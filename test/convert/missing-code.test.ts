@@ -114,6 +114,17 @@ describe('"these are real values": the second answer', () => {
     expect(samples.map((r) => r.minimumDepthInMeters)).toContain('99');
   });
 
+  it('a code answered real is judged by the output-table checks like any depth: -999 beside 5 and 10 is a mixed-sign column', async () => {
+    const e = await exportSheet(header, rows([5, -999, 10]), { quantity: Q, realCodes: [DEPTH] });
+    expect(e.findings.some((x) => x.ruleId === 'ROW-DEPTH-MIXED-SIGN')).toBe(true);
+    // (-9999 is 9999 m by size, inside the range: the range check judges it like any value, it is just not skipped)
+    const big = await exportSheet(header, rows([5, -9999, 10]), { quantity: Q, realCodes: [DEPTH] });
+    expect(big.findings.some((x) => x.ruleId === 'ROW-DEPTH-MIXED-SIGN')).toBe(true);
+    // answered missing, the cell is not there at all
+    const gone = await exportSheet(header, rows([5, -999, 10]), { quantity: Q, missingCodes: [DEPTH] });
+    expect(gone.findings.some((x) => x.ruleId === 'ROW-DEPTH-MIXED-SIGN' || x.ruleId === 'ROW-DEPTH-RANGE')).toBe(false);
+  });
+
   it('neither answer is preselected: with no answer the column blocks, whatever its values', async () => {
     const e = await exportSheet(header, rows([-98, -99, -100]), { quantity: Q });
     expect(judge(e.findings).blocking.map((x) => x.ruleId)).toContain('ROW-MISSING-CODE');

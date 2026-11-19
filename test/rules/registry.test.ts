@@ -186,6 +186,14 @@ describe('messages', () => {
           expect(tech.has(p), `${r.id} ${lang} uses {${p}} that technical lacks`).toBe(true);
         }
       }
+      // the text /convert shows instead of `plain` (plainConvert): the same four languages, the same length cap, only placeholders the technical line has
+      if (r.plainConvert !== undefined) {
+        for (const lang of LANGS) {
+          expect(r.plainConvert[lang], `${r.id} plainConvert ${lang}`).toBeTruthy();
+          expect(r.plainConvert[lang].length, `${r.id} plainConvert ${lang} too long`).toBeLessThanOrEqual(LONG_TEXT_ALLOWED[r.id] ?? 330);
+          for (const p of placeholders(r.plainConvert[lang])) expect(tech.has(p), `${r.id} plainConvert ${lang} uses {${p}} that technical lacks`).toBe(true);
+        }
+      }
       const declared = new Set(RULE_PARAMS[r.id]);
       for (const p of tech) {
         if (p.startsWith('threshold.')) {

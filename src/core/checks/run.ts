@@ -43,6 +43,11 @@ export interface RunOptions {
   singleCruise?: boolean;
   /** Today as a UTC calendar day (YYYY-MM-DD) for ROW-DATE-FUTURE; absent: the system clock, read once here. Tests pass a fixed day. */
   today?: string;
+  /**
+   * The tables of a conversion: a -99, -999 or -9999 still in them is a value the person answered "real" for (an unanswered code blocks before anything is written, an answered-missing one is not there), so the
+   * direction, range and chemistry checks judge it like any other number. /check never sets it: there a code is reported (ROW-MISSING-CODE) and left out of those checks.
+   */
+  codesAreValues?: boolean;
 }
 
 export function runChecks(session: CheckSession, opts: RunOptions = {}): Report {
@@ -73,8 +78,8 @@ export function runChecks(session: CheckSession, opts: RunOptions = {}): Report 
         else if (!at.sheets.includes(f.sheet)) at.sheets.push(f.sheet);
       } else findings.push(f);
     }
-    pushAll(findings, checkRows(ds, { ...(opts.land ? { land: opts.land } : {}), today }));
-    pushAll(findings, checkChemistry(ds));
+    pushAll(findings, checkRows(ds, { ...(opts.land ? { land: opts.land } : {}), today, ...(opts.codesAreValues ? { codesAreValues: true } : {}) }));
+    pushAll(findings, checkChemistry(ds, opts.codesAreValues === true));
   }
   for (const { f, sheets } of sheetFindings.values()) {
     // one sheet is named as that; many are listed up to ten and counted after ("A, B, ... (+30)"), so that forty sheets are not forty names in a sentence

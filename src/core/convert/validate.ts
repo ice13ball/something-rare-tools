@@ -74,7 +74,7 @@ function eventFindings(t: Table, opts: ValidateOptions): Finding[] {
   const layout = proposeLayout(file, { skipTransposed: true });
   const mappings = proposeMappings(file, layout);
   const built = buildDatasets(file, layout, mappings, [], 'event');
-  const report = runChecks({ datasets: built.datasets, records: [], parseFindings: built.findings }, { ...(opts.today === undefined ? {} : { today: opts.today }) });
+  const report = runChecks({ datasets: built.datasets, records: [], parseFindings: built.findings }, { ...(opts.today === undefined ? {} : { today: opts.today }), codesAreValues: true });
   // sampleSizeValue is a number whose unit stands in the next column, sampleSizeUnit: it is not a measured variable with a missing unit
   return report.findings.flatMap((f) => {
     // the station checks are made on the INPUT rows (build.ts, in the sheet's terms): in this table the station is a parent event and every eventID is its own "station"

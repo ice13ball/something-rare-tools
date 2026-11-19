@@ -78,12 +78,13 @@ export function advice(text: string, allowed: readonly string[]): string[] {
 const allowedFor = (id: string | undefined, key: string | undefined): Allowed[] => ALLOWED.filter((a) => (a.id !== undefined && a.id === id) || (a.idPrefix !== undefined && id !== undefined && id.startsWith(a.idPrefix)) || (a.key !== undefined && a.key === key));
 
 describe('no text advises deleting data', () => {
-  const rules = [...RULES, ...CONVERT_RULES.filter((c) => !RULES.some((r) => r.id === c.id))] as { id: string; plain: Record<string, string>; technical: string; plainIf?: { plain: Record<string, string> }[] }[];
+  const rules = [...RULES, ...CONVERT_RULES.filter((c) => !RULES.some((r) => r.id === c.id))] as { id: string; plain: Record<string, string>; technical: string; plainIf?: { plain: Record<string, string> }[]; plainConvert?: Record<string, string> }[];
   const texts: { where: string; id?: string; key?: string; text: string }[] = [
     ...rules.flatMap((r) => [
       { where: `${r.id} plain`, id: r.id, text: r.plain.en },
       { where: `${r.id} technical`, id: r.id, text: r.technical },
       ...(r.plainIf ?? []).map((x) => ({ where: `${r.id} plainIf`, id: r.id, text: x.plain.en })),
+      ...(r.plainConvert === undefined ? [] : [{ where: `${r.id} plainConvert`, id: r.id, text: r.plainConvert.en }]),
     ]),
     // the variants of a rule's text and the phrases that say what rows are (they live beside the rules, not in them)
     ...Object.entries(PROFILE_VARIANTS).flatMap(([k, v]) => [

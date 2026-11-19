@@ -748,7 +748,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
       de: `Die Spalte „{column}“ hat in {count} {+count:Zelle|Zellen} einen möglichen Code für einen fehlenden Wert, z. B. {value} ({+lines:Zeile|Zeilen} {lines}). Der Export wartet auf Ihre Antwort: als fehlend behandeln (ausgelassen und aufgelistet) oder als echte Werte (unverändert geschrieben).`,
       fr: `La colonne « {column} » contient dans {count} {+count:cellule|cellules} un code possible de valeur manquante, par ex. {value} ({+lines:ligne|lignes} {lines}). L'export attend votre réponse : traiter comme absent (laissé de côté et listé) ou comme valeurs réelles (écrites telles quelles).`,
     },
-    technical: `{file}, {sheet}:{lines} {count} cell(s) of column '{column}' (column {index} of the sheet in /convert) hold exactly -99, -999 or -9999 (numeric equality, first: {value}), a code often written for "no measurement". Checked: the depth column (the two bounds of a Darwin Core range) and every variable of the sheet. The cell is kept as written and never replaced; it is left out of the depth direction, ROW-DEPTH-RANGE and CHEM-RANGE.`,
+    technical: `{file}, {sheet}:{lines} {count} cell(s) of column '{column}' (column {index} of the sheet in /convert) hold exactly -99, -999 or -9999 (numeric equality, first: {value}), a code often written for "no measurement". /check keeps the cell as written and leaves it out of the depth direction, ROW-DEPTH-RANGE and CHEM-RANGE; /convert blocks the export until the column is answered (missing: the cells are left out and listed; real: they are written and judged like any value). Checked: the depth column (the two bounds of a Darwin Core range) and every variable of the sheet. The cell is never replaced.`,
   },
   {
     id: 'ROW-DM-COORDS',

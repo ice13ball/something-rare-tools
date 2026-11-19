@@ -188,7 +188,7 @@ const QUANTITIES: readonly Quantity[] = [
 
 const thresholdUnit = (name: string): string => getRule('CHEM-RANGE').thresholds?.find((t) => t.name.startsWith(`${name}.`))?.unit ?? '';
 
-function checkRange(ds: Dataset): Finding[] {
+function checkRange(ds: Dataset, codesAreValues = false): Finding[] {
   const out: Finding[] = [];
   for (const q of QUANTITIES) {
     const min = hasThreshold('CHEM-RANGE', `${q.name}.min`) ? threshold('CHEM-RANGE', `${q.name}.min`) : undefined;
@@ -202,7 +202,7 @@ function checkRange(ds: Dataset): Finding[] {
         const c = okCell(row, v.key);
         if (!c) continue;
         // -99, -999 and -9999 are reported by ROW-MISSING-CODE; they are not a measurement outside the cited range
-        if (isMissingValueCode(c.value!)) continue;
+        if (!codesAreValues && isMissingValueCode(c.value!)) continue;
         if ((min !== undefined && c.value! < min) || (max !== undefined && c.value! > max)) {
           count += 1;
           lines.push(c.line);
@@ -238,6 +238,6 @@ export function oxygenRangeSkipped(ds: Dataset): boolean {
 }
 
 /** Chemistry checks for one dataset. */
-export function checkChemistry(ds: Dataset): Finding[] {
-  return [...checkUnitPairs(ds), ...checkDicTa(ds), ...checkRange(ds)];
+export function checkChemistry(ds: Dataset, codesAreValues = false): Finding[] {
+  return [...checkUnitPairs(ds), ...checkDicTa(ds), ...checkRange(ds, codesAreValues)];
 }
