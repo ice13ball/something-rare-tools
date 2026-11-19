@@ -89,6 +89,7 @@ function ruleTexts(r: RuleDef): Text[] {
   add('plainByStatus.other', r.plainByStatus?.other);
   add('plainDataciteNotCompared', r.plainDataciteNotCompared);
   add('plainCollection', r.plainCollection);
+  add('plainNoMetadata', r.plainNoMetadata);
   add('plainOtherRest', r.plainOtherRest);
   add('plainTime', r.plainTime);
   add('plainConvert', r.plainConvert);

@@ -128,7 +128,7 @@ export interface ParsedFile {
   /** PANGAEA: how many columns (Latitude, Longitude, Date/Time) the parser added at the right of the table from the header's Event(s) block (parse/pangaeaEvents.ts); the parameter list stands for the columns before them. */
   eventColumns?: number;
   /** Set by the Darwin Core Archive reader: the file is a DwC-A (the one sure sign of Darwin Core input) and what its core is. */
-  dwca?: { core: 'Occurrence' | 'Event'; /** the core was cut at the row limit: references to rows that were not read cannot be judged */ partial: boolean };
+  dwca?: { core: 'Occurrence' | 'Event'; /** the time span the archive's eml.xml states (temporalCoverage): a statement about the whole dataset, not a date of any record */ timeSpan?: { start?: string; end?: string }; /** the core was cut at the row limit: references to rows that were not read cannot be judged */ partial: boolean };
 }
 
 /* ---------- metadata ---------- */
@@ -328,6 +328,8 @@ export interface Dataset {
   rows: DataRow[]; variables: Variable[];
   mappings: SheetMapping[]; layout: LayoutPlan;
   metadata: MetadataRecord[];
+  /** The time span the Darwin Core Archive's own eml.xml states; kept apart from `metadata` (it has no licence, no position, and is not a record of a metadata source). */
+  archiveSpan?: { start?: string; end?: string };
   depthPositive: 'down' | 'up' | 'unknown';
   /** The source file wrote decimals with a comma. Only then may the clean CSV swap the comma for a dot. */
   decimalComma?: boolean;
@@ -377,6 +379,8 @@ export interface RuleDef {
   plainDataciteNotCompared?: Record<Lang, string>;
   /** META-NO-EXTENT in Collection review (param scope = 'collection'): the same finding without a reference to the /check table, which Collection review does not have. */
   plainCollection?: Record<Lang, string>;
+  /** META-NO-DATES when no metadata of any kind was given (param noMetadata = 'yes'): the sentence says nothing about what metadata holds, because none was given. */
+  plainNoMetadata?: Record<Lang, string>;
   /** Appended to LIC-EXTRA-TEXT / LIC-ADDED-CONDITIONS when param otherRest is set: another string of the statement (identifier, Zenodo title) leaves something too. */
   plainOtherRest?: Record<Lang, string>;
   /**

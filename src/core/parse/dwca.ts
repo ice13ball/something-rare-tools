@@ -183,6 +183,8 @@ async function readXml(zip: ZipArchive, name: string, inflate: Inflate): Promise
 interface Eml {
   title?: string;
   version?: string;
+  /** temporalCoverage of the dataset: a range of dates or one date */
+  timeSpan?: { start?: string; end?: string };
 }
 
 /** Title and version/date of the dataset from eml.xml; a missing or unreadable eml.xml is not an error. */
@@ -199,7 +201,17 @@ async function readEml(zip: ZipArchive, name: string, inflate: Inflate): Promise
     const v = pkg?.includes('/') ? pkg.slice(pkg.lastIndexOf('/') + 1) : undefined;
     const pub = text('pubDate');
     const parts = [v ? (/^\d/.test(v) ? `v${v}` : v) : undefined, pub ? `published ${pub}` : undefined].filter((x): x is string => !!x);
-    return { title: text('title'), version: parts.length > 0 ? parts.join(', ') : undefined };
+    // coverage/temporalCoverage: rangeOfDates (beginDate, endDate) or singleDateTime, each with a calendarDate; a value that is not an ISO date (year, month or day) is not used
+    const day = (n: Element | undefined): string | undefined => {
+      const t = n ? byLocal(n, 'calendarDate')[0]?.textContent?.trim() : undefined;
+      return t && /^\d{4}(?:-\d{2}(?:-\d{2})?)?$/.test(t) ? t : undefined;
+    };
+    const cover = dataset ? byLocal(dataset, 'coverage').flatMap((c) => byLocal(c, 'temporalCoverage'))[0] : undefined;
+    const range = cover ? byLocal(cover, 'rangeOfDates')[0] : undefined;
+    const single = cover ? byLocal(cover, 'singleDateTime')[0] : undefined;
+    const start = range ? day(byLocal(range, 'beginDate')[0]) : day(single);
+    const end = range ? day(byLocal(range, 'endDate')[0]) : start;
+    return { title: text('title'), version: parts.length > 0 ? parts.join(', ') : undefined, ...(start || end ? { timeSpan: { ...(start ? { start } : {}), ...(end ? { end } : {}) } } : {}) };
   } catch {
     return {};
   }
@@ -345,5 +357,5 @@ async function read(fileName: string, bytes: Uint8Array, inflate: Inflate, opts:
   const sheet = { name: core.location, header, headerLine: core.ignoreHeaderLines, rows };
   const rag = raggedFinding(fileName, sheet.name, indexed.length, rows);
   if (rag) findings.push(rag);
-  return { fileName, kind: 'csv', sheets: [sheet], date1904: false, decimalComma: false, encoding, findings, dwca: { core: core.type, partial: total > rows.length } };
+  return { fileName, kind: 'csv', sheets: [sheet], date1904: false, decimalComma: false, encoding, findings, dwca: { core: core.type, partial: total > rows.length, ...(eml.timeSpan ? { timeSpan: eml.timeSpan } : {}) } };
 }

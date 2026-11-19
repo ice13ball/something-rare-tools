@@ -217,6 +217,22 @@ describe('META-NO-DATES', () => {
     expect(only(checkMetadataVsData(withMeta(makeDataset([{}]), makeRecord('datacite', { temporalExtent: { start: '2020-01-01', end: '2020-01-01' } }))), 'META-NO-DATES')).toEqual([]);
   });
 
+  it('an eml.xml time span of a Darwin Core Archive counts as a date: no error', () => {
+    expect(only(checkMetadataVsData({ ...makeDataset([{}]), archiveSpan: { start: '1977-01-01', end: '2025-09-15' } }), 'META-NO-DATES')).toEqual([]);
+  });
+
+  it('says that no metadata was given only when none was: the sentence claims nothing about metadata then', () => {
+    const none = only(checkMetadataVsData(makeDataset([{}])), 'META-NO-DATES')[0]!;
+    expect(none.params.noMetadata).toBe('yes');
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
+      expect(renderPlain(none, lang), lang).not.toMatch(/Neither|Ani dane|Weder|Ni les/);
+    }
+    expect(renderPlain(none, 'en')).toMatch(/No row has a date/);
+    const some = only(checkMetadataVsData(withMeta(makeDataset([{}]), makeRecord('zenodo'))), 'META-NO-DATES')[0]!;
+    expect(some.params.noMetadata).toBeUndefined();
+    expect(renderPlain(some, 'en')).toMatch(/Neither the data nor the metadata/);
+  });
+
   it('a dataset without rows is not reported', () => {
     expect(only(checkMetadataVsData(makeDataset([])), 'META-NO-DATES')).toEqual([]);
   });

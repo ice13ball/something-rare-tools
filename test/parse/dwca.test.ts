@@ -91,6 +91,26 @@ describe('Darwin Core Archive, Occurrence core', () => {
   });
 });
 
+describe('Darwin Core Archive, time span of eml.xml', () => {
+  const emlWith = (coverage: string): string =>
+    `<?xml version="1.0"?><eml:eml xmlns:eml="https://eml.ecoinformatics.org/eml-2.2.0" packageId="p/v1"><dataset><title>T</title><coverage>${coverage}</coverage></dataset></eml:eml>`;
+  const core = [HEADER, ...ROWS].join('\n') + '\n';
+  it('reads a range of dates as the time span the archive states, and no metadata record', async () => {
+    const f = await read(dwca(core, [], undefined, emlWith('<temporalCoverage><rangeOfDates><beginDate><calendarDate>1977-01-01</calendarDate></beginDate><endDate><calendarDate>2025-09-15</calendarDate></endDate></rangeOfDates></temporalCoverage>')));
+    expect(f.dwca?.timeSpan).toEqual({ start: '1977-01-01', end: '2025-09-15' });
+    expect(f.embeddedMetadata).toBeUndefined();
+  });
+  it('reads a single date, and a year-only date is kept as it is', async () => {
+    const f = await read(dwca(core, [], undefined, emlWith('<temporalCoverage><singleDateTime><calendarDate>2008</calendarDate></singleDateTime></temporalCoverage>')));
+    expect(f.dwca?.timeSpan).toEqual({ start: '2008', end: '2008' });
+  });
+  it('has no time span without one, or when it is not a date', async () => {
+    expect((await read(dwca(core))).dwca?.timeSpan).toBeUndefined();
+    expect((await read(dwca(core, [], undefined, emlWith('<temporalCoverage><rangeOfDates><beginDate><calendarDate>soon</calendarDate></beginDate></rangeOfDates></temporalCoverage>')))).dwca?.timeSpan).toBeUndefined();
+    expect((await read(dwca(core, [], undefined, emlWith('<geographicCoverage><geographicDescription>x</geographicDescription></geographicCoverage>')))).dwca?.timeSpan).toBeUndefined();
+  });
+});
+
 describe('Darwin Core Archive, Event core', () => {
   const eventMeta = (ext = true) =>
     metaXml({
