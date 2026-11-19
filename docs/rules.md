@@ -86,7 +86,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | ROW-JOIN-AMBIGUOUS | warning | show | B | — | —<a id="ROW-JOIN-AMBIGUOUS"></a> |
 | ROW-LONG-VALUE-SKIPPED | warning | show | B | — | —<a id="ROW-LONG-VALUE-SKIPPED"></a> |
 | ROW-LONG-NO-PARAMETER | warning | block | B | — | —<a id="ROW-LONG-NO-PARAMETER"></a> |
-| ROW-LONG-PARAMETER-MERGED | info | show | B | — | —<a id="ROW-LONG-PARAMETER-MERGED"></a> |
+| ROW-LONG-PARAMETER-MERGED | info | accept | B | — | —<a id="ROW-LONG-PARAMETER-MERGED"></a> |
 | ROW-LONG-KEY-EXTENDED | info | show | B | — | —<a id="ROW-LONG-KEY-EXTENDED"></a> |
 | ROW-KEY-IGNORED | info | show | B | — | —<a id="ROW-KEY-IGNORED"></a> |
 | ROW-JOIN-KEY-BLANK | warning | show | B | — | —<a id="ROW-JOIN-KEY-BLANK"></a> |

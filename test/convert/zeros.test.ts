@@ -58,7 +58,7 @@ describe('zeros', () => {
 
 describe('text in a taxon cell ("+", "x")', () => {
   const rows: Cell[][] = [['A1', 'S', '+', 5], ['A2', 'S', 'x', 'x']];
-  const answered = (a: 'absence' | 'leave-out' | 'present') => convert({ sheets: [sheetInput(fileOf([...HEADER, 'Latitude', 'Longitude', 'Date'], rows.map((r) => [...r, 55.1, 3.2, '2023-04-05'])), { quantity: { kind: 'count' }, countTexts: { '+': { answer: a, count: 1 }, x: { answer: a, count: 2 } } })], options: {} });
+  const answered = (a: 'absence' | 'leave-out' | 'present') => convert({ sheets: [sheetInput(fileOf([...HEADER, 'Latitude', 'Longitude', 'Date'], rows.map((r) => [...r, 55.1, 3.2, '2023-04-05'])), { quantity: { kind: 'count' }, countTexts: { '2\u001f+': { answer: a, count: 1 }, '2\u001fx': { answer: a, count: 1 }, '3\u001fx': { answer: a, count: 1 } } })], options: {} });
 
   it('is a question that blocks, one per text: nothing is written for the cells until the person says what each means', () => {
     const r = run(rows, true);
@@ -66,8 +66,11 @@ describe('text in a taxon cell ("+", "x")', () => {
     expect(w.map((f) => [f.severity, f.field, f.value, f.lines])).toEqual([
       ['warning', 'Calanus finmarchicus', '+', [2]],
       ['warning', 'Calanus finmarchicus', 'x', [3]],
+      ['warning', 'Oithona similis', 'x', [3]],
     ]);
-    expect(w[1].params).toMatchObject({ count: 2, held: 2 });
+    // the same text in two columns is two questions, each with its own cells
+    expect(w[1].params).toMatchObject({ count: 1, held: 1 });
+    expect(w[2].params).toMatchObject({ count: 1, held: 1 });
     expect(r.occurrences.filter((o) => o.occurrenceRemarks !== undefined)).toEqual([]);
     expect(w.every((f) => policyOf(f) === 'block')).toBe(true);
   });

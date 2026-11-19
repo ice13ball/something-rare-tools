@@ -327,20 +327,24 @@ describe('the summary-rows answer in the companion file (round 4, Task 15)', () 
 describe('the count-text answer in the companion file (round 4, Task 17)', () => {
   const h = 'a1b2c3d4';
   it('round trips the answer by sheet, count, rows and the hash of the text (a colon in the sheet name is safe); the line holds no text', () => {
-    const settings = { countText: [{ sheet: 'hauls.csv', answer: 'absence' as const, count: 2, rows: 9, hash: h }, { sheet: 'a:b.csv', answer: 'present' as const, count: 1, rows: 40, hash: '00ff00ff' }] };
+    const settings = { countText: [{ sheet: 'hauls.csv', answer: 'absence' as const, count: 2, rows: 9, index: 6, hash: h }, { sheet: 'a:b.csv', answer: 'present' as const, count: 1, rows: 40, index: 7, hash: '00ff00ff' }], countTextColumn: [{ sheet: 'a:b.csv', answer: 'leave-out' as const, count: 4, rows: 40, index: 7 }] };
     const text = writeConvertSidecar(settings);
-    expect(text).toContain(`countText=absence:2:9:hauls.csv:${h}`);
-    expect(readConvertSettings(textFile('c.sidecar.csv', text))?.countText).toEqual(settings.countText);
+    expect(text).toContain(`countText=absence:2:9:hauls.csv:6:${h}`);
+    expect(text).toContain('countTextColumn=leave-out:4:40:a:b.csv:7');
+    const back = readConvertSettings(textFile('c.sidecar.csv', text));
+    expect(back?.countText).toEqual(settings.countText);
+    expect(back?.countTextColumn).toEqual(settings.countTextColumn);
   });
 
   it('a malformed line (another answer, count 0, a bad hash) and a duplicate are not kept', () => {
-    const lines = [`countText=maybe:2:9:a.csv:${h}`, `countText=absence:0:9:a.csv:${h}`, 'countText=absence:2:9:a.csv:XYZ', `countText=absence:2:9:a.csv:${h}`, `countText=leave-out:3:9:a.csv:${h}`];
+    const lines = [`countText=maybe:2:9:a.csv:6:${h}`, `countText=absence:0:9:a.csv:6:${h}`, 'countText=absence:2:9:a.csv:6:XYZ', `countText=absence:2:9:a.csv:6:${h}`, `countText=leave-out:3:9:a.csv:6:${h}`, `countText=absence:2:9:a.csv:${h}`];
     const text = ['original_column,output_column,unit,unit_source,p01', ...lines.map((l) => `(setting),${l},,,`)].join('\n') + '\n';
-    expect(readConvertSettings(textFile('c.sidecar.csv', text))?.countText).toEqual([{ answer: 'absence', count: 2, rows: 9, sheet: 'a.csv', hash: h }]);
+    expect(readConvertSettings(textFile('c.sidecar.csv', text))?.countText).toEqual([{ answer: 'absence', count: 2, rows: 9, sheet: 'a.csv', index: 6, hash: h }]);
+    // (the last line is the old format, with no column index: it is not read)
   });
 
   it('is not written for an answer that is none or a hash that is not a hash', () => {
-    const out = writeConvertSidecar({ countText: [{ sheet: 'a.csv', answer: 'sideways' as never, count: 2, rows: 3, hash: h }, { sheet: 'a.csv', answer: 'absence', count: 0, rows: 3, hash: h }, { sheet: 'a.csv', answer: 'absence', count: 1, rows: 3, hash: 'raw text' }] });
+    const out = writeConvertSidecar({ countText: [{ sheet: 'a.csv', answer: 'sideways' as never, count: 2, rows: 3, index: 6, hash: h }, { sheet: 'a.csv', answer: 'absence', count: 0, rows: 3, index: 6, hash: h }, { sheet: 'a.csv', answer: 'absence', count: 1, rows: 3, index: 6, hash: 'raw text' }] });
     expect(out).not.toContain('countText=');
   });
 });

@@ -95,7 +95,7 @@ const BASELINE: Readonly<Record<string, 'block' | 'accept' | 'show'>> = {
   'ROW-LONG-VALUE-SKIPPED': 'show',
   'ROW-LONG-KEY-EXTENDED': 'show',
   'ROW-LONG-NO-PARAMETER': 'block',
-  'ROW-LONG-PARAMETER-MERGED': 'show',
+  'ROW-LONG-PARAMETER-MERGED': 'accept',
   'ROW-KEY-IGNORED': 'show',
   'ROW-JOIN-KEY-BLANK': 'show',
   'ROW-DATE-YYMMDD': 'accept',

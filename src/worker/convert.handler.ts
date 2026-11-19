@@ -199,7 +199,8 @@ export function createConvertHandler(): ConvertHandler {
         for (const t of s.turned ?? []) if (!(settings.turned ??= []).some((x) => x.sheet === t.sheet)) settings.turned.push(t);
         for (const d of s.declaredPosition ?? []) if (!(settings.declaredPosition ??= []).some((x) => x.sheet === d.sheet)) settings.declaredPosition.push(d);
         for (const d of s.declaredDate ?? []) if (!(settings.declaredDate ??= []).some((x) => x.sheet === d.sheet)) settings.declaredDate.push(d);
-        for (const d of s.countText ?? []) if (!(settings.countText ??= []).some((x) => x.sheet === d.sheet && x.hash === d.hash)) settings.countText.push(d);
+        for (const d of s.countText ?? []) if (!(settings.countText ??= []).some((x) => x.sheet === d.sheet && x.index === d.index && x.hash === d.hash)) settings.countText.push(d);
+        for (const d of s.countTextColumn ?? []) if (!(settings.countTextColumn ??= []).some((x) => x.sheet === d.sheet && x.index === d.index)) settings.countTextColumn.push(d);
         for (const d of s.summaryRows ?? []) if (!(settings.summaryRows ??= []).some((x) => x.sheet === d.sheet)) settings.summaryRows.push(d);
         for (const d of s.missingCode ?? []) if (!(settings.missingCode ??= []).some((x) => x.sheet === d.sheet && x.hash === d.hash)) settings.missingCode.push(d);
         for (const slot of ['dayMonthOrder', 'yyOrder'] as const) for (const d of s[slot] ?? []) if (!(settings[slot] ??= []).some((x) => x.sheet === d.sheet && x.hash === d.hash)) settings[slot].push(d as never);
@@ -566,7 +567,7 @@ export function createConvertHandler(): ConvertHandler {
     type One = { answer: 'absence' | 'leave-out' | 'present'; count: number; fromFile?: boolean };
     const own = s.countTexts as unknown;
     // (Object.fromEntries defines own properties: a text such as "__proto__" stays a plain key)
-    const texts: Record<string, One> = own !== undefined && own !== null && typeof own === 'object' ? Object.fromEntries(Object.entries(own).flatMap(([text, g]) => { const a = countTextAnswer(g); return a === undefined ? [] : [[text, a] as const]; })) : {};
+    const texts: Record<string, One> = own !== undefined && own !== null && typeof own === 'object' ? Object.fromEntries(Object.entries(own).flatMap(([key, g]) => { const a = countTextAnswer(g); return a === undefined || !/^\d{1,6}\u001f/.test(key) ? [] : [[key, a] as const]; })) : {};
     const columns: Record<number, { answer: 'absence' | 'leave-out' | 'present'; count: number; fromFile?: boolean }> = {};
     const col = s.countTextColumns as unknown;
     if (col !== undefined && col !== null && typeof col === 'object') for (const [k, g] of Object.entries(col)) { const a = countTextAnswer(g); if (a !== undefined && /^\d{1,6}$/.test(k)) columns[Number(k)] = a; }

@@ -89,7 +89,7 @@ describe('a long sheet with blank or NaN quantities', () => {
   });
 
   it('a text quantity (trace, <1) keeps its weight', async () => {
-    const e = await run([row('s1', 'Calanus finmarchicus', 'trace', 5), row('s1', 'Oithona similis', '<1', 2)], { countTexts: { trace: { answer: 'present', count: 1 }, '<1': { answer: 'present', count: 1 } } });
+    const e = await run([row('s1', 'Calanus finmarchicus', 'trace', 5), row('s1', 'Oithona similis', '<1', 2)], { countTexts: { '6\u001ftrace': { answer: 'present', count: 1 }, '6\u001f<1': { answer: 'present', count: 1 } } });
     expect(e.dataset.occurrences.map((o) => o.status)).toEqual(['present', 'present']);
     expect(e.dataset.measurements.filter((m) => m.type.toLowerCase().includes('weight')).map((m) => m.value)).toEqual(['5', '2']);
   });

@@ -7,7 +7,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initLang, setLang } from '../../src/app/i18n';
-import { applySavedCountTexts, countTextSettingsOf, initialChoices, requestOf } from '../../src/app/convertModel';
+import { applySavedCountTexts, countTextKeyOf, countTextSettingsOf, initialChoices, requestOf } from '../../src/app/convertModel';
 import { ConvertPage } from '../../src/app/pages/ConvertPage';
 import { shortHash } from '../../src/core/convert/keySetting';
 import { writeConvertSidecar } from '../../src/core/convert/settings';
@@ -77,7 +77,7 @@ describe('the questions and the three answers', () => {
     fireEvent.click(button(itemOf('CONV-TEXT-IN-TAXON-CELL', 'absent'), T['convert.finding.countAbsence']));
     await waitFor(() => expect(decided()).toHaveLength(1));
     await idle();
-    expect(lastSheet().countTexts).toEqual({ absent: { answer: 'absence', count: 1 } });
+    expect(lastSheet().countTexts).toEqual({ '6\u001fabsent': { answer: 'absence', count: 1 } });
     expect(lastSheet().countTextColumns).toBeUndefined();
     // that finding is decided, the other text is still asked
     expect(itemOf('CONV-COUNT-TEXT-DECIDED', 'absent')).toBeTruthy();
@@ -96,7 +96,7 @@ describe('the questions and the three answers', () => {
     fireEvent.click(button(asked()[0], T['convert.finding.countLeaveOut']));
     await waitFor(() => expect(decided()).toHaveLength(1));
     await idle();
-    expect(lastSheet().countTexts).toEqual({ absent: { answer: 'leave-out', count: 2 } });
+    expect(lastSheet().countTexts).toEqual({ '6\u001fabsent': { answer: 'leave-out', count: 2 } });
     expect(decided()[0].getAttribute('data-rule')).toBe('CONV-COUNT-TEXT-DECIDED');
   });
 
@@ -107,7 +107,7 @@ describe('the questions and the three answers', () => {
     fireEvent.click(button(itemOf('CONV-TEXT-IN-TAXON-CELL', 'nie stwierdzono'), T['convert.finding.countLeaveOut']));
     await waitFor(() => expect(decided()).toHaveLength(2));
     await idle();
-    expect(lastSheet().countTexts).toEqual({ absent: { answer: 'present', count: 1 }, 'nie stwierdzono': { answer: 'leave-out', count: 1 } });
+    expect(lastSheet().countTexts).toEqual({ '6\u001fabsent': { answer: 'present', count: 1 }, '6\u001fnie stwierdzono': { answer: 'leave-out', count: 1 } });
     expect(asked()).toHaveLength(0);
   });
 
@@ -147,7 +147,7 @@ describe('one answer for a whole column', () => {
     fireEvent.click(within(columnControl()!).getByRole('button', { name: T['convert.finding.countLeaveOut'] }));
     await waitFor(() => expect(decided()).toHaveLength(4));
     await idle();
-    expect(lastSheet().countTexts).toEqual({ 'not found': { answer: 'present', count: 1 } });
+    expect(lastSheet().countTexts).toEqual({ '6\u001fnot found': { answer: 'present', count: 1 } });
     // the column answer's count is every text cell of the column, the one answered by itself included
     expect(lastSheet().countTextColumns).toEqual({ 6: { answer: 'leave-out', count: 4 } });
     expect(itemOf('CONV-COUNT-TEXT-DECIDED', 'not found').textContent).not.toContain('whole column');
@@ -166,7 +166,7 @@ describe('one answer for a whole column', () => {
     await waitFor(() => expect(asked()).toHaveLength(3));
     await idle();
     expect(lastSheet().countTextColumns).toBeUndefined();
-    expect(lastSheet().countTexts).toEqual({ 'not found': { answer: 'present', count: 1 } });
+    expect(lastSheet().countTexts).toEqual({ '6\u001fnot found': { answer: 'present', count: 1 } });
     expect(decided()).toHaveLength(1);
   });
 
@@ -180,7 +180,7 @@ describe('one answer for a whole column', () => {
     fireEvent.click(button(itemOf('CONV-COUNT-TEXT-DECIDED', 'absent'), T['convert.finding.askAgain']));
     await waitFor(() => expect(asked().map((x) => x.textContent?.includes('"absent"'))).toContain(true));
     await idle();
-    expect(lastSheet().countTexts).toEqual({ 'not found': { answer: 'present', count: 1 } });
+    expect(lastSheet().countTexts).toEqual({ '6\u001fnot found': { answer: 'present', count: 1 } });
   });
 
   it('"Ask again" on a text answered by itself also takes back the column answer: the text is asked, and the other texts that answer covered come back as questions', async () => {
@@ -270,7 +270,7 @@ describe('the companion file', () => {
 
   it('keeps the answer by sheet, counts and the hash of the text: the file holds neither text', async () => {
     const text = await answered();
-    expect(text).toContain(`countText=absence:1:4:hauls.csv:${shortHash('tabsent')}`);
+    expect(text).toContain(`countText=absence:1:4:hauls.csv:6:${shortHash('tabsent')}`);
     expect(text).not.toContain('absent');
     expect(text).not.toContain('nie stwierdzono');
     expect(text).not.toContain('countText=leave-out');
@@ -282,7 +282,7 @@ describe('the companion file', () => {
     await load([{ name: 'hauls.csv', text: FILE }, { name: 'c.csv', text }]);
     await waitFor(() => expect(decided()).toHaveLength(1));
     await idle();
-    expect(lastSheet().countTexts).toEqual({ absent: { answer: 'absence', count: 1, fromFile: true } });
+    expect(lastSheet().countTexts).toEqual({ '6\u001fabsent': { answer: 'absence', count: 1, fromFile: true } });
     expect(itemOf('CONV-COUNT-TEXT-DECIDED', 'absent').textContent).toContain('companion file');
     expect(asked()).toHaveLength(1);
     expect(asked()[0].textContent).toContain('nie stwierdzono');
@@ -296,7 +296,7 @@ describe('the companion file', () => {
 
   it('is not applied, and the question is visible, for one more cell with the text or one more row', async () => {
     // a saved answer for 7 rows and one "absent" cell; the converter has to see texts in a minority of the column to ask at all
-    const text = writeConvertSidecar({ countText: [{ sheet: 'hauls.csv', answer: 'absence', count: 1, rows: 7, hash: shortHash('tabsent') }] });
+    const text = writeConvertSidecar({ countText: [{ sheet: 'hauls.csv', index: 6, answer: 'absence', count: 1, rows: 7, hash: shortHash('tabsent') }] });
     await load([{ name: 'hauls.csv', text: csvOf(HEADER, rowsOf([5, 6, 7, 8, 9, 'absent', 'nie stwierdzono'])) }, { name: 'c.csv', text }]);
     await waitFor(() => expect(decided()).toHaveLength(1));
     cleanup();
@@ -311,32 +311,110 @@ describe('the companion file', () => {
     expect(asked()).toHaveLength(2);
   });
 
-  it('a whole-column answer is written as one line per text it settled', async () => {
+  it('a whole-column answer is written as one countTextColumn line for its column, not one line per text', async () => {
     const run = await load([{ name: 'hauls.csv', text: csvOf(HEADER, rowsOf([5, 6, 7, 8, 'absent', 'none seen', 'not found'])) }]);
     fireEvent.click(within(document.querySelector<HTMLElement>('[data-testid="count-text-column"]')!).getByRole('button', { name: T['convert.finding.countAbsence'] }));
     await waitFor(() => expect(decided()).toHaveLength(3));
     await idle();
     fireEvent.click(screen.getByRole('button', { name: T['convert.companion.button'] }));
     const text = run.download.mock.calls[0][0] as string;
-    for (const w of ['absent', 'none seen', 'not found']) expect(text).toContain(`countText=absence:1:7:hauls.csv:${shortHash('t' + w)}`);
+    expect(text).toContain('countTextColumn=absence:3:7:hauls.csv:6');
+    expect(text).not.toMatch(/^countText=/m);
     expect(text).not.toContain('none seen');
   });
 
   it('settings: only a decided text of a sheet is recorded; applySavedCountTexts matches by hash and count and uses a saved answer once', async () => {
-    const saved = writeConvertSidecar({ countText: [{ sheet: 'hauls.csv', answer: 'present', count: 1, rows: 4, hash: shortHash('tabsent') }, { sheet: 'hauls.csv', answer: 'absence', count: 9, rows: 4, hash: shortHash('tnie stwierdzono') }] });
+    const saved = writeConvertSidecar({ countText: [{ sheet: 'hauls.csv', index: 6, answer: 'present', count: 1, rows: 4, hash: shortHash('tabsent') }, { sheet: 'hauls.csv', index: 6, answer: 'absence', count: 9, rows: 4, hash: shortHash('tnie stwierdzono') }] });
     const p = await parsed(FILE, saved);
     const choices = initialChoices(p);
     const key = Object.keys(choices)[0];
     expect(choices[key].countTextsSaved).toHaveLength(2);
     expect(choices[key].countTexts).toBeUndefined();
-    const q = (value: string, held: number): never => ({ ruleId: 'CONV-TEXT-IN-TAXON-CELL', file: 'hauls.csv', sheet: 'hauls.csv', value, params: { held, count: held } }) as never;
+    const q = (value: string, held: number): never => ({ ruleId: 'CONV-TEXT-IN-TAXON-CELL', file: 'hauls.csv', sheet: 'hauls.csv', value, params: { held, count: held, indexes: '6' } }) as never;
     const out = applySavedCountTexts(p, choices, [q('absent', 1), q('nie stwierdzono', 1)]);
-    expect(out[key].countTexts).toEqual({ absent: { answer: 'present', count: 1, fromFile: true } });
+    expect(out[key].countTexts).toEqual({ '6\u001fabsent': { answer: 'present', count: 1, fromFile: true } });
     expect(out[key].countTextsSaved).toHaveLength(1);
     expect(applySavedCountTexts(p, out, [q('absent', 1)])).toBe(out);
-    const said = [{ ruleId: 'CONV-COUNT-TEXT-DECIDED', file: 'hauls.csv', sheet: 'hauls.csv', value: 'absent', params: { held: 1, answer: 'present' } }, { ruleId: 'CONV-COUNT-TEXT-DECIDED', file: 'other.csv', sheet: 'x', value: 'absent', params: { held: 1, answer: 'present' } }] as never;
-    expect(countTextSettingsOf(p, said)).toEqual([{ sheet: 'hauls.csv', answer: 'present', count: 1, rows: 4, hash: shortHash('tabsent') }]);
+    const said = [{ ruleId: 'CONV-COUNT-TEXT-DECIDED', file: 'hauls.csv', sheet: 'hauls.csv', value: 'absent', params: { held: 1, answer: 'present', indexes: '6' } }, { ruleId: 'CONV-COUNT-TEXT-DECIDED', file: 'other.csv', sheet: 'x', value: 'absent', params: { held: 1, answer: 'present', indexes: '6' } }] as never;
+    expect(countTextSettingsOf(p, said)).toEqual([{ sheet: 'hauls.csv', index: 6, answer: 'present', count: 1, rows: 4, hash: shortHash('tabsent') }]);
     expect(countTextSettingsOf(p, [])).toEqual([]);
+  });
+
+  it('I1: the same text in two columns is answered per column and each answer comes back to its own column', async () => {
+    const two = csvOf(HEADER, rowsOf([5, 6, 7, '+'], [3, 4, 5, '+']));
+    const run = await load([{ name: 'hauls.csv', text: two }]);
+    expect(asked()).toHaveLength(2);
+    const [inA, inB] = asked();
+    fireEvent.click(button(inA, T['convert.finding.countPresent']));
+    await waitFor(() => expect(decided()).toHaveLength(1));
+    fireEvent.click(button(asked()[0], T['convert.finding.countAbsence']));
+    await waitFor(() => expect(decided()).toHaveLength(2));
+    expect(inB).toBeDefined();
+    await idle();
+    expect(lastSheet().countTexts).toEqual({ '6\u001f+': { answer: 'present', count: 1 }, '7\u001f+': { answer: 'absence', count: 1 } });
+    fireEvent.click(screen.getByRole('button', { name: T['convert.companion.button'] }));
+    const text = run.download.mock.calls[0][0] as string;
+    expect(text).toContain(`countText=present:1:4:hauls.csv:6:${shortHash('t+')}`);
+    expect(text).toContain(`countText=absence:1:4:hauls.csv:7:${shortHash('t+')}`);
+    expect(text).not.toContain('+,');
+    cleanup();
+    await load([{ name: 'hauls.csv', text: two }, { name: 'c.csv', text }]);
+    await waitFor(() => expect(decided()).toHaveLength(2));
+    await idle();
+    expect(lastSheet().countTexts).toEqual({ '6\u001f+': { answer: 'present', count: 1, fromFile: true }, '7\u001f+': { answer: 'absence', count: 1, fromFile: true } });
+    expect(asked()).toHaveLength(0);
+  });
+
+  it('I1: a line of the old format (no column) is not applied and the text is asked again, visibly', async () => {
+    const text = (await answered()).replace(`:6:${shortHash('tabsent')}`, `:${shortHash('tabsent')}`);
+    expect(text).toContain(`countText=absence:1:4:hauls.csv:${shortHash('tabsent')}`);
+    cleanup();
+    await load([{ name: 'hauls.csv', text: FILE }, { name: 'c.csv', text }]);
+    await idle();
+    expect(decided()).toHaveLength(0);
+    expect(asked()).toHaveLength(2);
+    expect(lastSheet().countTexts).toBeUndefined();
+  });
+
+  it('M1: an answer the converter found stale leaves the page state, the question shows, and no further pass is requested', async () => {
+    const download = vi.fn();
+    const base = createDirectConvertEngine();
+    seen = [];
+    let spoil = true;
+    const engine: ConvertEngine = {
+      ...base,
+      convert: (b) => {
+        seen.push(b);
+        // the converter sees today's cells differ from the count the answer was given for
+        const sheets = spoil ? b.sheets.map((x) => (x.countTexts === undefined ? x : { ...x, countTexts: Object.fromEntries(Object.entries(x.countTexts).map(([k, a]) => [k, { ...a, count: a.count + 1 }])) })) : b.sheets;
+        return base.convert({ ...b, sheets });
+      },
+    };
+    const view = render(<ConvertPage engine={engine} download={download} downloadFile={vi.fn()} />);
+    chooseFiles(view.container, [{ name: 'hauls.csv', text: FILE }]);
+    fireEvent.click(screen.getByRole('button', { name: T['convert.read'] }));
+    await screen.findByRole('heading', { name: T['convert.columns.title'] });
+    const confirm = screen.queryByRole('button', { name: /Confirm all shown/ });
+    if (confirm !== null) fireEvent.click(confirm);
+    for (const kind of screen.queryAllByLabelText(T['convert.quantity.kind'])) fireEvent.change(kind, { target: { value: 'count' } });
+    await idle();
+    const before = seen.length;
+    fireEvent.click(button(itemOf('CONV-TEXT-IN-TAXON-CELL', 'absent'), T['convert.finding.countAbsence']));
+    await waitFor(() => expect(seen.length).toBeGreaterThan(before));
+    spoil = false;
+    await waitFor(() => expect(lastSheet().countTexts).toBeUndefined());
+    await idle();
+    expect(asked()).toHaveLength(2);
+    const settled = seen.length;
+    await new Promise((r) => setTimeout(r, 400));
+    await idle();
+    expect(seen.length).toBe(settled);
+    expect(seen.length - before).toBe(2);
+  });
+
+  it('the page key of a per-text answer is the converter key', async () => {
+    const core = await import('../../src/core/convert/build');
+    expect(countTextKeyOf(6, 'a b')).toBe(core.countTextKey(6, 'a b'));
   });
 
   it('the request holds both slots only when answered', async () => {
@@ -345,8 +423,8 @@ describe('the companion file', () => {
     const key = Object.keys(choices)[0];
     const body = (c: typeof choices): ReturnType<typeof requestOf> => requestOf({ parsed: p, mappings: {}, choices: c, options: { fullList: false, prefixStation: false, flatten: { station: false, cruise: false } }, approved: {}, confirmed: {}, joins: [] } as never);
     expect(body(choices).sheets[0].countTexts).toBeUndefined();
-    const b = body({ ...choices, [key]: { ...choices[key], countTexts: { absent: { answer: 'absence', count: 1 } }, countTextColumns: { 6: { answer: 'present', count: 2 } } } });
-    expect(b.sheets[0].countTexts).toEqual({ absent: { answer: 'absence', count: 1 } });
+    const b = body({ ...choices, [key]: { ...choices[key], countTexts: { '6\u001fabsent': { answer: 'absence', count: 1 } }, countTextColumns: { 6: { answer: 'present', count: 2 } } } });
+    expect(b.sheets[0].countTexts).toEqual({ '6\u001fabsent': { answer: 'absence', count: 1 } });
     expect(b.sheets[0].countTextColumns).toEqual({ 6: { answer: 'present', count: 2 } });
   });
 });

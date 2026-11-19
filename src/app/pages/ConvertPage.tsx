@@ -32,7 +32,7 @@ import { VETO_NAME_SEP } from '../../core/convert/vetoedNumbers';
 import type { SheetKeyReport } from '../../core/convert/sampleKey';
 import { Layout } from '../components/Layout';
 import { shortHash } from '../../core/convert/keySetting';
-import { yyOrderSettingsOf, decimalReadingSettingsOf, missingCodeSettingsOf, summaryOwnerOf, summaryRowsSettingsOf, countTextSettingsOf, applySavedCountTexts, type CountTextAnswer, encodingSettingsOf, candidatesOf, candidateKey, handKey, printOf, tickHolds, ROLE_RULE, initialChoices, initialJoins, sampleJoinSettingsOf, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, turnedSettingsOf, dayMonthOrderSettingsOf, declaredPositionSettingsOf, declaredDateSettingsOf, positionJoinedFrom, ownRecordsSettingsOf, ownRecordsAllowed, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type JoinChoice, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
+import { yyOrderSettingsOf, decimalReadingSettingsOf, missingCodeSettingsOf, summaryOwnerOf, summaryRowsSettingsOf, countTextSettingsOf, countTextColumnSettingsOf, countTextKeyOf, dropStaleCountTexts, applySavedCountTexts, type CountTextAnswer, encodingSettingsOf, candidatesOf, candidateKey, handKey, printOf, tickHolds, ROLE_RULE, initialChoices, initialJoins, sampleJoinSettingsOf, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, turnedSettingsOf, dayMonthOrderSettingsOf, declaredPositionSettingsOf, declaredDateSettingsOf, positionJoinedFrom, ownRecordsSettingsOf, ownRecordsAllowed, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type JoinChoice, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
 import { downloadBlob, downloadText } from '../download';
 import { t, useLang } from '../i18n';
 import type { LegacyEncoding } from '../../core/values/encoding';
@@ -306,6 +306,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   // What the lookup found, as the entries the conversion takes (none while the box is off or nothing was looked up)
   const wormsLookup = useMemo(() => (wormsOn && Object.keys(wormsRecords).length > 0 ? lookupOf(wormsRecords, wormsChoices) : undefined), [wormsOn, wormsRecords, wormsChoices]);
 
+  // the answers the shown result was made with (an answer is judged stale only against the request that found it so)
+  const viewChoices = useRef<Record<string, SheetChoice>>({});
   // the conversion follows every decision; a late answer to an earlier request is dropped
   useEffect(() => {
     if (phase !== 'work' || !parsed) return undefined;
@@ -317,6 +319,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
         .then(
           (v) => {
             if (token.current !== mine) return;
+            viewChoices.current = choices;
             setView(v);
             setConvertError(null); // a later conversion that succeeds clears an earlier error
           },
@@ -336,7 +339,9 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     if (!parsed || !view) return;
     const asked = view.findings.filter((f) => f.ruleId === 'CONV-TEXT-IN-TAXON-CELL');
     if (asked.length === 0) return;
-    setChoices((prev) => applySavedCountTexts(parsed, prev, asked));
+    // an answer the converter found stale (its count no longer holds, so the text is asked again) leaves the page's state first: the question shows and no later request repeats the extra pass
+    const sent = viewChoices.current;
+    setChoices((prev) => applySavedCountTexts(parsed, dropStaleCountTexts(prev, sent, asked, parsed), asked));
   }, [parsed, view]);
 
   // what the ticked columns of the picker would make: the converter's own report for the request with that key on that sheet (the same run as the export), asked after a short pause; nothing is kept
@@ -468,24 +473,26 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
       if (text === undefined || text === '') return;
       const answer: CountTextAnswer | undefined = choice === 'countAbsence' ? 'absence' : choice === 'countLeaveOut' ? 'leave-out' : choice === 'countPresent' ? 'present' : undefined;
       if (answer !== undefined && (!Number.isInteger(held) || held < 1)) return;
-      const indexes = String(f.params.indexes ?? '').split(',').filter((x) => x !== '').map(Number);
+      const index = Number(f.params.indexes);
+      if (!Number.isInteger(index)) return;
+      const textKey = countTextKeyOf(index, text);
       setChoices((prev) => {
         const c = prev[key];
         if (c === undefined) return prev;
         const hash = shortHash('t' + text);
-        const saved = c.countTextsSaved?.filter((d) => d.hash !== hash);
+        const saved = c.countTextsSaved?.filter((d) => !(d.hash === hash && d.index === index));
         const { countTexts: own, countTextColumns: cols, countTextsSaved: _saved, ...rest } = c;
         const next: SheetChoice = { ...rest, ...(saved !== undefined && saved.length > 0 ? { countTextsSaved: saved } : {}) };
-        if (answer !== undefined) return { ...prev, [key]: { ...next, ...(cols === undefined ? {} : { countTextColumns: cols }), countTexts: { ...(own ?? {}), [text]: { answer, count: held } } } };
-        // "Ask again": a text the whole column's answer settled takes back that column's answer (only the columns of this text that hold the answer shown), and a text of its own is removed; answers the person gave
+        if (answer !== undefined) return { ...prev, [key]: { ...next, ...(cols === undefined ? {} : { countTextColumns: cols }), countTexts: { ...(own ?? {}), [textKey]: { answer, count: held } } } };
+        // "Ask again": a text the whole column's answer settled takes back that column's answer (the column of this text, when it holds the answer shown), and a text of its own is removed; answers the person gave
         // other texts, or other columns, stay
         if (f.params.via === 'column') {
-          const left = Object.fromEntries(Object.entries(cols ?? {}).filter(([i, a]) => !(indexes.includes(Number(i)) && a.answer === f.params.answer)));
+          const left = Object.fromEntries(Object.entries(cols ?? {}).filter(([i, a]) => !(Number(i) === index && a.answer === f.params.answer)));
           return { ...prev, [key]: { ...next, ...(own === undefined ? {} : { countTexts: own }), ...(Object.keys(left).length === 0 ? {} : { countTextColumns: left as never }) } };
         }
         // a text of its own: it is removed, and the answer for the whole column of this text goes too, or the column would settle it again without being asked; the other texts it covered come back as questions
-        const { [text]: _gone, ...others } = own ?? {};
-        const kept = Object.fromEntries(Object.entries(cols ?? {}).filter(([i]) => !indexes.includes(Number(i))));
+        const { [textKey]: _gone, ...others } = own ?? {};
+        const kept = Object.fromEntries(Object.entries(cols ?? {}).filter(([i]) => Number(i) !== index));
         return { ...prev, [key]: { ...next, ...(Object.keys(others).length === 0 ? {} : { countTexts: others }), ...(Object.keys(kept).length === 0 ? {} : { countTextColumns: kept as never }) } };
       });
       return;
@@ -1236,6 +1243,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const missingCode = parsed ? missingCodeSettingsOf(parsed, choices, said) : [];
     const summaryRows = parsed ? summaryRowsSettingsOf(parsed, choices, said) : [];
     const countText = parsed ? countTextSettingsOf(parsed, said) : [];
+    const countTextColumn = parsed ? countTextColumnSettingsOf(parsed, said) : [];
     const encoding = parsed ? encodingSettingsOf(parsed, choices) : [];
     // the position the person declared for a sheet without one: their own typed values, the one thing besides names and counts the file holds
     const declaredPosition = parsed ? declaredPositionSettingsOf(parsed, choices) : [];
@@ -1246,7 +1254,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const biomassBasis = biomassBasisOf(files.flatMap((f) => mappings[f.fileId] ?? f.mappings));
     // the ticks "of each organism" the user set or took back (only what differs from the proposal), kept by sheet and column header
     const perOccurrence = files.flatMap((f) => perOccurrenceOf(mappings[f.fileId] ?? f.mappings, f.proposals));
-    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(perOccurrence.length > 0 ? { perOccurrence } : {}), ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(presenceOnly.length > 0 ? { presenceOnly } : {}), ...(dropCopiesRows.length > 0 ? { dropCopiesRows } : {}), ...(ownRecords.length > 0 ? { ownRecords } : {}), ...(keepCopiesRows.length > 0 ? { keepCopiesRows } : {}), ...(totalOnceGroups.length > 0 ? { totalOnceGroups } : {}), ...(leaveOut.length > 0 ? { leaveOut } : {}), ...(realCountsRows.length > 0 ? { realCountsRows } : {}), ...(sampleKey.length > 0 ? { sampleKey } : {}), ...(turned.length > 0 ? { turned } : {}), ...(dayMonthOrder.length > 0 ? { dayMonthOrder } : {}), ...(yyOrder.length > 0 ? { yyOrder } : {}), ...(decimalReading.length > 0 ? { decimalReading } : {}), ...(missingCode.length > 0 ? { missingCode } : {}), ...(summaryRows.length > 0 ? { summaryRows } : {}), ...(countText.length > 0 ? { countText } : {}), ...(encoding.length > 0 ? { encoding } : {}), ...(declaredPosition.length > 0 ? { declaredPosition } : {}), ...(declaredDate.length > 0 ? { declaredDate } : {}), ...sampleJoins, ...(biomassBasis.length > 0 ? { biomassBasis } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
+    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(perOccurrence.length > 0 ? { perOccurrence } : {}), ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(presenceOnly.length > 0 ? { presenceOnly } : {}), ...(dropCopiesRows.length > 0 ? { dropCopiesRows } : {}), ...(ownRecords.length > 0 ? { ownRecords } : {}), ...(keepCopiesRows.length > 0 ? { keepCopiesRows } : {}), ...(totalOnceGroups.length > 0 ? { totalOnceGroups } : {}), ...(leaveOut.length > 0 ? { leaveOut } : {}), ...(realCountsRows.length > 0 ? { realCountsRows } : {}), ...(sampleKey.length > 0 ? { sampleKey } : {}), ...(turned.length > 0 ? { turned } : {}), ...(dayMonthOrder.length > 0 ? { dayMonthOrder } : {}), ...(yyOrder.length > 0 ? { yyOrder } : {}), ...(decimalReading.length > 0 ? { decimalReading } : {}), ...(missingCode.length > 0 ? { missingCode } : {}), ...(summaryRows.length > 0 ? { summaryRows } : {}), ...(countText.length > 0 ? { countText } : {}), ...(countTextColumn.length > 0 ? { countTextColumn } : {}), ...(encoding.length > 0 ? { encoding } : {}), ...(declaredPosition.length > 0 ? { declaredPosition } : {}), ...(declaredDate.length > 0 ? { declaredDate } : {}), ...sampleJoins, ...(biomassBasis.length > 0 ? { biomassBasis } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
   };
 
   return (

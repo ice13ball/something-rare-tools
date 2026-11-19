@@ -120,7 +120,9 @@ export interface SheetChoice {
   /** The answer given once for a column (by index): it applies to the texts of that column no text answer covers; its count is the cells of the column that hold a text. Never preselected. */
   countTextColumns?: Record<number, { answer: CountTextAnswer; count: number; fromFile?: boolean }>;
   /** The answers a companion file recorded for this sheet (same name, same number of rows), by the hash of 't' + the text. A pre-pick only for a text of the sheet that has that hash and as many cells; each is used once (`applySavedCountTexts`). */
-  countTextsSaved?: { answer: CountTextAnswer; count: number; hash: string }[];
+  countTextsSaved?: { answer: CountTextAnswer; count: number; index: number; hash: string }[];
+  /** The whole-column answers a companion file recorded for this sheet (same name, same number of rows), by column index; used only where the column holds as many text cells (`applySavedCountTexts`). */
+  countTextColumnsSaved?: { answer: CountTextAnswer; count: number; index: number }[];
   /** The one position the person typed for this sheet (it has no latitude / longitude column), as typed. Empty strings = none. Sent only when all three are filled. */
   positionLat: string;
   positionLon: string;
@@ -524,15 +526,27 @@ function savedSummaryRows(settings: ConvertParseResult['settings'], sheet: { nam
   return d === undefined ? {} : { summaryRows: { answer: d.answer, count: d.count, fromFile: true } };
 }
 
-/** The count-text answers a companion file recorded for a sheet: kept for a pre-pick only for the same sheet name with the same number of rows; matched to a text by hash once the converter names the texts. */
-function savedCountTexts(settings: ConvertParseResult['settings'], sheet: { name: string; rowCount: number }): Pick<SheetChoice, 'countTextsSaved'> {
-  const saved = (settings.countText ?? []).filter((d) => d.sheet === sheet.name && d.rows === sheet.rowCount).map((d) => ({ answer: d.answer, count: d.count, hash: d.hash }));
-  return saved.length === 0 ? {} : { countTextsSaved: saved };
+/** The count-text answers a companion file recorded for a sheet: kept for a pre-pick only for the same sheet name with the same number of rows; matched to a text of its column by hash once the converter names the texts. */
+function savedCountTexts(settings: ConvertParseResult['settings'], sheet: { name: string; rowCount: number }): Pick<SheetChoice, 'countTextsSaved' | 'countTextColumnsSaved'> {
+  const saved = (settings.countText ?? []).filter((d) => d.sheet === sheet.name && d.rows === sheet.rowCount).map((d) => ({ answer: d.answer, count: d.count, index: d.index, hash: d.hash }));
+  const columns = (settings.countTextColumn ?? []).filter((d) => d.sheet === sheet.name && d.rows === sheet.rowCount).map((d) => ({ answer: d.answer, count: d.count, index: d.index }));
+  return { ...(saved.length === 0 ? {} : { countTextsSaved: saved }), ...(columns.length === 0 ? {} : { countTextColumnsSaved: columns }) };
+}
+
+/** The cells of column `index` that hold a text, from a finding's `columnTexts` ("index:count,index:count"); undefined when the finding does not name the column. */
+function columnTextCount(f: Finding, index: number): number | undefined {
+  for (const part of String(f.params.columnTexts ?? '').split(',')) {
+    const [i, n] = part.split(':').map(Number);
+    if (i === index && Number.isInteger(n) && n >= 1) return n;
+  }
+  return undefined;
 }
 
 /**
- * The saved count-text answers that hold today: for each CONV-TEXT-IN-TAXON-CELL the converter asks, a saved answer whose hash is the hash of 't' + that text and whose count is the cells the question names (`held`)
- * becomes the sheet's answer for that text (`fromFile`). Each saved answer is used once, so "Ask again" asks again. The text is only ever compared by its hash. Returns the same object when nothing applies.
+ * The saved count-text answers that hold today, each for ITS OWN column only. For each CONV-TEXT-IN-TAXON-CELL the converter asks (one per text and column): a saved answer with that column index, the hash of
+ * 't' + that text and the cells the question names (`held`) becomes the sheet's answer for that text in that column (`fromFile`); a saved whole-column answer for that index whose count equals the text cells of
+ * the column (`columnTexts`) becomes the column's answer. Each saved answer is used once, so "Ask again" asks again. A line of the old format (no column index) was never read. The text is only ever compared by
+ * its hash. Returns the same object when nothing applies.
  */
 export function applySavedCountTexts(parsed: ConvertParseResult, choices: Record<string, SheetChoice>, findings: readonly Finding[]): Record<string, SheetChoice> {
   let out = choices;
@@ -541,31 +555,95 @@ export function applySavedCountTexts(parsed: ConvertParseResult, choices: Record
     const file = parsed.files.find((x) => x.fileName === f.file);
     if (file === undefined) continue;
     const key = sheetKey(file.fileId, f.sheet);
-    const c = out[key];
-    const saved = c?.countTextsSaved;
-    if (c === undefined || saved === undefined) continue;
-    const hash = shortHash('t' + f.value);
+    const index = Number(f.params.indexes);
+    if (!Number.isInteger(index)) continue;
+    let c = out[key];
+    if (c === undefined) continue;
+    const saved = c.countTextsSaved;
     const held = Number(f.params.held);
-    const at = saved.findIndex((d) => d.hash === hash && d.count === held);
-    if (at < 0) continue;
-    const rest = saved.filter((_, i) => i !== at);
-    const { countTextsSaved: _gone, ...without } = c;
-    out = { ...out, [key]: { ...without, ...(rest.length === 0 ? {} : { countTextsSaved: rest }), countTexts: { ...(c.countTexts ?? {}), [f.value]: { answer: saved[at].answer, count: held, fromFile: true } } } };
+    const at = saved === undefined ? -1 : saved.findIndex((d) => d.index === index && d.hash === shortHash('t' + f.value) && d.count === held);
+    if (saved !== undefined && at >= 0) {
+      const { countTextsSaved: _gone, ...without } = c;
+      const rest = saved.filter((_, i) => i !== at);
+      c = { ...without, ...(rest.length === 0 ? {} : { countTextsSaved: rest }), countTexts: { ...(c.countTexts ?? {}), [countTextKeyOf(index, f.value)]: { answer: saved[at].answer, count: held, fromFile: true } } };
+      out = { ...out, [key]: c };
+    }
+    const cols = c.countTextColumnsSaved;
+    const total = columnTextCount(f, index);
+    const col = cols === undefined || total === undefined ? -1 : cols.findIndex((d) => d.index === index && d.count === total);
+    if (cols !== undefined && col >= 0 && total !== undefined && c.countTextColumns?.[index] === undefined) {
+      const { countTextColumnsSaved: _gone, ...without } = c;
+      const rest = cols.filter((_, i) => i !== col);
+      out = { ...out, [key]: { ...without, ...(rest.length === 0 ? {} : { countTextColumnsSaved: rest }), countTextColumns: { ...(c.countTextColumns ?? {}), [index]: { answer: cols[col].answer, count: total, fromFile: true } } } };
+    }
   }
   return out;
 }
 
-/** The count-text answers a companion file records: one line per text the converter said as decided today (CONV-COUNT-TEXT-DECIDED), also a text a whole-column answer settled. The sheet, the answer, the cells it was given for, the rows of the sheet and the hash of 't' + the text; never the text. */
+/**
+ * Takes out of the choices an answer the converter found stale: a per-text answer whose text is asked again although the answer was sent with the request that found it (its count no longer holds, for
+ * example after a summary-row or undated leave-out), and with it the whole-column answer of that column (as "Ask again" does: the column would settle the text again without a question); a column answer
+ * whose cell count no longer matches the column. Only an answer the shown result was made with is judged (`sent`): one given since stays. Returns the same object when nothing is stale.
+ */
+export function dropStaleCountTexts(choices: Record<string, SheetChoice>, sent: Record<string, SheetChoice>, findings: readonly Finding[], parsed: ConvertParseResult): Record<string, SheetChoice> {
+  let out = choices;
+  for (const f of findings) {
+    if (f.ruleId !== 'CONV-TEXT-IN-TAXON-CELL' || f.sheet === undefined || f.value === undefined) continue;
+    const file = parsed.files.find((x) => x.fileName === f.file);
+    const index = Number(f.params.indexes);
+    if (file === undefined || !Number.isInteger(index)) continue;
+    const key = sheetKey(file.fileId, f.sheet);
+    const c = out[key];
+    const was = sent[key];
+    if (c === undefined || was === undefined) continue;
+    const textKey = countTextKeyOf(index, f.value);
+    const own = c.countTexts?.[textKey];
+    const column = c.countTextColumns?.[index];
+    const staleText = own !== undefined && own === was.countTexts?.[textKey];
+    const total = columnTextCount(f, index);
+    const staleColumn = column !== undefined && column === was.countTextColumns?.[index] && (staleText || (total !== undefined && column.count !== total));
+    if (!staleText && !staleColumn) continue;
+    const { countTexts: texts, countTextColumns: cols, ...rest } = c;
+    const { [textKey]: _gone, ...others } = texts ?? {};
+    const { [index]: _col, ...columns } = cols ?? {};
+    out = { ...out, [key]: { ...rest, ...((staleText ? others : (texts ?? {})) && Object.keys(staleText ? others : (texts ?? {})).length > 0 ? { countTexts: staleText ? others : texts } : {}), ...(Object.keys(staleColumn ? columns : (cols ?? {})).length > 0 ? { countTextColumns: staleColumn ? columns : cols } : {}) } as SheetChoice };
+  }
+  return out;
+}
+
+/** The key of a per-text count answer (the same as the converter's `countTextKey`): the column index on the sheet and the trimmed text. */
+export const countTextKeyOf = (index: number, text: string): string => `${index}\u001f${text}`;
+
+/**
+ * The count-text answers a companion file records for texts answered by themselves: one line per text and column the converter said as decided today (CONV-COUNT-TEXT-DECIDED) that no whole-column answer
+ * settled. The sheet, the answer, the cells it was given for, the rows of the sheet, the column index and the hash of 't' + the text; never the text.
+ */
 export function countTextSettingsOf(parsed: ConvertParseResult, said: readonly Finding[]): NonNullable<ConvertSettings['countText']> {
   const out: NonNullable<ConvertSettings['countText']> = [];
   for (const f of said) {
-    if (f.ruleId !== 'CONV-COUNT-TEXT-DECIDED' || f.sheet === undefined || f.value === undefined) continue;
+    if (f.ruleId !== 'CONV-COUNT-TEXT-DECIDED' || f.sheet === undefined || f.value === undefined || f.params.via === 'column') continue;
     const answer = f.params.answer;
     const held = Number(f.params.held);
+    const index = Number(f.params.indexes);
     const sh = parsed.files.find((x) => x.fileName === f.file)?.sheets.find((x) => x.name === f.sheet);
-    if (sh === undefined || (answer !== 'absence' && answer !== 'leave-out' && answer !== 'present') || !Number.isInteger(held) || held < 1) continue;
+    if (sh === undefined || (answer !== 'absence' && answer !== 'leave-out' && answer !== 'present') || !Number.isInteger(held) || held < 1 || !Number.isInteger(index) || index < 0) continue;
     const hash = shortHash('t' + f.value);
-    if (!out.some((o) => o.sheet === f.sheet && o.hash === hash)) out.push({ sheet: f.sheet, answer, count: held, rows: sh.rowCount, hash });
+    if (!out.some((o) => o.sheet === f.sheet && o.index === index && o.hash === hash)) out.push({ sheet: f.sheet, answer, count: held, rows: sh.rowCount, index, hash });
+  }
+  return out;
+}
+
+/** The whole-column count-text answers a companion file records: one line per column a CONV-COUNT-TEXT-DECIDED said was settled by the column's answer (`via` column), with the cells of that column that hold a text. */
+export function countTextColumnSettingsOf(parsed: ConvertParseResult, said: readonly Finding[]): NonNullable<ConvertSettings['countTextColumn']> {
+  const out: NonNullable<ConvertSettings['countTextColumn']> = [];
+  for (const f of said) {
+    if (f.ruleId !== 'CONV-COUNT-TEXT-DECIDED' || f.sheet === undefined || f.params.via !== 'column') continue;
+    const answer = f.params.answer;
+    const index = Number(f.params.indexes);
+    const sh = parsed.files.find((x) => x.fileName === f.file)?.sheets.find((x) => x.name === f.sheet);
+    const count = Number.isInteger(index) ? columnTextCount(f, index) : undefined;
+    if (sh === undefined || (answer !== 'absence' && answer !== 'leave-out' && answer !== 'present') || count === undefined) continue;
+    if (!out.some((o) => o.sheet === f.sheet && o.index === index)) out.push({ sheet: f.sheet, answer, count, rows: sh.rowCount, index });
   }
   return out;
 }

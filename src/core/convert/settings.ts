@@ -64,10 +64,14 @@ import type { ParsedFile } from '../types';
  *                     writes them (real) and says the answer came from the file. A sheet name, a hash and a count, never a value.
  *   summaryRows=<leave-out|keep>:<count>:<rows>:<sheet>  the person answered "leave them out (summary rows)" or "keep (a real station)" (CONV-SUMMARY-ROW-UNDECIDED) for the <count> rows a sheet of <rows> rows
  *                     holds back as summary rows. Holds only while the sheet has the same number of rows AND the converter holds back the same <count> rows; the converter then says the answer came from the file. No row label.
- *   countText=<absence|leave-out|present>:<count>:<rows>:<sheet>:<hash>  the person answered "absence", "leave out" or "present (the text in the remarks)" (CONV-TEXT-IN-TAXON-CELL) for the <count> cells
+ *   countText=<absence|leave-out|present>:<count>:<rows>:<sheet>:<colIndex>:<hash>  the person answered "absence", "leave out" or "present (the text in the remarks)" (CONV-TEXT-IN-TAXON-CELL) for the <count> cells
  *                     that hold one text in a count column of a sheet of <rows> rows. <hash> is the hash (core/convert/keySetting.ts `shortHash`) of 't' + the cell's trimmed text, NEVER the text: a text such as
  *                     "nie stwierdzono" or "<0.5" is a data value. Holds only when a text of that sheet has that hash, the same <count> cells and the sheet has the same number of rows; the page then pre-picks it
- *                     and the converter says the answer came from the file. An answer given once for a whole column is written as one such line per text it settled.
+ *                     and the converter says the answer came from the file. An answer is for ONE column
+ *                     (<colIndex> = the column's index on the sheet): the same text in two columns is two lines, and each applies only to its own column. A line without <colIndex> (the old format) is not
+ *                     applied: the text is asked again.
+ *   countTextColumn=<absence|leave-out|present>:<count>:<rows>:<sheet>:<colIndex>  the answer given once for every text still open in the column <colIndex>, for the <count> cells of that column that hold a text;
+ *                     holds only while the column has the same <count> and the sheet the same <rows>. A text answered by itself has its own `countText` line instead.
  *   sampleJoin=<rRows>:<dRows>:<rHashes>:<dHashes>:<["rFile","rSheet","dFile","dSheet"]>  the person confirmed that a results sheet takes its samples' description from another sheet (core/convert/sampleJoin.ts):
  *                     the rows of both sheets, the hashes of the key columns of each (core/convert/keySetting.ts, as for sampleKey) and the four names as a JSON array, so a `:` in a name is safe.
  *                     A PRE-CONFIRMATION that holds only when both sheets are found again with the same rows and the key columns are found by their hashes; otherwise the page asks again. No value.
@@ -116,6 +120,7 @@ export const DECIMAL_READING_SETTING = 'decimalReading=';
 export const MISSING_CODE_SETTING = 'missingCode=';
 export const SUMMARY_ROWS_SETTING = 'summaryRows=';
 export const COUNT_TEXT_SETTING = 'countText=';
+export const COUNT_TEXT_COLUMN_SETTING = 'countTextColumn=';
 export const ENCODING_SETTING = 'encoding=';
 export const DECLARED_POSITION_SETTING = 'declaredPosition=';
 export const DECLARED_DATE_SETTING = 'declaredDate=';
@@ -180,7 +185,9 @@ export interface ConvertSettings {
   /** The answer to the summary-rows question by sheet (the results sheet of a joined workbook), the rows it was given for and the rows of the sheet. Holds only for the same two numbers. */
   summaryRows?: { sheet: string; answer: 'leave-out' | 'keep'; count: number; rows: number }[];
   /** The answer to a text in a count column (CONV-TEXT-IN-TAXON-CELL) by sheet, the hash of 't' + the text (never the text), the cells it was given for and the rows of the sheet. Holds only for the same three. */
-  countText?: { sheet: string; answer: 'absence' | 'leave-out' | 'present'; count: number; rows: number; hash: string }[];
+  countText?: { sheet: string; answer: 'absence' | 'leave-out' | 'present'; count: number; rows: number; index: number; hash: string }[];
+  /** the answer given once for a whole count column (by its index on the sheet), with the cells of the column that hold a text */
+  countTextColumn?: { sheet: string; answer: 'absence' | 'leave-out' | 'present'; count: number; rows: number; index: number }[];
   /** The 8-bit encoding the person picked for a file whose letters read differently in the code pages, by the hash of the file's bytes. Holds only for a file with the same bytes. */
   encoding?: { encoding: 'windows-1250' | 'iso-8859-2' | 'windows-1252'; hash: string }[];
   /**
@@ -273,7 +280,9 @@ const DATE_PART = '\\d{4}(?:-\\d{2}(?:-\\d{2})?)?';
 export const DECLARED_DATE_SHAPE = new RegExp(`^${DATE_PART}(?:/${DATE_PART})?$`);
 const DECLARED_DATE = /^([^:]{4,21}):(\d{1,9}):(.+)$/s;
 const DECLARED_POSITION = /^([^:]{1,40}):([^:]{1,40}):([^:]{1,40}):(\d{1,9}):(.+)$/s;
-const COUNT_TEXT = /^(absence|leave-out|present):(\d{1,9}):(\d{1,9}):(.+):([0-9a-f]{8})$/s;
+// the trailing fields are anchored (column index, hash), so a sheet name with colons stays whole; an old line (no column index) does not match: it is not applied and the text is asked again
+const COUNT_TEXT = /^(absence|leave-out|present):(\d{1,9}):(\d{1,9}):(.+):(\d{1,6}):([0-9a-f]{8})$/s;
+const COUNT_TEXT_COLUMN = /^(absence|leave-out|present):(\d{1,9}):(\d{1,9}):(.+):(\d{1,6})$/s;
 const SUMMARY_ROWS = /^(leave-out|keep):(\d{1,9}):(\d{1,9}):(.+)$/s;
 const LEAVE_OUT = /^([a-z][a-z-]{0,40}):(\d{1,9}):(\d{1,9}):(.+)$/s;
 
@@ -340,10 +349,14 @@ export function readConvertSettings(parsed: ParsedFile): ConvertSettings | undef
       const m = SUMMARY_ROWS.exec(v.slice(SUMMARY_ROWS_SETTING.length));
       const list = (settings.summaryRows ??= []);
       if (m !== null && Number(m[2]) >= 1 && m[4].length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS && !list.some((x) => x.sheet === m[4])) list.push({ answer: m[1] as 'leave-out' | 'keep', count: Number(m[2]), rows: Number(m[3]), sheet: m[4] });
+    } else if (v.startsWith(COUNT_TEXT_COLUMN_SETTING)) {
+      const m = COUNT_TEXT_COLUMN.exec(v.slice(COUNT_TEXT_COLUMN_SETTING.length));
+      const list = (settings.countTextColumn ??= []);
+      if (m !== null && Number(m[2]) >= 1 && m[4].length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS * 40 && !list.some((x) => x.sheet === m[4] && x.index === Number(m[5]))) list.push({ answer: m[1] as 'absence' | 'leave-out' | 'present', count: Number(m[2]), rows: Number(m[3]), sheet: m[4], index: Number(m[5]) });
     } else if (v.startsWith(COUNT_TEXT_SETTING)) {
       const m = COUNT_TEXT.exec(v.slice(COUNT_TEXT_SETTING.length));
       const list = (settings.countText ??= []);
-      if (m !== null && Number(m[2]) >= 1 && m[4].length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS * 40 && !list.some((x) => x.sheet === m[4] && x.hash === m[5])) list.push({ answer: m[1] as 'absence' | 'leave-out' | 'present', count: Number(m[2]), rows: Number(m[3]), sheet: m[4], hash: m[5] });
+      if (m !== null && Number(m[2]) >= 1 && m[4].length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS * 40 && !list.some((x) => x.sheet === m[4] && x.index === Number(m[5]) && x.hash === m[6])) list.push({ answer: m[1] as 'absence' | 'leave-out' | 'present', count: Number(m[2]), rows: Number(m[3]), sheet: m[4], index: Number(m[5]), hash: m[6] });
     } else if (v.startsWith(DECLARED_POSITION_SETTING)) {
       const m = DECLARED_POSITION.exec(v.slice(DECLARED_POSITION_SETTING.length));
       const list = (settings.declaredPosition ??= []);
@@ -439,7 +452,8 @@ export function writeConvertSidecar(settings: Partial<ConvertSettings>): string 
       ...(settings.decimalReading ?? []).filter((d) => (d.reading === 'decimal' || d.reading === 'thousands') && d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && /^[0-9a-f]{8}/.test(d.hash) && Number.isInteger(d.rows) && d.rows >= 0).slice(0, MAX_SETTING_SHEETS * 8).map((d) => line([SETTING_ROW, `${DECIMAL_READING_SETTING}${d.reading}:${d.sheet}:${d.hash}:${d.rows}`, '', '', ''])),
       ...(settings.encoding ?? []).filter((e) => (e.encoding === 'windows-1250' || e.encoding === 'iso-8859-2' || e.encoding === 'windows-1252') && /^[0-9a-f]{8}$/.test(e.hash)).slice(0, MAX_SETTING_SHEETS).map((e) => line([SETTING_ROW, `${ENCODING_SETTING}${e.encoding}:${e.hash}`, '', '', ''])),
       ...(settings.missingCode ?? []).filter((d) => (d.answer === 'missing' || d.answer === 'real') && d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && /^[0-9a-f]{8}/.test(d.hash) && Number.isInteger(d.rows) && d.rows >= 0).slice(0, MAX_SETTING_SHEETS * 8).map((d) => line([SETTING_ROW, `${MISSING_CODE_SETTING}${d.answer}:${d.sheet}:${d.hash}:${d.rows}`, '', '', ''])),
-      ...(settings.countText ?? []).filter((d) => (d.answer === 'absence' || d.answer === 'leave-out' || d.answer === 'present') && d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && /^[0-9a-f]{8}$/.test(d.hash) && Number.isInteger(d.count) && d.count >= 1 && Number.isInteger(d.rows) && d.rows >= 0).slice(0, MAX_SETTING_SHEETS * 40).map((d) => line([SETTING_ROW, `${COUNT_TEXT_SETTING}${d.answer}:${d.count}:${d.rows}:${d.sheet}:${d.hash}`, '', '', ''])),
+      ...(settings.countText ?? []).filter((d) => (d.answer === 'absence' || d.answer === 'leave-out' || d.answer === 'present') && d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && /^[0-9a-f]{8}$/.test(d.hash) && Number.isInteger(d.count) && d.count >= 1 && Number.isInteger(d.rows) && d.rows >= 0 && Number.isInteger(d.index) && d.index >= 0 && d.index <= 999999).slice(0, MAX_SETTING_SHEETS * 40).map((d) => line([SETTING_ROW, `${COUNT_TEXT_SETTING}${d.answer}:${d.count}:${d.rows}:${d.sheet}:${d.index}:${d.hash}`, '', '', ''])),
+      ...(settings.countTextColumn ?? []).filter((d) => (d.answer === 'absence' || d.answer === 'leave-out' || d.answer === 'present') && d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && Number.isInteger(d.count) && d.count >= 1 && Number.isInteger(d.rows) && d.rows >= 0 && Number.isInteger(d.index) && d.index >= 0 && d.index <= 999999).slice(0, MAX_SETTING_SHEETS * 40).map((d) => line([SETTING_ROW, `${COUNT_TEXT_COLUMN_SETTING}${d.answer}:${d.count}:${d.rows}:${d.sheet}:${d.index}`, '', '', ''])),
       ...(settings.summaryRows ?? []).filter((d) => (d.answer === 'leave-out' || d.answer === 'keep') && d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && Number.isInteger(d.count) && d.count >= 1 && Number.isInteger(d.rows) && d.rows >= 0).slice(0, MAX_SETTING_SHEETS).map((d) => line([SETTING_ROW, `${SUMMARY_ROWS_SETTING}${d.answer}:${d.count}:${d.rows}:${d.sheet}`, '', '', ''])),
       ...(settings.declaredPosition ?? []).filter((d) => d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && [d.lat, d.lon, d.uncertaintyM].every((x) => /^[^:\r\n]{1,40}$/.test(x.trim()) && x.trim() !== '')).slice(0, MAX_SETTING_SHEETS).map((d) => line([SETTING_ROW, `${DECLARED_POSITION_SETTING}${d.lat.trim()}:${d.lon.trim()}:${d.uncertaintyM.trim()}:${Math.max(0, Math.floor(d.rows))}:${d.sheet}`, '', '', ''])),
       ...(settings.declaredDate ?? []).filter((d) => d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && DECLARED_DATE_SHAPE.test(d.value.trim())).slice(0, MAX_SETTING_SHEETS).map((d) => line([SETTING_ROW, `${DECLARED_DATE_SETTING}${d.value.trim()}:${Math.max(0, Math.floor(d.rows))}:${d.sheet}`, '', '', ''])),

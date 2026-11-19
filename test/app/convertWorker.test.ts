@@ -858,7 +858,7 @@ describe('the count-text answers of the request (round 4, Task 17)', () => {
   it('without an answer the text is asked; each of the three answers reaches the converter, fromFile is said', async () => {
     expect((await run({}))('CONV-TEXT-IN-TAXON-CELL')).toHaveLength(1);
     for (const answer of ['absence', 'leave-out', 'present']) {
-      const r = await run({ countTexts: { absent: { answer, count: 1, fromFile: true } } });
+      const r = await run({ countTexts: { '6\u001fabsent': { answer, count: 1, fromFile: true } } });
       expect(r('CONV-TEXT-IN-TAXON-CELL')).toHaveLength(0);
       expect(r('CONV-COUNT-TEXT-DECIDED')[0].params).toMatchObject({ answer, fromFile: 'yes' });
     }
@@ -868,15 +868,17 @@ describe('the count-text answers of the request (round 4, Task 17)', () => {
     const col = await run({ countTextColumns: { 6: { answer: 'absence', count: 1 } } });
     expect(col('CONV-TEXT-IN-TAXON-CELL')).toHaveLength(0);
     expect(col('CONV-COUNT-TEXT-DECIDED')[0].params).toMatchObject({ answer: 'absence', via: 'column' });
-    const both = await run({ countTextColumns: { 6: { answer: 'absence', count: 1 } }, countTexts: { absent: { answer: 'present', count: 1 } } });
+    const both = await run({ countTextColumns: { 6: { answer: 'absence', count: 1 } }, countTexts: { '6\u001fabsent': { answer: 'present', count: 1 } } });
     expect(both('CONV-COUNT-TEXT-DECIDED')[0].params).toMatchObject({ answer: 'present' });
   });
 
   it('a malformed answer (count 0, 1.5, a text, another answer, not an object) is dropped: the text is asked; a text called __proto__ stays a plain key', async () => {
     for (const bad of [{ answer: 'absence', count: 0 }, { answer: 'absence', count: 1.5 }, { answer: 'absence', count: '1' }, { answer: 'drop', count: 1 }, 'absence', null]) {
-      expect((await run({ countTexts: { absent: bad } }))('CONV-TEXT-IN-TAXON-CELL')).toHaveLength(1);
+      expect((await run({ countTexts: { '6\u001fabsent': bad } }))('CONV-TEXT-IN-TAXON-CELL')).toHaveLength(1);
     }
     expect((await run({ countTextColumns: { x: { answer: 'absence', count: 1 }, 6: { answer: 'absence', count: 0 } } }))('CONV-TEXT-IN-TAXON-CELL')).toHaveLength(1);
-    expect((await run({ countTexts: JSON.parse('{"__proto__":{"answer":"absence","count":1}}') }))('CONV-TEXT-IN-TAXON-CELL')).toHaveLength(1);
+    // a key with no column index (the old format) answers nothing
+    expect((await run({ countTexts: { absent: { answer: 'absence', count: 1 } } }))('CONV-TEXT-IN-TAXON-CELL')).toHaveLength(1);
+    expect((await run({ countTexts: JSON.parse('{"6\\u001f__proto__":{"answer":"absence","count":1}}') }))('CONV-TEXT-IN-TAXON-CELL')).toHaveLength(1);
   });
 });

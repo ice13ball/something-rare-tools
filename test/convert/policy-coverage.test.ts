@@ -17,7 +17,14 @@ const ROOT = join(__dirname, '..', '..');
 const src = (p: string): string => readFileSync(join(ROOT, p), 'utf8');
 const tsFiles = (dir: string): string[] => readdirSync(join(ROOT, dir), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? tsFiles(join(dir, e.name)) : e.name.endsWith('.ts') ? [join(dir, e.name)] : []));
 
-/** The ids a reader names: the quoted ids of the parse and values folders, and the ids the metadata parser adds. */
+/** Where the extra files raise a finding: `c.add('ID'`, `makeFinding('ID'` or `makeFinding(cond ? 'ID' : 'ID'` (a quoted id straight after the call, or in its first argument's ternary). */
+const EMISSION = /(?:\bc\.add|\bmakeFinding)\(\s*(?:[^'()]*\?\s*)?'((?:IN|ROW)-[A-Z0-9-]+)'(?:\s*:\s*'((?:IN|ROW)-[A-Z0-9-]+)')?/g;
+
+/**
+ * The ids a reader names, from exactly these places: every quoted `IN-`/`ROW-` id in src/core/parse and src/core/values; the `c.add('ID'` calls of the metadata parser in src/core/dataset.ts; and every
+ * emission site (`c.add('ID'` or `makeFinding('ID'`) in src/core/dataset.ts (all of it, not only the metadata parser), src/core/checks/rows.ts, src/core/convert/pivot.ts and src/core/convert/dateOrder.ts.
+ * Nothing else is scanned: a reader decision raised from any other file is not seen by this test.
+ */
 export function readerIds(): Set<string> {
   const out = new Set<string>();
   for (const f of [...tsFiles('src/core/parse'), ...tsFiles('src/core/values')]) for (const m of src(f).matchAll(/'((?:IN|ROW)-[A-Z0-9-]+)'/g)) out.add(m[1]);
@@ -28,6 +35,7 @@ export function readerIds(): Set<string> {
   const next = rest.search(/\n(?:export )?function /);
   const body = next < 0 ? rest : rest.slice(0, next);
   for (const m of body.matchAll(/c\.add\('([A-Z0-9-]+)'/g)) out.add(m[1]);
+  for (const f of ['src/core/dataset.ts', 'src/core/checks/rows.ts', 'src/core/convert/pivot.ts', 'src/core/convert/dateOrder.ts']) for (const m of src(f).matchAll(EMISSION)) for (const id of [m[1], m[2]]) if (id !== undefined) out.add(id);
   return out;
 }
 
@@ -76,10 +84,25 @@ const EXEMPT: Record<string, string> = {
   'IN-DWCA-PARTIAL': 'raised only by parseDwca; the convert worker reads files with parseFile',
   'IN-DWCA-VERSION': 'raised only by parseDwca; the convert worker reads files with parseFile',
   'IN-DWCA-EVENT-CORE': 'raised only by parseDwca; the convert worker reads files with parseFile',
+  // seen since the scan reads src/core/dataset.ts, checks/rows.ts, convert/pivot.ts and convert/dateOrder.ts whole (round 4 final review, I2); a check of the data as written, no value is changed
+  'ROW-DATE-MISSING': '(c) a check: rows without a date are reported, nothing is filled in',
+  'ROW-HEADER-CODE-SHAPE': '(c) a check of the header as written; no value is changed',
+  'ROW-ON-LAND': '(c) a check of the coordinates as written; no value is changed',
+  'ROW-ON-LAND-NEAR': '(c) a check of the coordinates as written; no value is changed',
+  'ROW-STATION-SPREAD': '(c) a check of the coordinates as written; no value is changed',
+  'ROW-UNIT-MISSING': '(c) a check: a header with no unit is reported, no unit is assumed',
+  'ROW-YEAR-DATE-MISMATCH': '(c) a check of two columns as written; no value is changed',
+  'ROW-YEAR-OUTLIER': '(c) a check of the years as written; no value is changed',
+  'ROW-KEY-IGNORED': '(b) it names only columns the person set to ignore',
 };
 
 /** A rule that is `show` now and has a task that changes it. */
-const PENDING: Record<string, string> = {};
+const PENDING: Record<string, string> = {
+  // found by the widened scan (I2); their policy was not changed by that fix, and each is a reader choice or leave-out still to be judged
+  'ROW-DEPTH-SIGN': 'a depth sign the reader may have read by convention; to be judged',
+  'ROW-LONG-KEY-EXTENDED': 'the reader picks the column that separates repeated rows; to be judged',
+  'ROW-LONG-VALUE-SKIPPED': 'a value of a long sheet is not read; to be judged against the ledger',
+};
 
 /** The ids the test looks at, with where each came from. */
 export function judged(): Map<string, string> {

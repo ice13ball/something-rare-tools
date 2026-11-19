@@ -578,7 +578,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-LONG-PARAMETER-MERGED',
     category: 'B',
     severity: 'info',
-    exportPolicy: 'show',
+    exportPolicy: 'accept',
     params: ['count', 'column'],
     plain: {
       pl: `W „{sheet}” komórka kolumny „{column}” jest w skoroszycie scalona na kilka wierszy; jej nazwa dotyczy wszystkich wierszy scalenia: {count} {+count:wiersz poniżej|wiersze poniżej|wierszy poniżej} pierwszej komórki ({+lines:wiersz|wiersze|wierszy} {lines}) czytano z niej. Sprawdź, czy to właściwy parametr.`,
