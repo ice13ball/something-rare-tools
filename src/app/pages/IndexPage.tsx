@@ -51,7 +51,7 @@ export function IndexPage(): React.ReactElement {
           {t('cite.article')} <a href={doiUrl(SITE.doiArticle)}>{doiUrl(SITE.doiArticle)}</a>
         </p>
         <p>
-          {t('cite.code')} <a href={doiUrl(SITE.doiCode100)}>{doiUrl(SITE.doiCode100)}</a>. {t('cite.all')}{' '}
+          {t('cite.code')} <a href={doiUrl(SITE.doiCodeVersion)}>{doiUrl(SITE.doiCodeVersion)}</a>. {t('cite.all')}{' '}
           <a href={doiUrl(SITE.doiCodeAll)}>{doiUrl(SITE.doiCodeAll)}</a>.
         </p>
       </section>
