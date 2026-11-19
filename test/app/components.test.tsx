@@ -81,7 +81,7 @@ describe('ReportView', () => {
     const f = makeFinding('ROW-ON-LAND', { file: 'a.csv', lines: [2, 3], params: { count: 2, places: 'x', allPlaces: '5 E, 1 N (1 row; ≥100 km; line 2) | 6 E, 1 N (1 row; ≥100 km; line 3)' } });
     const { container } = render(<ReportView report={buildReport([f])} />);
     const text = container.textContent ?? '';
-    expect(text).toContain('2 pozycji, wypisane poniżej');
+    expect(text).toContain('2 pozycje wypisane poniżej');
     expect(text).not.toContain('positions, listed below');
   });
 
