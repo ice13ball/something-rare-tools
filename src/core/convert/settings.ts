@@ -62,6 +62,8 @@ import type { ParsedFile } from '../types';
  *   missingCode=<missing|real>:<sheet>:<hash>:<rows>  the person answered "treat as missing" or "these are real values" (ROW-MISSING-CODE) for the number column with that header hash (core/convert/keySetting.ts) of the sheet of that name, for a sheet of <rows> rows.
  *                     Holds only when the column is found again by its hash and the sheet has the same number of rows; the converter then leaves the cells of that column that hold -99, -999 or -9999 empty (missing) or
  *                     writes them (real) and says the answer came from the file. A sheet name, a hash and a count, never a value.
+ *   summaryRows=<leave-out|keep>:<count>:<rows>:<sheet>  the person answered "leave them out (summary rows)" or "keep (a real station)" (CONV-SUMMARY-ROW-UNDECIDED) for the <count> rows a sheet of <rows> rows
+ *                     holds back as summary rows. Holds only while the sheet has the same number of rows AND the converter holds back the same <count> rows; the converter then says the answer came from the file. No row label.
  *   sampleJoin=<rRows>:<dRows>:<rHashes>:<dHashes>:<["rFile","rSheet","dFile","dSheet"]>  the person confirmed that a results sheet takes its samples' description from another sheet (core/convert/sampleJoin.ts):
  *                     the rows of both sheets, the hashes of the key columns of each (core/convert/keySetting.ts, as for sampleKey) and the four names as a JSON array, so a `:` in a name is safe.
  *                     A PRE-CONFIRMATION that holds only when both sheets are found again with the same rows and the key columns are found by their hashes; otherwise the page asks again. No value.
@@ -108,6 +110,7 @@ export const DAY_MONTH_ORDER_SETTING = 'dayMonthOrder=';
 export const YY_ORDER_SETTING = 'yyOrder=';
 export const DECIMAL_READING_SETTING = 'decimalReading=';
 export const MISSING_CODE_SETTING = 'missingCode=';
+export const SUMMARY_ROWS_SETTING = 'summaryRows=';
 export const ENCODING_SETTING = 'encoding=';
 export const DECLARED_POSITION_SETTING = 'declaredPosition=';
 export const DECLARED_DATE_SETTING = 'declaredDate=';
@@ -169,6 +172,8 @@ export interface ConvertSettings {
   decimalReading?: { sheet: string; reading: 'decimal' | 'thousands'; hash: string; rows: number }[];
   /** The columns the person answered "treat -99, -999, -9999 as missing" for, by sheet, the column's header hash and the number of rows the answer was given for. Holds only for the same column and the same number of rows. */
   missingCode?: { sheet: string; answer: 'missing' | 'real'; hash: string; rows: number }[];
+  /** The answer to the summary-rows question by sheet (the results sheet of a joined workbook), the rows it was given for and the rows of the sheet. Holds only for the same two numbers. */
+  summaryRows?: { sheet: string; answer: 'leave-out' | 'keep'; count: number; rows: number }[];
   /** The 8-bit encoding the person picked for a file whose letters read differently in the code pages, by the hash of the file's bytes. Holds only for a file with the same bytes. */
   encoding?: { encoding: 'windows-1250' | 'iso-8859-2' | 'windows-1252'; hash: string }[];
   /**
@@ -261,6 +266,7 @@ const DATE_PART = '\\d{4}(?:-\\d{2}(?:-\\d{2})?)?';
 export const DECLARED_DATE_SHAPE = new RegExp(`^${DATE_PART}(?:/${DATE_PART})?$`);
 const DECLARED_DATE = /^([^:]{4,21}):(\d{1,9}):(.+)$/s;
 const DECLARED_POSITION = /^([^:]{1,40}):([^:]{1,40}):([^:]{1,40}):(\d{1,9}):(.+)$/s;
+const SUMMARY_ROWS = /^(leave-out|keep):(\d{1,9}):(\d{1,9}):(.+)$/s;
 const LEAVE_OUT = /^([a-z][a-z-]{0,40}):(\d{1,9}):(\d{1,9}):(.+)$/s;
 
 const addName = (list: string[], name: string): void => {
@@ -322,6 +328,10 @@ export function readConvertSettings(parsed: ParsedFile): ConvertSettings | undef
       const m = MISSING_CODE.exec(v.slice(MISSING_CODE_SETTING.length));
       const list = (settings.missingCode ??= []);
       if (m !== null && m[2].length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS * 8 && !list.some((x) => x.sheet === m[2] && x.hash === m[3])) list.push({ answer: m[1] as 'missing' | 'real', sheet: m[2], hash: m[3], rows: Number(m[4]) });
+    } else if (v.startsWith(SUMMARY_ROWS_SETTING)) {
+      const m = SUMMARY_ROWS.exec(v.slice(SUMMARY_ROWS_SETTING.length));
+      const list = (settings.summaryRows ??= []);
+      if (m !== null && Number(m[2]) >= 1 && m[4].length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS && !list.some((x) => x.sheet === m[4])) list.push({ answer: m[1] as 'leave-out' | 'keep', count: Number(m[2]), rows: Number(m[3]), sheet: m[4] });
     } else if (v.startsWith(DECLARED_POSITION_SETTING)) {
       const m = DECLARED_POSITION.exec(v.slice(DECLARED_POSITION_SETTING.length));
       const list = (settings.declaredPosition ??= []);
@@ -417,6 +427,7 @@ export function writeConvertSidecar(settings: Partial<ConvertSettings>): string 
       ...(settings.decimalReading ?? []).filter((d) => (d.reading === 'decimal' || d.reading === 'thousands') && d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && /^[0-9a-f]{8}/.test(d.hash) && Number.isInteger(d.rows) && d.rows >= 0).slice(0, MAX_SETTING_SHEETS * 8).map((d) => line([SETTING_ROW, `${DECIMAL_READING_SETTING}${d.reading}:${d.sheet}:${d.hash}:${d.rows}`, '', '', ''])),
       ...(settings.encoding ?? []).filter((e) => (e.encoding === 'windows-1250' || e.encoding === 'iso-8859-2' || e.encoding === 'windows-1252') && /^[0-9a-f]{8}$/.test(e.hash)).slice(0, MAX_SETTING_SHEETS).map((e) => line([SETTING_ROW, `${ENCODING_SETTING}${e.encoding}:${e.hash}`, '', '', ''])),
       ...(settings.missingCode ?? []).filter((d) => (d.answer === 'missing' || d.answer === 'real') && d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && /^[0-9a-f]{8}/.test(d.hash) && Number.isInteger(d.rows) && d.rows >= 0).slice(0, MAX_SETTING_SHEETS * 8).map((d) => line([SETTING_ROW, `${MISSING_CODE_SETTING}${d.answer}:${d.sheet}:${d.hash}:${d.rows}`, '', '', ''])),
+      ...(settings.summaryRows ?? []).filter((d) => (d.answer === 'leave-out' || d.answer === 'keep') && d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && Number.isInteger(d.count) && d.count >= 1 && Number.isInteger(d.rows) && d.rows >= 0).slice(0, MAX_SETTING_SHEETS).map((d) => line([SETTING_ROW, `${SUMMARY_ROWS_SETTING}${d.answer}:${d.count}:${d.rows}:${d.sheet}`, '', '', ''])),
       ...(settings.declaredPosition ?? []).filter((d) => d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && [d.lat, d.lon, d.uncertaintyM].every((x) => /^[^:\r\n]{1,40}$/.test(x.trim()) && x.trim() !== '')).slice(0, MAX_SETTING_SHEETS).map((d) => line([SETTING_ROW, `${DECLARED_POSITION_SETTING}${d.lat.trim()}:${d.lon.trim()}:${d.uncertaintyM.trim()}:${Math.max(0, Math.floor(d.rows))}:${d.sheet}`, '', '', ''])),
       ...(settings.declaredDate ?? []).filter((d) => d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && DECLARED_DATE_SHAPE.test(d.value.trim())).slice(0, MAX_SETTING_SHEETS).map((d) => line([SETTING_ROW, `${DECLARED_DATE_SETTING}${d.value.trim()}:${Math.max(0, Math.floor(d.rows))}:${d.sheet}`, '', '', ''])),
       ...(settings.sampleJoin ?? []).filter((j) => SHEET_NAMES([...j.results, ...j.description]) && /^[0-9a-f]{8}/.test(j.resultsHashes) && /^[0-9a-f]{8}/.test(j.descriptionHashes) && Number.isInteger(j.resultsRows) && j.resultsRows >= 0 && Number.isInteger(j.descriptionRows) && j.descriptionRows >= 0).slice(0, MAX_SETTING_SHEETS).flatMap((j) => [

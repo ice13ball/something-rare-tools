@@ -304,3 +304,22 @@ describe('the two-digit-year order in the companion file (round 4, Task 8)', () 
     expect(read?.yyOrder).toEqual([{ sheet: 'Counts', order: 'ymd', hash, rows: 3 }]);
   });
 });
+
+describe('the summary-rows answer in the companion file (round 4, Task 15)', () => {
+  it('round trips the answer by count, rows and sheet name (a colon in the name is safe), and holds no row label', () => {
+    const settings = { summaryRows: [{ sheet: 'hauls.csv', answer: 'keep' as const, count: 2, rows: 3 }, { sheet: 'a:b.csv', answer: 'leave-out' as const, count: 5, rows: 40 }] };
+    const text = writeConvertSidecar(settings);
+    expect(text).toContain('summaryRows=keep:2:3:hauls.csv');
+    expect(readConvertSettings(textFile('c.sidecar.csv', text))?.summaryRows).toEqual(settings.summaryRows);
+  });
+
+  it('a malformed line, an unknown answer, a count of 0 and a repeated sheet are not kept', () => {
+    const lines = ['summaryRows=maybe:2:3:a.csv', 'summaryRows=keep:0:3:a.csv', 'summaryRows=keep:x:3:a.csv', 'summaryRows=keep:2:3:a.csv', 'summaryRows=leave-out:2:3:a.csv'];
+    const text = ['original_column,output_column,unit,unit_source,p01', ...lines.map((l) => `(setting),${l},,,`)].join('\n') + '\n';
+    expect(readConvertSettings(textFile('c.sidecar.csv', text))?.summaryRows).toEqual([{ answer: 'keep', count: 2, rows: 3, sheet: 'a.csv' }]);
+  });
+
+  it('is not written for an answer that is none', () => {
+    expect(writeConvertSidecar({ summaryRows: [{ sheet: 'a.csv', answer: 'sideways' as never, count: 2, rows: 3 }, { sheet: 'a.csv', answer: 'keep', count: 0, rows: 3 }] })).not.toContain('summaryRows=');
+  });
+});

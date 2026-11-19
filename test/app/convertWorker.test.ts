@@ -813,3 +813,33 @@ describe('the two-digit-year order of the request (round 4, Task 8)', () => {
     }
   });
 });
+
+describe('the summary-rows answer of the request (round 4, Task 15)', () => {
+  const CSV = 'Station,Sample,Date,Latitude,Longitude,Calanus finmarchicus\nSeine,k1,2023-06-14,49.5,0.2,4\nSomme,k2,2023-06-15,50.2,1.6,5\nSomme,k3,2023-06-16,50.2,1.6,6\n';
+  async function run(extra: Record<string, unknown>) {
+    const e = createDirectConvertEngine();
+    const p = await e.parse([file('hauls.csv', CSV)]);
+    const f = p.files[0];
+    const sheet = { fileId: f.fileId, sheet: 'hauls.csv', mapping: f.mappings[0], shape: 'wide' as const, quantity: { kind: 'count' as const }, ...extra };
+    const v = await e.convert({ sheets: [sheet as ConvertRequestBody['sheets'][number]], options: {}, approvedSplits: {} });
+    return (id: string) => v.findings.filter((x) => x.ruleId === id);
+  }
+
+  it('without an answer the question is open; an answer for the count reaches the converter, fromFile is said', async () => {
+    const none = await run({});
+    expect(none('CONV-SUMMARY-ROW-UNDECIDED')).toHaveLength(1);
+    expect(none('CONV-SUMMARY-ROW-UNDECIDED')[0].params).toMatchObject({ count: 2, held: 2 });
+    const done = await run({ summaryRows: { answer: 'leave-out', count: 2, fromFile: true } });
+    expect(done('CONV-SUMMARY-ROW-UNDECIDED')).toHaveLength(0);
+    expect(done('CONV-SUMMARY-ROW-SKIPPED')[0].params).toMatchObject({ answer: 'leave-out', held: 2, fromFile: 'yes' });
+    expect((await run({ summaryRows: { answer: 'keep', count: 2 } }))('CONV-SUMMARY-ROW-SKIPPED')[0].params).toMatchObject({ answer: 'keep' });
+  });
+
+  it('an answer for another count, and a malformed one (count 0, 1.5, a text, another answer), do not apply: the question is asked', async () => {
+    for (const bad of [{ answer: 'leave-out', count: 3 }, { answer: 'leave-out', count: 0 }, { answer: 'keep', count: 1.5 }, { answer: 'keep', count: '2' }, { answer: 'drop', count: 2 }, 'keep', null]) {
+      const r = await run({ summaryRows: bad });
+      expect(r('CONV-SUMMARY-ROW-UNDECIDED')).toHaveLength(1);
+      expect(r('CONV-SUMMARY-ROW-SKIPPED')).toHaveLength(0);
+    }
+  });
+});

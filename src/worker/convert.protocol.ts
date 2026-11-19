@@ -150,6 +150,8 @@ export interface ConvertSheetRequest {
   /** The columns (by index) the PERSON answered "treat -99, -999 and -9999 as missing" for (ROW-MISSING-CODE): `missing` or `real` (these are values); `missingCodesFromFile` those among them read from a companion file (same header hash and row count, checked by the page). */
   missingCodes?: Record<number, 'missing' | 'real'>;
   missingCodesFromFile?: number[];
+  /** The PERSON's answer for the rows the sheet holds back as summary rows (CONV-SUMMARY-ROW-UNDECIDED): `leave-out` or `keep`, for `count` rows (the finding's `held`). `fromFile` = a companion file gave it. The converter honours it only while `count` is the number of rows it holds back today. */
+  summaryRows?: { answer: 'leave-out' | 'keep'; count: number; fromFile?: boolean };
   /**
    * The one position the PERSON typed for this sheet (latitude, longitude, uncertainty in metres, as typed). Sent only when all three are filled; never guessed. `declaredPositionFromFile` says it was
    * read from a companion file and has not been edited since.

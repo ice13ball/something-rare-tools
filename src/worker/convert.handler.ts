@@ -199,6 +199,7 @@ export function createConvertHandler(): ConvertHandler {
         for (const t of s.turned ?? []) if (!(settings.turned ??= []).some((x) => x.sheet === t.sheet)) settings.turned.push(t);
         for (const d of s.declaredPosition ?? []) if (!(settings.declaredPosition ??= []).some((x) => x.sheet === d.sheet)) settings.declaredPosition.push(d);
         for (const d of s.declaredDate ?? []) if (!(settings.declaredDate ??= []).some((x) => x.sheet === d.sheet)) settings.declaredDate.push(d);
+        for (const d of s.summaryRows ?? []) if (!(settings.summaryRows ??= []).some((x) => x.sheet === d.sheet)) settings.summaryRows.push(d);
         for (const d of s.missingCode ?? []) if (!(settings.missingCode ??= []).some((x) => x.sheet === d.sheet && x.hash === d.hash)) settings.missingCode.push(d);
         for (const slot of ['dayMonthOrder', 'yyOrder'] as const) for (const d of s[slot] ?? []) if (!(settings[slot] ??= []).some((x) => x.sheet === d.sheet && x.hash === d.hash)) settings[slot].push(d as never);
         // the joins and declined pairs of the companion file(s), by file and sheet name: the page re-opens each one whose rows or key columns changed
@@ -542,6 +543,15 @@ export function createConvertHandler(): ConvertHandler {
     return { missingCodes: kept, ...(fromFile.length === 0 ? {} : { missingCodesFromFile: fromFile }) };
   }
 
+  /** The answer of a request sheet to the summary-rows question: one of the two answers and a whole count of at least 1; anything else is dropped (the question is then asked). */
+  function summaryRowsOf(s: ConvertRequestBody['sheets'][number]): Pick<ConvertSheetInput, 'summaryRows'> {
+    const g = s.summaryRows as unknown;
+    if (g === undefined || g === null || typeof g !== 'object') return {};
+    const { answer, count, fromFile } = g as { answer?: unknown; count?: unknown; fromFile?: unknown };
+    if ((answer !== 'leave-out' && answer !== 'keep') || typeof count !== 'number' || !Number.isInteger(count) || count < 1) return {};
+    return { summaryRows: { answer, count, ...(fromFile === true ? { fromFile: true } : {}) } };
+  }
+
   /** The position a person declared for a request sheet: three non-empty strings, trimmed, each at most 40 characters (the core reads the numbers and refuses what is not one). Nothing otherwise. */
   function declaredOf(s: ConvertRequestBody['sheets'][number]): Pick<ConvertSheetInput, 'declaredPosition' | 'declaredPositionFromFile' | 'declaredDate' | 'declaredDateFromFile'> {
     const date = typeof s.declaredDate === 'string' ? s.declaredDate.trim() : '';
@@ -592,6 +602,7 @@ export function createConvertHandler(): ConvertHandler {
       // the day/month order the person declared, by column: whole-number columns of the sheet and the two orders only
       ...orderOf(s),
       ...missingCodesOf(s),
+      ...summaryRowsOf(s),
       // the position the person typed for a sheet with none
       ...declaredOf(s),
       ...(Array.isArray(s.leaveOutFile) && s.leaveOutFile.length > 0
