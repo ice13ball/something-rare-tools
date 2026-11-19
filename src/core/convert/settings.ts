@@ -51,6 +51,8 @@ import type { ParsedFile } from '../types';
  *   dayMonthOrder=<dmy|mdy>:<sheet>:<hash>:<rows>  the person declared that the date column with that header hash (core/convert/keySetting.ts) of the sheet of that name writes the day first (dmy) or
  *                     the month first (mdy), for a sheet of <rows> rows. A PRE-PICK that holds only when the column is found again by its hash and the sheet has the same number of rows; the page then
  *                     says the answer came from the file, with "Ask again". A sheet name, a hash and a count, never a date.
+ *   yyOrder=<ymd|dmy|mdy>:<sheet>:<hash>:<rows>  the same for the NN-NN-NN dates (two-digit year) of that column: a SECOND answer, independent of dayMonthOrder (a column of slash dates and NN-NN-NN
+ *                     dates can carry both). Same hash, same row count, same pre-pick rule. A sheet name, a hash and a count, never a date.
  *   decimalReading=<decimal|thousands>:<sheet>:<hash>:<rows>  the person declared that the comma of the number column with that header hash (core/convert/keySetting.ts) of the sheet of that name is a
  *                     decimal comma or a thousands separator (IN-DECIMAL-AMBIGUOUS), for a sheet of <rows> rows. A PRE-PICK that holds only when the column is found again by its hash, the sheet has the same
  *                     number of rows and the converter's reader still asks about that column; the page then says the answer came from the file, with "Ask again". A sheet name, a hash and a count, never a number.
@@ -100,6 +102,7 @@ export const PER_OCCURRENCE_SETTING = 'perOccurrence=';
 export const SAMPLE_KEY_SETTING = 'sampleKey=';
 export const SAMPLE_KEY_PREFIX_SETTING = 'sampleKeyPrefix=';
 export const DAY_MONTH_ORDER_SETTING = 'dayMonthOrder=';
+export const YY_ORDER_SETTING = 'yyOrder=';
 export const DECIMAL_READING_SETTING = 'decimalReading=';
 export const ENCODING_SETTING = 'encoding=';
 export const DECLARED_POSITION_SETTING = 'declaredPosition=';
@@ -156,6 +159,8 @@ export interface ConvertSettings {
   sampleKey?: { sheet: string; hashes: string; rows: number; prefix?: string }[];
   /** The day/month order the person declared for a date column, by sheet, the column's header hash and the number of rows the answer was given for. Holds only for the same column and the same number of rows. */
   dayMonthOrder?: { sheet: string; order: 'dmy' | 'mdy'; hash: string; rows: number }[];
+  /** The order the person declared for the NN-NN-NN dates of a column, by sheet, header hash and rows: a second answer beside dayMonthOrder. Holds only for the same column and the same number of rows. */
+  yyOrder?: { sheet: string; order: 'ymd' | 'dmy' | 'mdy'; hash: string; rows: number }[];
   /** What the person declared a comma to be in a number column, by sheet, the column's header hash and the number of rows the answer was given for. Holds only for the same column and the same number of rows. */
   decimalReading?: { sheet: string; reading: 'decimal' | 'thousands'; hash: string; rows: number }[];
   /** The 8-bit encoding the person picked for a file whose letters read differently in the code pages, by the hash of the file's bytes. Holds only for a file with the same bytes. */
@@ -238,6 +243,7 @@ function names(text: string, n: number): string[] | undefined {
 }
 const ONE_HASH = '[0-9a-f]{8}(?:\\.\\d{1,4}of\\d{1,4})?';
 const TURNED = new RegExp(`^(.+):(${ONE_HASH}):(\\d{1,9}):(${HASHES})?(?::(dates))?$`, 's');
+const YY_ORDER = /^(ymd|dmy|mdy):(.+):([0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?):(\d{1,9})$/s;
 const DAY_MONTH_ORDER = /^(dmy|mdy):(.+):([0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?):(\d{1,9})$/s;
 const DECIMAL_READING = /^(decimal|thousands):(.+):([0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?):(\d{1,9})$/s;
 const ENCODING_PICK = /^(windows-1250|iso-8859-2|windows-1252):([0-9a-f]{8})$/;
@@ -293,6 +299,10 @@ export function readConvertSettings(parsed: ParsedFile): ConvertSettings | undef
       const m = DAY_MONTH_ORDER.exec(v.slice(DAY_MONTH_ORDER_SETTING.length));
       const list = (settings.dayMonthOrder ??= []);
       if (m !== null && m[2].length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS * 8 && !list.some((x) => x.sheet === m[2] && x.hash === m[3])) list.push({ order: m[1] as 'dmy' | 'mdy', sheet: m[2], hash: m[3], rows: Number(m[4]) });
+    } else if (v.startsWith(YY_ORDER_SETTING)) {
+      const m = YY_ORDER.exec(v.slice(YY_ORDER_SETTING.length));
+      const list = (settings.yyOrder ??= []);
+      if (m !== null && m[2].length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS * 8 && !list.some((x) => x.sheet === m[2] && x.hash === m[3])) list.push({ order: m[1] as 'ymd' | 'dmy' | 'mdy', sheet: m[2], hash: m[3], rows: Number(m[4]) });
     } else if (v.startsWith(DECIMAL_READING_SETTING)) {
       const m = DECIMAL_READING.exec(v.slice(DECIMAL_READING_SETTING.length));
       const list = (settings.decimalReading ??= []);
@@ -393,6 +403,7 @@ export function writeConvertSidecar(settings: Partial<ConvertSettings>): string 
       ]),
       ...(settings.turned ?? []).filter((t) => t.sheet !== '' && t.sheet.length <= MAX_SETTING_NAME && new RegExp(`^${ONE_HASH}$`).test(t.nameHash) && (t.notSampleHashes === '' || new RegExp(`^${HASHES}$`).test(t.notSampleHashes)) && Number.isInteger(t.rows) && t.rows >= 0).slice(0, MAX_SETTING_SHEETS).map((t) => line([SETTING_ROW, `${TURNED_SETTING}${t.sheet}:${t.nameHash}:${t.rows}:${t.notSampleHashes}${t.headerDates === true ? ':dates' : ''}`, '', '', ''])),
       ...(settings.dayMonthOrder ?? []).filter((d) => (d.order === 'dmy' || d.order === 'mdy') && d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && /^[0-9a-f]{8}/.test(d.hash) && Number.isInteger(d.rows) && d.rows >= 0).slice(0, MAX_SETTING_SHEETS * 8).map((d) => line([SETTING_ROW, `${DAY_MONTH_ORDER_SETTING}${d.order}:${d.sheet}:${d.hash}:${d.rows}`, '', '', ''])),
+      ...(settings.yyOrder ?? []).filter((d) => (d.order === 'ymd' || d.order === 'dmy' || d.order === 'mdy') && d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && /^[0-9a-f]{8}/.test(d.hash) && Number.isInteger(d.rows) && d.rows >= 0).slice(0, MAX_SETTING_SHEETS * 8).map((d) => line([SETTING_ROW, `${YY_ORDER_SETTING}${d.order}:${d.sheet}:${d.hash}:${d.rows}`, '', '', ''])),
       ...(settings.decimalReading ?? []).filter((d) => (d.reading === 'decimal' || d.reading === 'thousands') && d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && /^[0-9a-f]{8}/.test(d.hash) && Number.isInteger(d.rows) && d.rows >= 0).slice(0, MAX_SETTING_SHEETS * 8).map((d) => line([SETTING_ROW, `${DECIMAL_READING_SETTING}${d.reading}:${d.sheet}:${d.hash}:${d.rows}`, '', '', ''])),
       ...(settings.encoding ?? []).filter((e) => (e.encoding === 'windows-1250' || e.encoding === 'iso-8859-2' || e.encoding === 'windows-1252') && /^[0-9a-f]{8}$/.test(e.hash)).slice(0, MAX_SETTING_SHEETS).map((e) => line([SETTING_ROW, `${ENCODING_SETTING}${e.encoding}:${e.hash}`, '', '', ''])),
       ...(settings.declaredPosition ?? []).filter((d) => d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && [d.lat, d.lon, d.uncertaintyM].every((x) => /^[^:\r\n]{1,40}$/.test(x.trim()) && x.trim() !== '')).slice(0, MAX_SETTING_SHEETS).map((d) => line([SETTING_ROW, `${DECLARED_POSITION_SETTING}${d.lat.trim()}:${d.lon.trim()}:${d.uncertaintyM.trim()}:${Math.max(0, Math.floor(d.rows))}:${d.sheet}`, '', '', ''])),

@@ -766,3 +766,50 @@ describe('encodingChoice: letters that read differently in the 8-bit code pages 
     expect(g.decimal).toEqual({ 't.csv': { 1: { reading: 'thousands' } } });
   });
 });
+
+describe('the two-digit-year order of the request (round 4, Task 8)', () => {
+  const CSV = 'Sample,Date,Latitude,Longitude,Calanus finmarchicus\nk1,05-06-21,55,3,4\nk2,25-06-21,56,3,5\nk3,5/4/2023,56,3,6\n';
+  async function run(extra: Record<string, unknown>) {
+    const e = createDirectConvertEngine();
+    const p = await e.parse([file('hauls.csv', CSV)]);
+    const f = p.files[0];
+    const date = f.mappings[0].columns.find((c) => c.header === 'Date')!.index;
+    const sheet = { fileId: f.fileId, sheet: 'hauls.csv', mapping: f.mappings[0], shape: 'wide' as const, quantity: { kind: 'count' as const }, ...extra };
+    const v = await e.convert({ sheets: [sheet as ConvertRequestBody['sheets'][number]], options: {}, approvedSplits: {} });
+    return { date, v, rule: (id: string) => v.findings.filter((x) => x.ruleId === id) };
+  }
+  const yy = (r: Awaited<ReturnType<typeof run>>, id: string) => r.rule(id).filter((x) => x.params.variant === 'two-digit-year');
+  const slash = (r: Awaited<ReturnType<typeof run>>, id: string) => r.rule(id).filter((x) => x.params.variant !== 'two-digit-year');
+
+  it('without answers both questions are open', async () => {
+    const r = await run({});
+    expect(yy(r, 'CONV-DATE-ORDER-UNDECLARED')).toHaveLength(1);
+    expect(slash(r, 'CONV-DATE-ORDER-UNDECLARED')).toHaveLength(1);
+  });
+
+  it('yyOrder reaches the converter (not dropped), answers only the two-digit question, and fromFile is said', async () => {
+    const probe = await run({});
+    const r = await run({ yyOrder: { [probe.date]: 'ymd' }, yyOrderFromFile: [probe.date] });
+    expect(yy(r, 'CONV-DATE-ORDER-UNDECLARED')).toHaveLength(0);
+    expect(yy(r, 'CONV-DATE-ORDER-DECLARED')[0]?.params).toMatchObject({ order: 'ymd', fromFile: 'yes' });
+    expect(slash(r, 'CONV-DATE-ORDER-UNDECLARED')).toHaveLength(1);
+    const s = await run({ dayMonthOrder: { [probe.date]: 'dmy' } });
+    expect(yy(s, 'CONV-DATE-ORDER-UNDECLARED')).toHaveLength(1);
+    expect(slash(s, 'CONV-DATE-ORDER-UNDECLARED')).toHaveLength(0);
+  });
+
+  it('a bad key, a value that is no order and a fromFile index without a kept order are dropped', async () => {
+    const probe = await run({});
+    for (const extra of [
+      { yyOrder: { x: 'ymd', 99: 'ymd', [probe.date]: 'yx' } },
+      { yyOrder: { 1: 'yx' } },
+      { yyOrder: { '1.5': 'dmy', '-1': 'mdy' } },
+      { yyOrderFromFile: [probe.date] },
+      { yyOrder: { 99: 'dmy' }, yyOrderFromFile: [probe.date, 99] },
+    ]) {
+      const r = await run(extra);
+      expect(yy(r, 'CONV-DATE-ORDER-UNDECLARED')).toHaveLength(1);
+      expect(yy(r, 'CONV-DATE-ORDER-DECLARED')).toHaveLength(0);
+    }
+  });
+});

@@ -281,3 +281,26 @@ describe('the encoding pick in the companion file (round 4, Task 6)', () => {
     expect(writeConvertSidecar({ encoding: [{ encoding: 'utf-8' as never, hash: '0a1b2c3d' }, { encoding: 'windows-1252', hash: 'xyz' }] })).not.toContain('encoding=');
   });
 });
+
+describe('the two-digit-year order in the companion file (round 4, Task 8)', () => {
+  const hash = keyHashes(['Sample', 'Date'], [1]) as string;
+
+  it('round trips ymd, dmy and mdy by sheet, header hash and rows, beside dayMonthOrder, with no header text', () => {
+    const settings = { dayMonthOrder: [{ sheet: 'Counts', order: 'dmy' as const, hash, rows: 3 }], yyOrder: [{ sheet: 'Counts', order: 'ymd' as const, hash, rows: 3 }, { sheet: 'a:b.csv', order: 'mdy' as const, hash, rows: 12 }] };
+    const text = writeConvertSidecar(settings);
+    expect(text).toContain(`yyOrder=ymd:Counts:${hash}:3`);
+    expect(text).toContain(`dayMonthOrder=dmy:Counts:${hash}:3`);
+    expect(text).not.toMatch(/Date/);
+    const read = readConvertSettings(textFile('c.sidecar.csv', text));
+    expect(read?.yyOrder).toEqual(settings.yyOrder);
+    expect(read?.dayMonthOrder).toEqual(settings.dayMonthOrder);
+  });
+
+  it('ymd is not a slash answer: dayMonthOrder=ymd is dropped; a malformed yyOrder line, an unknown order and a repeated column are not kept', () => {
+    const lines = [`dayMonthOrder=ymd:Counts:${hash}:3`, `yyOrder=xyz:Counts:${hash}:3`, 'yyOrder=ymd:Counts:nothex:3', `yyOrder=ymd:Counts:${hash}:3`, `yyOrder=dmy:Counts:${hash}:3`];
+    const text = ['original_column,output_column,unit,unit_source,p01', ...lines.map((l) => `(setting),${l},,,`)].join('\n') + '\n';
+    const read = readConvertSettings(textFile('c.sidecar.csv', text));
+    expect(read?.dayMonthOrder ?? []).toEqual([]);
+    expect(read?.yyOrder).toEqual([{ sheet: 'Counts', order: 'ymd', hash, rows: 3 }]);
+  });
+});

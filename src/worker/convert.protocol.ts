@@ -142,6 +142,12 @@ export interface ConvertSheetRequest {
   dayMonthOrder?: Record<number, 'dmy' | 'mdy'>;
   dayMonthOrderFromFile?: number[];
   /**
+   * The order the PERSON declared for the NN-NN-NN dates (two-digit year) of date columns, by column index (`ymd`, `dmy` or `mdy`). A second answer, independent of `dayMonthOrder`: a column of slash
+   * dates and NN-NN-NN dates can carry both. `yyOrderFromFile` lists the indexes read from a companion file (same header hash and row count, checked by the page).
+   */
+  yyOrder?: Record<number, 'ymd' | 'dmy' | 'mdy'>;
+  yyOrderFromFile?: number[];
+  /**
    * The one position the PERSON typed for this sheet (latitude, longitude, uncertainty in metres, as typed). Sent only when all three are filled; never guessed. `declaredPositionFromFile` says it was
    * read from a companion file and has not been edited since.
    */

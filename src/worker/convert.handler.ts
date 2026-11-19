@@ -200,6 +200,7 @@ export function createConvertHandler(): ConvertHandler {
         for (const d of s.declaredPosition ?? []) if (!(settings.declaredPosition ??= []).some((x) => x.sheet === d.sheet)) settings.declaredPosition.push(d);
         for (const d of s.declaredDate ?? []) if (!(settings.declaredDate ??= []).some((x) => x.sheet === d.sheet)) settings.declaredDate.push(d);
         for (const d of s.dayMonthOrder ?? []) if (!(settings.dayMonthOrder ??= []).some((x) => x.sheet === d.sheet && x.hash === d.hash)) settings.dayMonthOrder.push(d);
+        for (const d of s.yyOrder ?? []) if (!(settings.yyOrder ??= []).some((x) => x.sheet === d.sheet && x.hash === d.hash)) settings.yyOrder.push(d);
         // the joins and declined pairs of the companion file(s), by file and sheet name: the page re-opens each one whose rows or key columns changed
         for (const j of s.sampleJoin ?? []) if (!(settings.sampleJoin ??= []).some((x) => x.results[0] === j.results[0] && x.results[1] === j.results[1])) settings.sampleJoin.push(j);
         for (const j of s.sampleJoinNo ?? []) if (!(settings.sampleJoinNo ??= []).some((x) => x.results[0] === j.results[0] && x.results[1] === j.results[1] && x.description[0] === j.description[0] && x.description[1] === j.description[1])) settings.sampleJoinNo.push(j);
@@ -516,6 +517,20 @@ export function createConvertHandler(): ConvertHandler {
     return { dayMonthOrder: kept, ...(fromFile.length === 0 ? {} : { dayMonthOrderFromFile: fromFile }) };
   }
 
+  /** The NN-NN-NN orders of a request sheet, checked the same way: whole-number column indexes within the sheet, `ymd`, `dmy` or `mdy`; a from-file mark only for a kept index. A separate answer from the slash order. */
+  function yyOrderOf(s: ConvertRequestBody['sheets'][number]): Pick<ConvertSheetInput, 'yyOrder' | 'yyOrderFromFile'> {
+    if (s.yyOrder === undefined || s.yyOrder === null || typeof s.yyOrder !== 'object') return {};
+    const width = held(s.fileId).parsed.sheets.find((x) => x.name === s.sheet)?.header.length ?? 0;
+    const kept: Record<number, 'ymd' | 'dmy' | 'mdy'> = {};
+    for (const [k, v] of Object.entries(s.yyOrder)) {
+      const i = Number(k);
+      if (/^\d+$/.test(k) && Number.isInteger(i) && i < width && (v === 'ymd' || v === 'dmy' || v === 'mdy')) kept[i] = v;
+    }
+    if (Object.keys(kept).length === 0) return {};
+    const fromFile = Array.isArray(s.yyOrderFromFile) ? [...new Set(s.yyOrderFromFile.filter((i) => Number.isInteger(i) && kept[i] !== undefined))] : [];
+    return { yyOrder: kept, ...(fromFile.length === 0 ? {} : { yyOrderFromFile: fromFile }) };
+  }
+
   /** The position a person declared for a request sheet: three non-empty strings, trimmed, each at most 40 characters (the core reads the numbers and refuses what is not one). Nothing otherwise. */
   function declaredOf(s: ConvertRequestBody['sheets'][number]): Pick<ConvertSheetInput, 'declaredPosition' | 'declaredPositionFromFile' | 'declaredDate' | 'declaredDateFromFile'> {
     const date = typeof s.declaredDate === 'string' ? s.declaredDate.trim() : '';
@@ -565,6 +580,7 @@ export function createConvertHandler(): ConvertHandler {
       ...(s.profile === undefined && s.sampleKey !== undefined && s.sampleKey !== null && Array.isArray(s.sampleKey.columns) ? keyOf(s) : {}),
       // the day/month order the person declared, by column: whole-number columns of the sheet and the two orders only
       ...orderOf(s),
+      ...yyOrderOf(s),
       // the position the person typed for a sheet with none
       ...declaredOf(s),
       ...(Array.isArray(s.leaveOutFile) && s.leaveOutFile.length > 0
