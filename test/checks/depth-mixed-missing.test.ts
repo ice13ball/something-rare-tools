@@ -9,6 +9,7 @@ import { parseFile } from '../../src/core/parse';
 import { proposeLayout, proposeMappings } from '../../src/core/recognize/layout';
 import { depthSigns, proposeColumns } from '../../src/core/recognize/columns';
 import { isMissingValueCode, MISSING_VALUE_CODES } from '../../src/core/values/numbers';
+import { checkRows } from '../../src/core/checks/rows';
 import { checkChemistry } from '../../src/core/checks/chemistry';
 import { toCleanCsv } from '../../src/core/output/csv';
 import type { Finding } from '../../src/core/types';
@@ -106,11 +107,32 @@ describe('ROW-DEPTH-MIXED-SIGN and ROW-DEPTH-RANGE on /check', () => {
   it('a code is left out of the counts', () => {
     expect(ids(run(depthCsv(['5', '-999', '10'])).findings, 'ROW-DEPTH-MIXED-SIGN')).toHaveLength(0);
   });
-  it('the policy of both new rules is accept', async () => {
+  it('the policy of ROW-DEPTH-MIXED-SIGN is accept; ROW-MISSING-CODE blocks the converter\'s export until its column is answered (it is a warning here)', async () => {
     const { policyOf } = await import('../../src/core/convert/policy');
     const { findings } = run(depthCsv(['-1', '5', '-999']));
     expect(policyOf(ids(findings, 'ROW-DEPTH-MIXED-SIGN')[0])).toBe('accept');
-    expect(policyOf(ids(findings, 'ROW-MISSING-CODE')[0])).toBe('accept');
+    expect(policyOf(ids(findings, 'ROW-MISSING-CODE')[0])).toBe('block');
+    expect(ids(findings, 'ROW-MISSING-CODE')[0].severity).toBe('warning');
+  });
+});
+
+describe('a declared direction combined with mixed signs', () => {
+  const sheetRows = (depths: number[]) => depths.map((d, i) => ({ station: 'S1', date: '2022-05-01', depth: d, line: i + 2 }));
+  for (const declared of ['down', 'up'] as const) {
+    it(`a column declared ${declared} (by the person) still gets ROW-DEPTH-MIXED-SIGN with both counts, and the range is judged on absolute values`, () => {
+      const ds = makeCDataset({ id: 'a', depthPositive: declared }, sheetRows([-0.3, 5, 10, 15000, -20000]));
+      const f = checkRows(ds);
+      const m = f.filter((x) => x.ruleId === 'ROW-DEPTH-MIXED-SIGN');
+      expect(m).toHaveLength(1);
+      expect(m[0].params).toMatchObject({ negative: 2, positive: 3 });
+      expect(f.filter((x) => x.ruleId === 'ROW-DEPTH-SIGN')).toHaveLength(0);
+      // |-20000| and 15000 are out whatever the declared direction
+      expect(f.filter((x) => x.ruleId === 'ROW-DEPTH-RANGE')[0].lines).toEqual([5, 6]);
+    });
+  }
+  it('a declared direction with one sign only is silent', () => {
+    const ds = makeCDataset({ id: 'a', depthPositive: 'up' }, sheetRows([-1, -5, 0]));
+    expect(checkRows(ds).filter((x) => x.ruleId === 'ROW-DEPTH-MIXED-SIGN')).toHaveLength(0);
   });
 });
 

@@ -2,6 +2,8 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { describe, expect, it } from 'vitest';
 import { checkCrossFile, equalWithin, normaliseStation } from '../../src/core/checks/crossfile';
+import { renderPlain } from '../../src/core/report';
+import { LANGS } from '../../src/core/types';
 import { byRule, makeCDataset, type RowSpec } from './c.helpers';
 
 const DIC_L = [{ key: 'DIC', canonical: 'DIC', unit: 'µmol/L' }];
@@ -149,6 +151,39 @@ describe('XF-DATE-CONFLICT', () => {
     expect(byRule(checkCrossFile([a, makeCDataset({ id: 'b', vars }, rows('2023-07-30'))]), 'XF-DATE-CONFLICT')).toHaveLength(0);
     const deeper = rows('2022-07-30').map((r) => ({ ...r, depth: Number(r.depth) + 100 }));
     expect(byRule(checkCrossFile([a, makeCDataset({ id: 'c', vars }, deeper)]), 'XF-DATE-CONFLICT')).toHaveLength(0);
+  });
+});
+
+describe('XF-DATE-CONFLICT with an open depth direction and an open date order (K2)', () => {
+  const vars = [{ key: 'Na', canonical: 'sodium', unit: 'mg/L' }, { key: 'Cl', canonical: 'chloride', unit: 'mg/L' }];
+  const rows = (date: string, sign = 1): RowSpec[] => [
+    { station: 'ST2', date, depth: sign * 2.5, v: { Na: 4321.7, Cl: 18000.5 }, line: 7 },
+    { station: 'ST2', date, depth: sign * 7.5, v: { Na: 9800.1, Cl: 17100.3 }, line: 8 },
+  ];
+  it('a dataset whose direction is open is compared on absolute depth, as the range check does', () => {
+    const open = makeCDataset({ id: 'a', file: 'a.csv', vars, depthPositive: 'unknown' }, rows('2023-07-30', -1));
+    const b = makeCDataset({ id: 'b', file: 'b.csv', vars }, rows('2022-07-30'));
+    expect(byRule(checkCrossFile([open, b]), 'XF-DATE-CONFLICT')).toHaveLength(1);
+  });
+  it('a down dataset with negative depths still does not match positive ones; an up dataset still does', () => {
+    const b = makeCDataset({ id: 'b', file: 'b.csv', vars }, rows('2022-07-30'));
+    expect(byRule(checkCrossFile([makeCDataset({ id: 'a', file: 'a.csv', vars, depthPositive: 'down' }, rows('2023-07-30', -1)), b]), 'XF-DATE-CONFLICT')).toHaveLength(0);
+    expect(byRule(checkCrossFile([makeCDataset({ id: 'c', file: 'c.csv', vars, depthPositive: 'up' }, rows('2023-07-30', -1)), b]), 'XF-DATE-CONFLICT')).toHaveLength(1);
+  });
+  it('a date read in the default order of an ambiguous column says so, in four languages; otherwise the text is unchanged', () => {
+    const a = makeCDataset({ id: 'a', file: 'a.csv', vars }, rows('2023-07-30'));
+    const b = makeCDataset({ id: 'b', file: 'b.csv', vars }, rows('2022-07-30'));
+    const plain = byRule(checkCrossFile([a, b]), 'XF-DATE-CONFLICT')[0];
+    expect(plain.params.ambiguous).toBe(2);
+    for (const r of b.rows) r.datetime = { ...r.datetime!, orderOpen: true };
+    const f = byRule(checkCrossFile([a, b]), 'XF-DATE-CONFLICT')[0];
+    expect(f.params.ambiguous).toBe(1);
+    for (const lang of LANGS) {
+      const said = renderPlain(f, lang);
+      const base = renderPlain(plain, lang);
+      expect(said.length, lang).toBeGreaterThan(base.length);
+      expect(said.startsWith(base.trim()), lang).toBe(true);
+    }
   });
 });
 

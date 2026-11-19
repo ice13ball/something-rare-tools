@@ -59,6 +59,7 @@ const EXEMPT: Record<string, string> = {
   'CONV-LONG-DROPPED': '(b) it lists only columns the person marked',
   'CONV-SHEET-TURNED': '(b) the person declared that the samples are the columns',
   'CONV-JOIN-CONFLICT-CHOSEN': '(b) the person chose which value of the two sheets is written',
+  'CONV-MISSING-CODE-DECLARED': '(b) the person answered "treat as missing" for the column; the question that blocks is ROW-MISSING-CODE',
   'IN-DATE1904': '(c) the workbook states its own date system; the reader only follows it',
   'IN-HEADER-UNITS-READ': '(c) a row of units under the header; a row with a number is never folded (parse/shared.ts foldUnitsRow)',
   'IN-PERCENT-READ': "(c) the cell's own number format",

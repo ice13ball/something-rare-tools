@@ -147,6 +147,9 @@ export interface ConvertSheetRequest {
    */
   yyOrder?: Record<number, 'ymd' | 'dmy' | 'mdy'>;
   yyOrderFromFile?: number[];
+  /** The columns (by index) the PERSON answered "treat -99, -999 and -9999 as missing" for (ROW-MISSING-CODE); `missingCodesFromFile` those among them read from a companion file (same header hash and row count, checked by the page). */
+  missingCodes?: number[];
+  missingCodesFromFile?: number[];
   /**
    * The one position the PERSON typed for this sheet (latitude, longitude, uncertainty in metres, as typed). Sent only when all three are filled; never guessed. `declaredPositionFromFile` says it was
    * read from a companion file and has not been edited since.

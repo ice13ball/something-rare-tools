@@ -199,6 +199,7 @@ export function createConvertHandler(): ConvertHandler {
         for (const t of s.turned ?? []) if (!(settings.turned ??= []).some((x) => x.sheet === t.sheet)) settings.turned.push(t);
         for (const d of s.declaredPosition ?? []) if (!(settings.declaredPosition ??= []).some((x) => x.sheet === d.sheet)) settings.declaredPosition.push(d);
         for (const d of s.declaredDate ?? []) if (!(settings.declaredDate ??= []).some((x) => x.sheet === d.sheet)) settings.declaredDate.push(d);
+        for (const d of s.missingCode ?? []) if (!(settings.missingCode ??= []).some((x) => x.sheet === d.sheet && x.hash === d.hash)) settings.missingCode.push(d);
         for (const slot of ['dayMonthOrder', 'yyOrder'] as const) for (const d of s[slot] ?? []) if (!(settings[slot] ??= []).some((x) => x.sheet === d.sheet && x.hash === d.hash)) settings[slot].push(d as never);
         // the joins and declined pairs of the companion file(s), by file and sheet name: the page re-opens each one whose rows or key columns changed
         for (const j of s.sampleJoin ?? []) if (!(settings.sampleJoin ??= []).some((x) => x.results[0] === j.results[0] && x.results[1] === j.results[1])) settings.sampleJoin.push(j);
@@ -526,6 +527,15 @@ export function createConvertHandler(): ConvertHandler {
     };
   }
 
+  /** The columns a request sheet answered "treat as missing" for: whole-number indexes within the sheet; a from-file mark only for an index that is kept. Nothing, when nothing is left. */
+  function missingCodesOf(s: ConvertRequestBody['sheets'][number]): Pick<ConvertSheetInput, 'missingCodes' | 'missingCodesFromFile'> {
+    const width = held(s.fileId).parsed.sheets.find((x) => x.name === s.sheet)?.header.length ?? 0;
+    const kept = Array.isArray(s.missingCodes) ? [...new Set((s.missingCodes as unknown[]).filter((i): i is number => typeof i === 'number' && Number.isInteger(i) && i >= 0 && i < width))] : [];
+    if (kept.length === 0) return {};
+    const fromFile = Array.isArray(s.missingCodesFromFile) ? [...new Set((s.missingCodesFromFile as unknown[]).filter((i): i is number => typeof i === 'number' && kept.includes(i)))] : [];
+    return { missingCodes: kept, ...(fromFile.length === 0 ? {} : { missingCodesFromFile: fromFile }) };
+  }
+
   /** The position a person declared for a request sheet: three non-empty strings, trimmed, each at most 40 characters (the core reads the numbers and refuses what is not one). Nothing otherwise. */
   function declaredOf(s: ConvertRequestBody['sheets'][number]): Pick<ConvertSheetInput, 'declaredPosition' | 'declaredPositionFromFile' | 'declaredDate' | 'declaredDateFromFile'> {
     const date = typeof s.declaredDate === 'string' ? s.declaredDate.trim() : '';
@@ -575,6 +585,7 @@ export function createConvertHandler(): ConvertHandler {
       ...(s.profile === undefined && s.sampleKey !== undefined && s.sampleKey !== null && Array.isArray(s.sampleKey.columns) ? keyOf(s) : {}),
       // the day/month order the person declared, by column: whole-number columns of the sheet and the two orders only
       ...orderOf(s),
+      ...missingCodesOf(s),
       // the position the person typed for a sheet with none
       ...declaredOf(s),
       ...(Array.isArray(s.leaveOutFile) && s.leaveOutFile.length > 0

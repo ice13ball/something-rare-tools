@@ -66,14 +66,15 @@ export type LedgerReason =
   | 'no-event-date'
   | 'turned-label'
   | 'turn-no-name'
-  | 'turn-name-repeated';
+  | 'turn-name-repeated'
+  | 'missing-code';
 
 export const LEDGER_REASONS: readonly LedgerReason[] = [
   'ragged', 'summary-row', 'no-code', 'no-replicate', 'no-taxon', 'value-no-taxon', 'taxon-no-quantity', 'quantity-blank', 'nothing-to-record', 'duplicate-event', 'repeat-total', 'copy-dropped', 'zero', 'zero-with-biomass',
   'negative', 'not-integer', 'cover-range', 'class-value', 'na-cell', 'absent-mark', 'bad-mark', 'no-station', 'duplicate-level', 'repeat-in-sample', 'absent-record', 'column-not-read', 'sheet-not-read', 'sheet-not-used',
   'empty-parameter', 'repeated-parameter', 'quality-flag', 'text-cell', 'position-no-taxon', 'sample-no-taxon', 'not-in-event',
   'taxon-only-in-total', 'one-specimen-total', 'join-not-chosen', 'join-no-key', 'join-ambiguous', 'join-results-not-written', 'join-no-match', 'no-event-date',
-  'turned-label', 'turn-no-name', 'turn-name-repeated',
+  'turned-label', 'turn-no-name', 'turn-name-repeated', 'missing-code',
 ];
 // (the reasons a CELL can have are all among the first 31: the chain of a wide row keeps them as bits of an Int32; the last ones belong to whole lines, or to a lost cell named beside its line, never to FateLog.cell)
 const CODE_OF: Record<string, number> = Object.fromEntries(LEDGER_REASONS.map((r, i) => [r, i + 1]));

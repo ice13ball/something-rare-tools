@@ -72,12 +72,14 @@ export interface ExportOptions {
   nerc?: NercDecisions;
   /** The columns the person set to ignore (round 4: CONV-COLUMN-IGNORED names only these; absent = every ignore is the converter's proposal). */
   ignoreChosen?: number[];
+  /** The columns the person answered "treat -99, -999, -9999 as missing" for (round 4, ROW-MISSING-CODE). */
+  missingCodes?: number[];
 }
 
 /** A sheet through convert, validation and the writers, as the export does it. */
 export async function exportSheet(header: string[], rows: Cell[][], o: ExportOptions): Promise<Exported> {
   const file = fileOf(header, rows, 'S', o.decimalComma ? { decimalComma: true } : {});
-  const sheet = sheetInput(file, { quantity: o.quantity, ...(o.ignoreChosen ? { ignoreChosen: o.ignoreChosen } : {}), ...(o.edit ? { edit: o.edit } : {}), ...(o.shape ? { shape: o.shape } : {}), ...(o.device ? { device: o.device } : {}), ...(o.meshUm === undefined ? {} : { meshUm: o.meshUm }), ...(o.nerc ? { nerc: o.nerc } : {}) });
+  const sheet = sheetInput(file, { quantity: o.quantity, ...(o.ignoreChosen ? { ignoreChosen: o.ignoreChosen } : {}), ...(o.missingCodes ? { missingCodes: o.missingCodes } : {}), ...(o.edit ? { edit: o.edit } : {}), ...(o.shape ? { shape: o.shape } : {}), ...(o.device ? { device: o.device } : {}), ...(o.meshUm === undefined ? {} : { meshUm: o.meshUm }), ...(o.nerc ? { nerc: o.nerc } : {}) });
   const approvedSplits = o.approve === false ? {} : Object.fromEntries(listSplits({ sheets: [sheet] }).filter((s) => s.needsDecision).map((s) => [s.verbatim, s.proposed]));
   const input: ConvertInput = { sheets: [sheet], options: { fullList: o.fullList === true, prefixStation: o.prefixStation === true }, approvedSplits, ...(o.worms ? { worms: o.worms } : {}) };
   const result = convert(input);

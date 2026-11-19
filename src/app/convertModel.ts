@@ -109,6 +109,10 @@ export interface SheetChoice {
   yyOrder?: Record<number, 'ymd' | 'dmy' | 'mdy'>;
   /** The columns whose yyOrder was read from a companion file and has not been changed since. */
   yyOrderFile?: number[];
+  /** The columns (by index) the person answered "treat -99, -999 and -9999 as missing" for (ROW-MISSING-CODE). Never prefilled except by a companion file that still holds (same header hash, same number of rows). */
+  missingCodes?: number[];
+  /** The columns among `missingCodes` that were read from a companion file and have not been changed since. */
+  missingCodesFile?: number[];
   /** The one position the person typed for this sheet (it has no latitude / longitude column), as typed. Empty strings = none. Sent only when all three are filled. */
   positionLat: string;
   positionLon: string;
@@ -332,6 +336,14 @@ function slotRequest(c: SheetChoice, slot: OrderSlot): Pick<ConvertRequestBody['
 }
 const orderRequest = (c: SheetChoice): Pick<ConvertRequestBody['sheets'][number], 'dayMonthOrder' | 'dayMonthOrderFromFile' | 'yyOrder' | 'yyOrderFromFile'> => ({ ...slotRequest(c, 'dayMonthOrder'), ...slotRequest(c, 'yyOrder') });
 
+/** The columns the person answered "treat as missing" for, and those among them a companion file gave. */
+const missingCodeRequest = (c: SheetChoice): Pick<ConvertRequestBody['sheets'][number], 'missingCodes' | 'missingCodesFromFile'> => {
+  const columns = c.missingCodes ?? [];
+  if (columns.length === 0) return {};
+  const fromFile = (c.missingCodesFile ?? []).filter((i) => columns.includes(i));
+  return { missingCodes: columns, ...(fromFile.length > 0 ? { missingCodesFromFile: fromFile } : {}) };
+};
+
 /** A column of this sheet has a latitude or longitude role (even one blank in every row): a declared position never applies to it. */
 const hasPositionRole = (m: Pick<SheetMapping, 'columns'>): boolean => m.columns.some((c) => c.role.kind === 'latitude' || c.role.kind === 'longitude');
 
@@ -414,12 +426,12 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
       const nerc = s.nerc ? nercDecisionsOf(nercColumnsOf(s.parsed, s.mappings, s.choices), s.nerc, f.fileId, m.sheet) : undefined;
       if (c.profile) {
         // a profile sheet has no quantity, device or mesh size: only its roles, its cruise code and the user's approval of depth-based level IDs are sent
-        sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(handSet.length > 0 ? { handSet } : {}), profile: { ...(c.profileDepthIds ? { depthIds: true } : {}), ...(c.profileIgnoreCast ? { ignoreCast: true } : {}), ...(c.profilePosition ? { positionStation: true } : {}) }, ...orderRequest(c), ...declaredRequest(c, m, positionJoinedFrom(s, f.fileId, m.sheet)), ...declaredDateRequest(c), ...(nerc ? { nerc } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }) });
+        sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(handSet.length > 0 ? { handSet } : {}), profile: { ...(c.profileDepthIds ? { depthIds: true } : {}), ...(c.profileIgnoreCast ? { ignoreCast: true } : {}), ...(c.profilePosition ? { positionStation: true } : {}) }, ...orderRequest(c), ...missingCodeRequest(c), ...declaredRequest(c, m, positionJoinedFrom(s, f.fileId, m.sheet)), ...declaredDateRequest(c), ...(nerc ? { nerc } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }) });
         continue;
       }
       const q = declarationOf(c.quantity);
       const dev = deviceOf(c);
-      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(handSet.length > 0 ? { handSet } : {}), ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(c.presenceOnly && !m.columns.some((col) => col.role.kind === 'quantity') ? { presenceOnly: true } : {}), ...(c.totalOnce ? { totalOnce: true } : {}), ...(c.realCounts ? { realCounts: true } : {}), ...(c.dropCopies ? { dropCopies: true } : {}), ...(!c.dropCopies && (c.dropCopiesAnswer ?? c.dropCopiesFile) !== undefined ? { dropCopiesCount: (c.dropCopiesAnswer ?? c.dropCopiesFile) as number, ...(c.dropCopiesAnswer === undefined ? { dropCopiesFromFile: true } : {}) } : {}), ...(!c.totalOnce && (c.totalOnceAnswer ?? c.totalOnceFile) !== undefined ? { totalOnceCount: (c.totalOnceAnswer ?? c.totalOnceFile) as number, ...(c.totalOnceAnswer === undefined ? { totalOnceFromFile: true } : {}) } : {}), ...(c.realCountsAnswer !== undefined && !c.realCounts ? { realCountsRows: c.realCountsAnswer } : {}), ...(c.realCountsFile !== undefined && !c.realCounts ? { realCountsRowsFile: c.realCountsFile } : {}), ...ownRequest(c, ownRecordsAllowed(f, m, c)), ...(c.leaveOut !== undefined && c.leaveOut.length > 0 ? { leaveOut: c.leaveOut } : {}), ...(c.leaveOutFile !== undefined && c.leaveOutFile.length > 0 ? { leaveOutFile: c.leaveOutFile } : {}), ...orderRequest(c), ...declaredRequest(c, m, positionJoinedFrom(s, f.fileId, m.sheet)), ...declaredDateRequest(c), ...(c.sampleKey !== undefined && c.sampleKey.length > 0 ? { sampleKey: { columns: c.sampleKey, ...(c.sampleKeyPrefix === undefined ? {} : { prefix: c.sampleKeyPrefix }) }, ...(c.sampleKeyFromFile === true ? { sampleKeyFromFile: true } : {}) } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
+      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(handSet.length > 0 ? { handSet } : {}), ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(c.presenceOnly && !m.columns.some((col) => col.role.kind === 'quantity') ? { presenceOnly: true } : {}), ...(c.totalOnce ? { totalOnce: true } : {}), ...(c.realCounts ? { realCounts: true } : {}), ...(c.dropCopies ? { dropCopies: true } : {}), ...(!c.dropCopies && (c.dropCopiesAnswer ?? c.dropCopiesFile) !== undefined ? { dropCopiesCount: (c.dropCopiesAnswer ?? c.dropCopiesFile) as number, ...(c.dropCopiesAnswer === undefined ? { dropCopiesFromFile: true } : {}) } : {}), ...(!c.totalOnce && (c.totalOnceAnswer ?? c.totalOnceFile) !== undefined ? { totalOnceCount: (c.totalOnceAnswer ?? c.totalOnceFile) as number, ...(c.totalOnceAnswer === undefined ? { totalOnceFromFile: true } : {}) } : {}), ...(c.realCountsAnswer !== undefined && !c.realCounts ? { realCountsRows: c.realCountsAnswer } : {}), ...(c.realCountsFile !== undefined && !c.realCounts ? { realCountsRowsFile: c.realCountsFile } : {}), ...ownRequest(c, ownRecordsAllowed(f, m, c)), ...(c.leaveOut !== undefined && c.leaveOut.length > 0 ? { leaveOut: c.leaveOut } : {}), ...(c.leaveOutFile !== undefined && c.leaveOutFile.length > 0 ? { leaveOutFile: c.leaveOutFile } : {}), ...orderRequest(c), ...missingCodeRequest(c), ...declaredRequest(c, m, positionJoinedFrom(s, f.fileId, m.sheet)), ...declaredDateRequest(c), ...(c.sampleKey !== undefined && c.sampleKey.length > 0 ? { sampleKey: { columns: c.sampleKey, ...(c.sampleKeyPrefix === undefined ? {} : { prefix: c.sampleKeyPrefix }) }, ...(c.sampleKeyFromFile === true ? { sampleKeyFromFile: true } : {}) } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
     }
   }
   const confirmed = (s.joins ?? []).filter((j) => j.state === 'confirmed');
@@ -486,6 +498,17 @@ function savedSlot(settings: ConvertParseResult['settings'], sheet: { name: stri
 }
 const savedOrders = (settings: ConvertParseResult['settings'], sheet: { name: string; header: string[]; rowCount: number }): Pick<SheetChoice, OrderSlot | 'dayMonthOrderFile' | 'yyOrderFile'> => ({ ...savedSlot(settings, sheet, 'dayMonthOrder'), ...savedSlot(settings, sheet, 'yyOrder') });
 
+/** The "treat as missing" answers a companion file recorded for a sheet: a pre-pick only for a column found again by its header hash, in a sheet with the same number of rows. */
+function savedMissingCodes(settings: ConvertParseResult['settings'], sheet: { name: string; header: string[]; rowCount: number }): Pick<SheetChoice, 'missingCodes' | 'missingCodesFile'> {
+  const columns: number[] = [];
+  for (const d of settings.missingCode ?? []) {
+    if (d.sheet !== sheet.name || d.rows !== sheet.rowCount) continue;
+    const at = resolveKeyHashes(sheet.header, d.hash);
+    if (at?.length === 1 && !columns.includes(at[0])) columns.push(at[0]);
+  }
+  return columns.length === 0 ? {} : { missingCodes: columns, missingCodesFile: columns };
+}
+
 /** The answers a companion file recorded for a sheet, with the own-records pair kept together: the copies answer is "under each row is its own record", so it is kept only while that choice holds for this sheet today (the same name and number of rows). */
 function ownAnswers(settings: ConvertParseResult['settings'], sheet: { name: string; rowCount: number }): ReturnType<typeof fileAnswers> & ReturnType<typeof savedOwnRecords> {
   const { keepCopiesFile, ...rest } = fileAnswers(settings, sheet.name);
@@ -536,7 +559,7 @@ export function initialChoices(parsed: ConvertParseResult): Record<string, Sheet
       const match = profile ? { kind: 'none' as const } : savedKeyFor(parsed, f, sh);
       const saved = match.kind === 'found' ? match.entry : undefined;
       const savedColumns = saved === undefined ? undefined : resolveKeyHashes(sh.header, saved.hashes);
-      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: false, realCounts: false, dropCopies: false, ...ownAnswers(parsed.settings, sh), ...savedOrders(parsed.settings, sh), ...savedPosition(parsed.settings, sh), ...savedDate(parsed.settings, sh), ...(savedColumns === undefined ? {} : { sampleKey: savedColumns, sampleKeyFromFile: true, ...(saved?.prefix === undefined ? {} : { sampleKeyPrefix: saved.prefix }) }), ...(match.kind === 'ambiguous' ? { sampleKeyAmbiguous: true as const } : {}) };
+      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: false, realCounts: false, dropCopies: false, ...ownAnswers(parsed.settings, sh), ...savedOrders(parsed.settings, sh), ...savedMissingCodes(parsed.settings, sh), ...savedPosition(parsed.settings, sh), ...savedDate(parsed.settings, sh), ...(savedColumns === undefined ? {} : { sampleKey: savedColumns, sampleKeyFromFile: true, ...(saved?.prefix === undefined ? {} : { sampleKeyPrefix: saved.prefix }) }), ...(match.kind === 'ambiguous' ? { sampleKeyAmbiguous: true as const } : {}) };
     }
   }
   return out;
@@ -560,6 +583,22 @@ function slotSettingsOf(parsed: ConvertParseResult, choices: Record<string, Shee
       for (const [k, order] of Object.entries(answers)) {
         const hash = keyHashes(sh.header, [Number(k)]);
         if (hash !== undefined && said(f.fileName, sh.name, Number(k)) && !out.some((o) => o.sheet === sh.name && o.hash === hash)) out.push({ sheet: sh.name, order, hash, rows: sh.rowCount } as never);
+      }
+    }
+  }
+  return out;
+}
+/** The columns of the sheets in use answered "treat as missing" and said by the converter (CONV-MISSING-CODE-DECLARED): the sheet, the column's header hash and the number of rows of the sheet. A name, a hash and a count, never a value. */
+export function missingCodeSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>, declared?: readonly Finding[]): NonNullable<ConvertSettings['missingCode']> {
+  const out: NonNullable<ConvertSettings['missingCode']> = [];
+  for (const f of parsed.files) {
+    for (const sh of f.sheets) {
+      const c = choices[sheetKey(f.fileId, sh.name)];
+      if (!c || !c.use) continue;
+      for (const index of c.missingCodes ?? []) {
+        const said = declared === undefined || declared.some((x) => x.ruleId === 'CONV-MISSING-CODE-DECLARED' && x.file === f.fileName && x.sheet === sh.name && Number(x.params.index) === index);
+        const hash = keyHashes(sh.header, [index]);
+        if (hash !== undefined && said && !out.some((o) => o.sheet === sh.name && o.hash === hash)) out.push({ sheet: sh.name, hash, rows: sh.rowCount });
       }
     }
   }

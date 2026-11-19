@@ -9,7 +9,7 @@ import type { RuleSpec } from './spec';
  * `file` to fileA and list `datasetIds` of both.
  * Declared params per rule:
  *   XF-DUPLICATE-SAMPLES   fileA, fileB, count     count = matched samples (same station/position, depth, day)
- *   XF-DATE-CONFLICT       station, fileA, fileB, dateA, dateB, lineA, lineB   one example pair of lines
+ *   XF-DATE-CONFLICT       station, fileA, fileB, dateA, dateB, lineA, lineB, ambiguous   one example pair of lines; ambiguous = 1 when one of the two dates is a two-digit-year date of a column whose order is open (the text adds a sentence), 2 when not (a plural token chooses the sentence)
  *   XF-STATION-ALIAS       nameA, nameB            two raw ids that normalise to the same station
  *   XF-UNIT-CONFLICT       variable, unitA, unitB, matched, equal, fileA, fileB
  *                          matched = matched samples, equal = how many of them have equal values
@@ -38,14 +38,14 @@ export const CROSSFILE_RULES: readonly RuleSpec[] = [
     category: 'C',
     severity: 'warning',
     exportPolicy: 'show',
-    params: ['station', 'fileA', 'fileB', 'dateA', 'dateB', 'lineA', 'lineB'],
+    params: ['station', 'fileA', 'fileB', 'dateA', 'dateB', 'lineA', 'lineB', 'ambiguous'],
     plain: {
-      pl: `Stacja {station} ma te same wartości w plikach {fileA} i {fileB}, ale różne daty ({dateA} i {dateB}). Jedna z dat jest prawdopodobnie błędna.`,
-      en: `Station {station} has the same values in {fileA} and {fileB} but different dates ({dateA} and {dateB}). One of the dates is probably wrong.`,
-      de: `Die Station {station} hat in {fileA} und {fileB} dieselben Werte, aber unterschiedliche Daten ({dateA} und {dateB}). Eines der Daten ist vermutlich falsch.`,
-      fr: `La station {station} a les mêmes valeurs dans {fileA} et {fileB}, mais des dates différentes ({dateA} et {dateB}). L'une des dates est probablement fausse.`,
+      pl: `Stacja {station} ma te same wartości w plikach {fileA} i {fileB}, ale różne daty ({dateA} i {dateB}). Jedna z dat jest prawdopodobnie błędna.{+ambiguous: Jedna ma dwucyfrowy rok o otwartej kolejności, czytany w kolejności domyślnej; konflikt może wynikać z odczytu.||}`,
+      en: `Station {station} has the same values in {fileA} and {fileB} but different dates ({dateA} and {dateB}). One of the dates is probably wrong.{+ambiguous: One of them is a two-digit-year date in a column whose order is not decided; it was read in the default order, so the conflict may come from the reading.|}`,
+      de: `Die Station {station} hat in {fileA} und {fileB} dieselben Werte, aber unterschiedliche Daten ({dateA} und {dateB}). Eines der Daten ist vermutlich falsch.{+ambiguous: Eines davon hat eine zweistellige Jahreszahl mit offener Reihenfolge und wurde in der Standardreihenfolge gelesen; der Konflikt kann vom Lesen stammen.|}`,
+      fr: `La station {station} a les mêmes valeurs dans {fileA} et {fileB}, mais des dates différentes ({dateA} et {dateB}). L'une des dates est probablement fausse.{+ambiguous: L'une a une année sur deux chiffres, d'ordre ouvert, lue dans l'ordre par défaut ; le conflit peut venir de la lecture.|}`,
     },
-    technical: `station {station}: {fileA}:{lineA} dated {dateA} vs {fileB}:{lineB} dated {dateB}; at least 2 shared variables are equal.`,
+    technical: `station {station}: {fileA}:{lineA} dated {dateA} vs {fileB}:{lineB} dated {dateB}; at least 2 shared variables are equal. ambiguous={ambiguous}: 1 = one of the dates is a two-digit-year date of a column whose order is open, read in the default order (ROW-DATE-YY-AMBIGUOUS); 2 = not.`,
   },
   {
     id: 'XF-STATION-ALIAS',

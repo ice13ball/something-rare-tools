@@ -213,5 +213,7 @@ export function validateTables(ds: ConvertedDataset, stage1: readonly Finding[] 
 
 /** Everything: the tables and the description. This is what the export checks before it writes anything. */
 export function validateDataset(ds: ConvertedDataset, stage1: readonly Finding[] = [], opts: ValidateOptions = {}): Finding[] {
-  return [...validateTables(ds, stage1, opts), ...metadataFindings(ds.metadata)];
+  // the converter asks about -99, -999 and -9999 on the SOURCE column (core/convert/missingCode.ts: ROW-MISSING-CODE with the sheet's own header, lines and column), before anything is written; the copy a table of the
+  // output would raise (minimumDepthInMeters ...) names a column the person never saw, so it is not raised twice
+  return [...validateTables(ds, stage1, opts).filter((f) => f.ruleId !== 'ROW-MISSING-CODE'), ...metadataFindings(ds.metadata)];
 }

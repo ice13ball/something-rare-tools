@@ -432,11 +432,12 @@ below the surface. CF Standard Name Table, standard_name `depth`: "Depth is the 
 
 The "not stated" row is, in practice, reached only by hand-mapped columns (the mapping editor starts them at "not stated"); a name-recognised depth column always has a depth word, elevation, a P01 code or a Darwin Core term.
 
-Mixed signs (checked, NOT changed): any negative value still means `up`. Leaving a column with both signs undecided was tried and reverted: `crossfile` matches depths across files with this
-sign, and in the golden set porewater3m has 296 negative and 15 positive depth values, so "not stated" turned its XF-DATE-CONFLICT with the anions file (positive depths) into a miss. ROW-DEPTH-SIGN
-therefore does not fire for mixed signs, and cannot double-report with ROW-DEPTH-RANGE (which is about values outside the physical range). The last row is reached in practice only through the user's own
-mapping (the mapping editor already starts a hand-mapped depth column at "not stated"); it is kept as a guard. The default changes nothing downstream: `crossfile` treats "unknown" like "down" and the
-clean CSV writes a note only for "up". Not used: the metadata record (recognition reads one sheet), the unit. Not added: "height" as an elevation word ("wave height", "height above seafloor").
+Mixed signs (K2, round 4): the direction is decided only when every non-zero value (over every row; 0 and the codes -99, -999, -9999 not counted) shares a sign. Both signs leave the column `unknown`
+with the note `note-depth-mixed-signs`, and each sheet gets ROW-DEPTH-MIXED-SIGN (both counts); ROW-DEPTH-SIGN does not fire for it. ROW-DEPTH-RANGE judges the absolute value on such a sheet. `crossfile`
+compares a dataset whose direction is open (`unknown`) on ABSOLUTE depth, the same rule as the range check: it decides no direction, up and down datasets are matched as before, and in the golden set
+porewater3m (296 negative, 15 positive depth values) still meets the anions file (positive depths), so its XF-DATE-CONFLICT stays. (Round 4's first K2 commit treated `unknown` like `down` there and lost that
+conflict silently; leaving the column undecided was first tried and reverted in round 2 for the same reason.) The clean CSV writes its upward note only for "up". The last row of the table is reached in practice only through the user's own
+mapping (the mapping editor already starts a hand-mapped depth column at "not stated"); it is kept as a guard. Not used: the metadata record (recognition reads one sheet), the unit. Not added: "height" as an elevation word ("wave height", "height above seafloor").
 
 ## Oxygen outside µmol/kg (2026-10-24): CHEM-RANGE
 

@@ -36,6 +36,8 @@ export interface RawSheet {
   turn?: TurnInfo;
   /** Set only by the converter's decimal reading (core/convert/decimalReading.ts): the sheet as it was read before the person's answer turned the cells of a thousands column into numbers (the list of rows not written shows these cells). */
   decimalSource?: RawSheet;
+  /** Set only by the converter's missing-value answer (core/convert/missingCode.ts): the sheet as it was read before the cells the person said are missing codes (-99, -999, -9999) were left empty (the list of rows not written shows them as written). */
+  missingSource?: RawSheet;
 }
 /** The person's declaration that a sheet's columns are samples: which column names the rows (the left-hand labels), which columns right of it are not samples, and whether the header gives the date as well as the sample code. */
 export interface TurnDeclaration {
@@ -278,6 +280,8 @@ export interface ParsedDate {
   precision: 'year' | 'month' | 'day' | 'minute' | 'second';
   tz: 'utc' | 'offset' | 'unknown';
   ambiguity?: 'yy-mm-dd';
+  /** A NN-NN-NN cell of a column whose order is still open, read in the first fitting order (ROW-DATE-YY-AMBIGUOUS names it); set only on a cell whose date differs between the readings. */
+  orderOpen?: true;
   /** Darwin Core eventDate interval 'start/end': the end, parsed on its own. `iso` and `precision` above stay the START (every existing reader keeps working). */
   end?: ParsedDate;
 }

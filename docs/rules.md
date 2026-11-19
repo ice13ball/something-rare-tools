@@ -97,7 +97,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | ROW-HEADER-CODE-SHAPE | warning | show | B | — | [NERC Vocabulary Server (NVS), collections P01 (BODC Parameter Usage Vocabulary) and P06 (BODC data storage units); read 2026-10-29](https://vocab.nerc.ac.uk/collection/P06/current/), Every concept of P06 has a four-character code (411 of 411 codes read, e.g. UPAA) and every concept of P01 an eight-character one (50 613 of 50 613 codes read, e.g. TEMPPR01; 66 begin with a digit); a code of another length has no concept page: https://vocab.nerc.ac.uk/collection/P01/current/D13CMOP11/ answers 404, https://vocab.nerc.ac.uk/collection/P01/current/D13CMOP1/ is a concept.<a id="ROW-HEADER-CODE-SHAPE"></a> |
 | ROW-DEPTH-SIGN | info | show | B | — | —<a id="ROW-DEPTH-SIGN"></a> |
 | ROW-DEPTH-MIXED-SIGN | warning | accept | B | — | —<a id="ROW-DEPTH-MIXED-SIGN"></a> |
-| ROW-MISSING-CODE | warning | accept | B | — | —<a id="ROW-MISSING-CODE"></a> |
+| ROW-MISSING-CODE | warning | block | B | — | —<a id="ROW-MISSING-CODE"></a> |
 | ROW-DM-COORDS | info | show | B | — | —<a id="ROW-DM-COORDS"></a> |
 | ROW-HEMISPHERE-CONFLICT | warning | accept | B | — | —<a id="ROW-HEMISPHERE-CONFLICT"></a> |
 | ROW-HEMISPHERE-UNPAIRED | warning | accept | B | — | —<a id="ROW-HEMISPHERE-UNPAIRED"></a> |
@@ -180,6 +180,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-DATE-ORDER-CONTRADICTED | error | block | B | — | —<a id="CONV-DATE-ORDER-CONTRADICTED"></a> |
 | CONV-DATE-ORDER-DECLARED | info | show | B | — | —<a id="CONV-DATE-ORDER-DECLARED"></a> |
 | CONV-DECIMAL-DECLARED | info | show | B | — | —<a id="CONV-DECIMAL-DECLARED"></a> |
+| CONV-MISSING-CODE-DECLARED | info | show | B | — | —<a id="CONV-MISSING-CODE-DECLARED"></a> |
 | CONV-ENCODING-DECLARED | info | show | B | — | —<a id="CONV-ENCODING-DECLARED"></a> |
 | CONV-ZERO-WITH-BIOMASS | warning | accept | B | — | —<a id="CONV-ZERO-WITH-BIOMASS"></a> |
 | CONV-SAMPLE-PER-ROW | warning | accept | B | — | [OBIS Manual, "How to format Occurrence tables" (manual.obis.org/format_occurrence.html; read 2026-10-26)](https://manual.obis.org/format_occurrence.html), "(remember that all OBIS data have at least one occurrence record associated, regardless of what organization structure you have chosen)"<a id="CONV-SAMPLE-PER-ROW"></a> |

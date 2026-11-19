@@ -88,6 +88,8 @@ export const REASON_KIND: Record<LedgerReason, ReasonKind> = {
   'join-not-chosen': 'listed',
   // a description row whose results rows wrote nothing (blank counts, rows left out ...): its values reach no sample, so the row is listed whole; the results rows carry the question
   'join-results-not-written': 'listed',
+  // a cell the person answered "treat as missing" for (-99, -999, -9999 in a depth or measurement column): left empty, listed with the cell as written
+  'missing-code': 'listed',
 };
 
 /** The rules that already block the export for a `covered` reason. */
@@ -143,6 +145,8 @@ export const LISTED_BY: Partial<Record<LedgerReason, readonly string[]>> = {
   'join-not-chosen': ['CONV-JOIN-CONFLICT-CHOSEN'],
   // a description row whose results rows wrote nothing: the results rows carry the question
   'join-results-not-written': [],
+  // the person's own answer, said once per column
+  'missing-code': ['CONV-MISSING-CODE-DECLARED'],
 };
 
 /** The rule that blocked on its own for a reason that can be left out, and goes when the user leaves the reason out (the new finding takes over its question). */
@@ -204,7 +208,7 @@ function sourceOf(l: SheetLedger, sheets: readonly ConvertSheetInput[]): RawShee
     if (l.sheet === sin.sheet) return join.results.raw.turn?.source ?? join.results.raw;
   }
   const sheet = sin?.file.sheets.find((x) => x.name === l.sheet);
-  return sheet?.pivot?.source ?? sheet?.turn?.source ?? sheet?.decimalSource ?? sheet;
+  return sheet?.pivot?.source ?? sheet?.turn?.source ?? sheet?.missingSource ?? sheet?.decimalSource ?? sheet;
 }
 
 const cellShown = (c: RawCell | undefined): string => {

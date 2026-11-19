@@ -73,7 +73,9 @@ function push<K, V>(m: Map<K, V[]>, k: K, v: V): void {
 }
 
 function prepare(ds: Dataset): Prep {
+  // an open direction (both signs, or none stated) is no direction: such a dataset is compared on absolute depth, as ROW-DEPTH-RANGE judges a mixed sheet; up and down are as before
   const sign = ds.depthPositive === 'up' ? -1 : 1;
+  const open = ds.depthPositive === 'unknown';
   const depthRole = ds.mappings.flatMap((m) => m.columns).find((c) => c.role.kind === 'depth')?.role;
   const unit = depthRole && depthRole.kind === 'depth' ? depthRole.unit : undefined;
   const p: Prep = {
@@ -90,7 +92,7 @@ function prepare(ds: Dataset): Prep {
     const pr: PRow = { row };
     if (row.station !== undefined && row.station.trim() !== '') pr.station = normaliseStation(row.station);
     if (row.datetime && DAY_PRECISIONS.has(row.datetime.precision)) pr.day = row.datetime.iso.slice(0, 10);
-    if (row.depth !== undefined) pr.depth = { v: sign * row.depth, dec: row.depthDecimals ?? decimalsOfNumber(row.depth) };
+    if (row.depth !== undefined) pr.depth = { v: open ? Math.abs(row.depth) : sign * row.depth, dec: row.depthDecimals ?? decimalsOfNumber(row.depth) };
     p.rows.push(pr);
     if (pr.station !== undefined) {
       push(p.byStation, pr.station, pr);
@@ -288,6 +290,8 @@ function dateConflicts(A: Prep, B: Prep, out: Finding[]): void {
           dateB: example.b.day!,
           lineA: example.a.row.line,
           lineB: example.b.row.line,
+          // 1: one of the two dates is a NN-NN-NN date of a column whose order is open (read in the default order); 2: not
+          ambiguous: example.a.row.datetime?.orderOpen === true || example.b.row.datetime?.orderOpen === true ? 1 : 2,
         },
         datasetIds: [A.ds.id, B.ds.id],
       }),

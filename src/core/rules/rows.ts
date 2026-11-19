@@ -140,7 +140,7 @@ const SHIP_DECLARED = {
  *   ROW-HEADER-CODE-SHAPE column, code, collection, length   column = the header; code = what follows `SDN:<collection>::`; collection = P01 or P06; length = characters such a code has (8 or 4)
  *   ROW-DEPTH-SIGN        header      the depth column header
  *   ROW-DEPTH-MIXED-SIGN  header, negative, positive   the depth column header and how many non-zero depths are negative and positive (once per sheet; -99, -999, -9999 and 0 not counted); the direction is left open and the range is judged on absolute values
- *   ROW-MISSING-CODE      column, count   field = column, value = the first code as written (-99, -999 or -9999), lines = the cells; once per sheet and column (depth, depth bounds, every variable); the cell is kept as written
+ *   ROW-MISSING-CODE      column, count, index   (/convert: index = the column on the sheet; the export blocks until the person answers "treat as missing" for it) field = column, value = the first code as written (-99, -999 or -9999), lines = the cells; once per sheet and column (depth, depth bounds, every variable); the cell is kept as written (/check) or, after the answer in /convert, left out and listed
  *   ROW-DM-COORDS         (none)      field = column, value = example text (once per column)
  *   ROW-HEMISPHERE-CONFLICT hemisphere  field = coordinate column, hemisphere = its hemisphere column, value = example as written, lines = rows
  *   ROW-HEMISPHERE-MISSING  hemisphere  the same, for a filled value with an empty or unknown letter
@@ -734,15 +734,15 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-MISSING-CODE',
     category: 'B',
     severity: 'warning',
-    exportPolicy: 'accept',
-    params: ['column', 'count'],
+    exportPolicy: 'block',
+    params: ['column', 'count', 'index'],
     plain: {
       pl: `Kolumna „{column}” ma w {count} {+count:komórce|komórkach|komórkach} możliwy kod brakującej wartości, np. {value} ({+lines:wiersz|wiersze|wierszy} {lines}). Wartości -99, -999 i -9999 często znaczą „nie zmierzono”. Zostają bez zmian, ale nie wchodzą w kierunek głębokości ani w kontrolę zakresu.`,
       en: `The column "{column}" has a possible missing-value code in {count} {+count:cell|cells}, e.g. {value} ({+lines:line|lines} {lines}). Values such as -99, -999 and -9999 often stand for "not measured". They are kept as written and left out of the depth direction and the range checks.`,
       de: `Die Spalte „{column}“ hat in {count} {+count:Zelle|Zellen} einen möglichen Code für einen fehlenden Wert, z. B. {value} ({+lines:Zeile|Zeilen} {lines}). Werte wie -99, -999 und -9999 stehen oft für „nicht gemessen“. Sie bleiben unverändert und gehen weder in die Tiefenrichtung noch in die Bereichsprüfungen ein.`,
       fr: `La colonne « {column} » contient dans {count} {+count:cellule|cellules} un code possible de valeur manquante, par ex. {value} ({+lines:ligne|lignes} {lines}). Les valeurs -99, -999 et -9999 signifient souvent « non mesuré ». Elles restent telles quelles, hors du sens de la profondeur et des contrôles de plage.`,
     },
-    technical: `{file}, {sheet}:{lines} {count} cell(s) of column '{column}' hold exactly -99, -999 or -9999 (numeric equality, first: {value}), a code often written for "no measurement". Checked: the depth column (the two bounds of a Darwin Core range) and every variable of the sheet. The cell is kept as written and never replaced; it is left out of the depth direction, ROW-DEPTH-RANGE and CHEM-RANGE.`,
+    technical: `{file}, {sheet}:{lines} {count} cell(s) of column '{column}' (column {index} of the sheet in /convert) hold exactly -99, -999 or -9999 (numeric equality, first: {value}), a code often written for "no measurement". Checked: the depth column (the two bounds of a Darwin Core range) and every variable of the sheet. The cell is kept as written and never replaced; it is left out of the depth direction, ROW-DEPTH-RANGE and CHEM-RANGE.`,
   },
   {
     id: 'ROW-DM-COORDS',

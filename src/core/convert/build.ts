@@ -60,6 +60,8 @@ import { MAX_EVENT_ID, keyColumns, keyPrefixOf, keyReader, mixedKeyColumns } fro
 import type { SampleKey, SheetKeyReport } from './sampleKey';
 import { joinLines } from './sampleJoin';
 import { turnFindings, turnedLines } from './turn';
+import { applyMissingCodes } from './missingCode';
+import type { CodedCell } from './missingCode';
 import type { SampleJoinInfo } from './sampleJoin';
 
 /*
@@ -372,6 +374,13 @@ export interface ConvertSheetInput {
    * named by CONV-COLUMN-IGNORED when it is in this list and by CONV-COLUMN-IGNORED-PROPOSED (accepted once) when it is not. Absent (a core caller, a test): every ignore counts as the converter's proposal.
    */
   ignoreChosen?: readonly number[];
+  /**
+   * The columns (by index on the sheet) the person answered "treat -99, -999 and -9999 as missing" for (ROW-MISSING-CODE): the cells of the column that hold exactly one of those numbers are left empty before the sheet is read and
+   * listed in the rows not written with the reason `missing-code`. A column with a code that is not here blocks the export; a column here with no code is untouched.
+   */
+  missingCodes?: readonly number[];
+  /** The indexes among `missingCodes` that a companion file gave (it holds only for the same header and the same number of rows): said in the finding. */
+  missingCodesFromFile?: readonly number[];
   /** The user's tick "read this sheet as a normal table": a sheet that looks transposed (CONV-SHEET-TRANSPOSED) is read as it stands, row 1 being the header. */
   readAsTable?: boolean;
   /**
@@ -1847,9 +1856,20 @@ export function convert(input: ConvertInput): ConvertResult {
 }
 
 function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<number, ReadonlySet<number>>): ConvertResult & { undated: UndatedSheet[] } {
-  const rawInput: ConvertInput = { ...rawInputGiven, sheets: rawInputGiven.sheets.map(withKeyParts) };
+  // -99, -999 and -9999 in a numeric column: the question (blocks) or, once answered, the cells left empty before anything is read (core/convert/missingCode.ts)
+  const missingFindings: Finding[] = [];
+  const missingCoded = new Map<number, CodedCell[]>();
+  const rawInput: ConvertInput = {
+    ...rawInputGiven,
+    sheets: rawInputGiven.sheets.map((given, i) => {
+      const m = applyMissingCodes(withKeyParts(given));
+      missingFindings.push(...m.findings);
+      if (m.coded.length > 0) missingCoded.set(i, m.coded);
+      return m.sin;
+    }),
+  };
   // a sheet in the long environmental layout is not read at all: nothing of it is written, and the finding blocks the export
-  const longFindings: Finding[] = [];
+  const longFindings: Finding[] = [...missingFindings];
   const ledger: SheetLedger[] = [];
   const keyReports: SheetKeyReport[] = [];
   const input: ConvertInput = {
@@ -3342,6 +3362,21 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
       done.push(read.length > 0 ? combineDescriptionLedgers(read) : list[0]);
     });
     ledger.splice(0, ledger.length, ...done);
+  }
+  // the cells the person answered "treat as missing" for were left empty before the sheet was read: each is a cell of its line that has no record, with its own reason
+  for (const [index, cells] of missingCoded) {
+    const sin = rawInput.sheets[index];
+    const l = ledger.find((x) => x.inputIndex === index && x.kind !== 'description' && x.sheet === sin?.sheet);
+    if (l === undefined) continue;
+    for (const c of cells) {
+      let fate = l.lines.find((f) => f.line === c.line);
+      if (fate === undefined) {
+        fate = { line: c.line, fate: 'written' };
+        l.lines.push(fate);
+      }
+      (fate.lostCells ??= []).push({ index: c.index, reason: 'missing-code' });
+    }
+    l.lines.sort((a, b) => a.line - b.line);
   }
   // A profile level is a leaf of the tree, and BioCheck needs a date and a position on every leaf AFTER inheritance (a child takes them from its parent only where it leaves them
   // empty, docs/research/qc-sources.md, stage 0, Item 2b). The row checks of the output tables do not always see a level without either, so it is checked here, in the sheet's terms.

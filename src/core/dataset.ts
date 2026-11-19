@@ -476,7 +476,10 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
           if (date.ambiguity === 'yy-mm-dd') {
             const text = String(cell).trim();
             if (!yyColumnOpen) c.add('ROW-DATE-YYMMDD', sheet.name, specs.when.header, row.line, text, false, { interpreted: date.iso.slice(0, 10), order: whenYY !== 'unknown' ? whenYY : yyReadings.join(', ') });
-            else if (isAmbiguousTwoDigit(cell, yyReadings)) c.add('ROW-DATE-YY-AMBIGUOUS', sheet.name, specs.when.header, row.line, text, false, { interpreted: `${date.iso.slice(0, 10)} (${yyRead})`, readings: otherReadings(text, yyReadings, date.iso.slice(0, 10)) });
+            else if (isAmbiguousTwoDigit(cell, yyReadings)) {
+              date = { ...date, orderOpen: true };
+              c.add('ROW-DATE-YY-AMBIGUOUS', sheet.name, specs.when.header, row.line, text, false, { interpreted: `${date.iso.slice(0, 10)} (${yyRead})`, readings: otherReadings(text, yyReadings, date.iso.slice(0, 10)) });
+            }
           }
           let timeCell = specs.time ? (row.cells[specs.time.index] ?? null) : null;
           const origTime = timeCell;
