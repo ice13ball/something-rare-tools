@@ -6,3 +6,4 @@ coverage
 *.local
 .DS_Store
 /test/convert-private/
+/convert-recordings/

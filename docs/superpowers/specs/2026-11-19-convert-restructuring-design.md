@@ -48,6 +48,12 @@ behaviour unchanged; `/check` unchanged.
    (no step in this design changes the number of passes).
 A step whose diff needs any of 1-4 to be updated is not a refactor and goes back to Michal as a behaviour change.
 
+**How to use the convert replay gate.** Recordings live in the git-ignored `convert-recordings/`; never commit them. On the base commit run
+`CONVERT_RECORD=convert-recordings/base npm run convert:record` (records every `convert()` call of the suite, then marks the calls that depend on test mocks).
+On the head commit run `CONVERT_REPLAY_BASE=convert-recordings/base npm run convert:replay`; it must report 0 differences and exit 0. Two recordings of the
+same commit are byte-identical (`diff -rq`), so any difference is a behaviour change. Coverage: `CONVERT_REPLAY_COVERAGE=convert-recordings/base npx vitest run --config vitest.convert-replay.config.ts`.
+Known gaps: see the step-0 report (no recorded sheet holds both summary and kept-summary findings; 6 mock-dependent calls are skipped).
+
 ## 3. Stages of convertPass (question 1)
 
 ### 3.1 What is there (phases as they appear in the code)
