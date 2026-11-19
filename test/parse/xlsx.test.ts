@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 import { describe, expect, it } from 'vitest';
 import { isPercentFormat, parseXlsx, percentValue } from '../../src/core/parse/xlsx';
 import { parseFile, ParseError } from '../../src/core/parse';
+import { mergedValue } from '../../src/core/parse/shared';
 
 type Cell = XLSX.CellObject;
 const wbOf = (sheets: Record<string, XLSX.WorkSheet>, extra?: Partial<XLSX.WorkBook>): Uint8Array => {
@@ -142,5 +143,26 @@ describe('a percent number format is read as displayed', () => {
     expect(zero.findings.map((x) => x.ruleId)).not.toContain('IN-PERCENT-READ');
     const mixed = parseXlsx(wbOf({ S: aoa([['x'], [{ t: 'n', v: 0, z: '0%' }], [{ t: 'n', v: 0.25, z: '0%' }]]) }), 'z2.xlsx');
     expect(mixed.findings.find((x) => x.ruleId === 'IN-PERCENT-READ')?.params).toMatchObject({ stored: '0.25', shown: '25' });
+  });
+});
+
+describe('parseXlsx: vertical merges below the header (round 4 K1)', () => {
+  const merged = (merges: XLSX.Range[]) => {
+    const ws = aoa([['Station', 'Parameter', 'Value'], ['A', 'Nitrate', 1], ['B', null, 2], ['C', null, 3], ['D', 'Silicate', 4]]);
+    ws['!merges'] = merges;
+    return parseXlsx(wbOf({ S: ws }), 'm.xlsx').sheets[0];
+  };
+  it('records a vertical merge as 1-based lines; the merged-away cells stay blank', () => {
+    const s = merged([{ s: { r: 1, c: 1 }, e: { r: 3, c: 1 } }]);
+    expect(s.mergedDown).toEqual([{ index: 1, from: 2, to: 4 }]);
+    expect(s.rows[1].cells[1]).toBeNull();
+    expect(mergedValue(s, 1, 3)).toBe('Nitrate');
+    expect(mergedValue(s, 1, 4)).toBe('Nitrate');
+    expect(mergedValue(s, 1, 2)).toBeUndefined(); // the top cell itself
+    expect(mergedValue(s, 1, 5)).toBeUndefined();
+    expect(mergedValue(s, 0, 3)).toBeUndefined();
+  });
+  it('a horizontal merge, a single-row merge and a merge on or above the header are not recorded', () => {
+    expect(merged([{ s: { r: 1, c: 0 }, e: { r: 1, c: 1 } }, { s: { r: 2, c: 1 }, e: { r: 2, c: 1 } }, { s: { r: 0, c: 1 }, e: { r: 2, c: 1 } }]).mergedDown).toBeUndefined();
   });
 });

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { isBlankCell, stripTypeSuffix } from '../recognize/columns';
+import { mergedValue } from '../parse/shared';
+import { makeFinding } from '../rules/registryCheck';
 import { MAX_PAIRS } from './pivotLimits';
 import { headerKey } from '../recognize/vocab';
 import { makeConvertFinding } from '../rules/convert';
@@ -53,13 +55,23 @@ const text = (c: RawCell | undefined): string | undefined => {
 /** Why a long sheet is not read, when its columns say it is one: fewer than two parameters, or more pairs than a sheet may have. */
 export type LongReason = 'one-parameter' | 'too-many';
 
+/**
+ * The parameter name of a row: its own cell, or, when that is blank, the name of the merged cell above it (a workbook parameter cell merged down several rows holds the name in its top cell only),
+ * and only for a row that has a value. Nothing is read from any other column.
+ */
+function parameterOf(sheet: RawSheet, c: LongColumns, row: RawRow): string | undefined {
+  const own = text(row.cells[c.parameterAt]);
+  if (own !== undefined || isBlankCell(row.cells[c.valueAt] ?? null)) return own;
+  return text(mergedValue(sheet, c.parameterAt, row.line));
+}
+
 /** The distinct non-empty parameter texts and the distinct (parameter, unit) pairs of a sheet; the scan stops counting pairs past the cap. */
 function scan(sheet: RawSheet, c: LongColumns, skip: ReadonlySet<number>): { params: Set<string>; pairs: number } {
   const params = new Set<string>();
   const pairs = new Set<string>();
   for (const row of sheet.rows) {
     if (skip.has(row.line)) continue;
-    const p = text(row.cells[c.parameterAt]);
+    const p = parameterOf(sheet, c, row);
     if (p === undefined) continue;
     params.add(p);
     if (pairs.size <= MAX_PAIRS) pairs.add(`${p}\u0001${c.unitAt === undefined ? '' : (text(row.cells[c.unitAt]) ?? '')}`);
@@ -160,6 +172,7 @@ function pivotSheet(sheet: RawSheet, c: LongColumns, ragged: ReadonlySet<number>
   const byKey = new Map<string, Group>();
   const duplicates = new Map<string, { header: string; lines: number[] }>();
   const unnamed: number[] = [];
+  const mergedLines: number[] = [];
   const flagLines: number[] = [];
   const blankLines: number[] = [];
   const raggedLines: number[] = [];
@@ -170,8 +183,10 @@ function pivotSheet(sheet: RawSheet, c: LongColumns, ragged: ReadonlySet<number>
       raggedLines.push(row.line);
       continue;
     }
-    const parameter = text(row.cells[c.parameterAt]);
+    const own = text(row.cells[c.parameterAt]);
+    const parameter = parameterOf(sheet, c, row);
     const value = row.cells[c.valueAt] ?? null;
+    if (own === undefined && parameter !== undefined) mergedLines.push(row.line);
     if (parameter === undefined) {
       if (!isBlankCell(value)) unnamed.push(row.line);
       else blankLines.push(row.line);
@@ -286,6 +301,7 @@ function pivotSheet(sheet: RawSheet, c: LongColumns, ragged: ReadonlySet<number>
     flagRows,
     duplicates: [...duplicates.values()],
     unnamed,
+    merged: mergedLines,
     source: sheet,
     lines: { sourceRows: sheet.rows.length, ragged: raggedLines, flag: flagLines, emptyParameter: unnamed, blank: blankLines, repeated: repeatedLines, entryAbsent },
     keyOptions,
@@ -329,6 +345,7 @@ export function pivotNoteFindings(file: string, sheet: string, p: PivotNote): Fi
   const out: Finding[] = [makeConvertFinding('CONV-LONG-READ', { file, sheet, params: { parameterColumn: p.parameterColumn, valueColumn: p.valueColumn, rows: p.rowsIn, samples: p.samples, columns: p.pivoted.length } })];
   if (p.flagColumns.length > 0) out.push(makeConvertFinding('CONV-LONG-FLAG-COLUMNS', { file, sheet, params: { count: p.flagColumns.length, columns: p.flagColumns.join(', ') } }));
   if (p.flagParameters.length > 0) out.push(makeConvertFinding('CONV-LONG-FLAG-PARAMETERS', { file, sheet, params: { count: p.flagParameters.length, names: p.flagParameters.join(', '), rows: p.flagRows } }));
+  if (p.merged.length > 0) out.push(makeFinding('ROW-LONG-PARAMETER-MERGED', { file, sheet, lines: p.merged, params: { count: p.merged.length, column: p.parameterColumn } }));
   if (p.renamed.length > 0) out.push(makeConvertFinding('CONV-LONG-RENAMED', { file, sheet, params: { count: p.renamed.length, names: p.renamed.join(', ') } }));
   if (p.dropped.length > 0) out.push(makeConvertFinding('CONV-LONG-DROPPED', { file, sheet, params: { count: p.dropped.length, columns: p.dropped.join(', ') } }));
   if (p.varying.length > 0) out.push(makeConvertFinding('CONV-LONG-KEY-VARIES', { file, sheet, params: { count: p.varyingSamples, columns: p.varying.join(', ') } }));

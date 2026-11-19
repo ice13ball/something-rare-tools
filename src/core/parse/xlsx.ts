@@ -188,6 +188,8 @@ function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, finding
       fractional.push(false);
     }
   }
+  // a cell merged down a column holds its value in the top cell only; where it starts below the header it is recorded (a merge that starts on or above the header is the header's business)
+  const mergedDown = merges.filter((m) => m.s.r > headerRow && m.e.r > m.s.r).map((m) => ({ index: m.s.c, from: m.s.r + 1, to: m.e.r + 1 }));
   // cells right of the last named header cell are a column without a name, never dropped: the header grows to the last one that holds a value in a row kept (a blank in the MIDDLE of the header is left as it is)
   let unnamedFrom: number | undefined;
   let widest = header.length;
@@ -222,7 +224,7 @@ function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, finding
   const timeAll = header.map((_, c) => dateAll[c] && timed[c] === numeric[c]);
   // some numeric cell of the column has a date format that shows a fraction of a second (ss.0, ss.000): a fraction in the column is a real one. Set only when there is one.
   const fractionShown = header.map((_, c) => fractional[c] === true);
-  return { name, header, headerLine: headerRow + 1, rows, ...(unnamedFrom === undefined ? {} : { unnamedFrom }), ...(fold || unitsFold ? { subHeaderLine: (fold2 ?? unitsFold ?? fold)!.line } : {}), ...(unitsFold ? { unitsRowLine: unitsFold.line } : {}), dateFormatted, ...(timeFormatted.some(Boolean) ? { timeFormatted } : {}), ...(dateAll.some(Boolean) ? { dateAll } : {}), ...(timeAll.some(Boolean) ? { timeAll } : {}), ...(fractionShown.some(Boolean) ? { fractionShown } : {}) };
+  return { name, header, headerLine: headerRow + 1, rows, ...(unnamedFrom === undefined ? {} : { unnamedFrom }), ...(fold || unitsFold ? { subHeaderLine: (fold2 ?? unitsFold ?? fold)!.line } : {}), ...(unitsFold ? { unitsRowLine: unitsFold.line } : {}), dateFormatted, ...(timeFormatted.some(Boolean) ? { timeFormatted } : {}), ...(dateAll.some(Boolean) ? { dateAll } : {}), ...(timeAll.some(Boolean) ? { timeAll } : {}), ...(fractionShown.some(Boolean) ? { fractionShown } : {}), ...(mergedDown.length > 0 ? { mergedDown } : {}) };
 }
 
 /** A date format that shows a fraction of a second: "hh:mm:ss.000", "ss.0", "[ss].000", "mm:ss.00". Quoted text, escaped characters, `[$locale]` brackets, `_x` (a space) and `*x` (a fill) are ignored. */

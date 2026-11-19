@@ -26,6 +26,8 @@ export interface RawSheet {
   dateFormatted?: boolean[];    // xlsx: column is date-formatted in the majority of its cells
   dateAll?: boolean[];          // xlsx: EVERY numeric cell of the column is date-formatted (dateFormatted is the majority); only present when some column is
   timeAll?: boolean[];          // xlsx: every numeric cell of the column has a time-only format; only present when some column is
+  /** xlsx: vertical merges below the header (`!merges`), 1-based lines; only the top cell holds the value (parse/shared.ts mergedValue). Only present when there is one. */
+  mergedDown?: readonly { index: number; from: number; to: number }[];
   fractionShown?: boolean[];    // xlsx: some numeric cell of the column has a date format that shows a fraction of a second (ss.000); only present when some column is
   timeFormatted?: boolean[];    // xlsx: the date formats of the column are time-only (hh:mm, [h]:mm); only present when some column is
   /** Set only by the converter's long-sheet reader (core/convert/pivot.ts): this sheet is a PIVOT of a long environmental sheet, with where each cell came from. Never set for /check. */
@@ -83,6 +85,8 @@ export interface PivotInfo {
   duplicates: { header: string; lines: number[] }[];
   /** Original lines that have a value but no parameter name (nothing can be named for them). */
   unnamed: number[];
+  /** Original lines whose parameter name was read from the merged cell above them (the parameter cell was merged over several rows); only rows with a value. */
+  merged: number[];
   /**
    * Where every ORIGINAL line went when the sheet was pivoted (the ledger reads it; the page never gets it). `entryAbsent`: per pivoted row (by its `line`), the positions in `pivoted` that no original line filled.
    * Every other line is one of the lists, or the first line of a (pivoted row, pivoted column) cell. `sourceRows` = all the data lines of the long sheet.

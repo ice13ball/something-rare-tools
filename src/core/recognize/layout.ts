@@ -6,7 +6,7 @@ import { isBlankCell, isKnownColumnName, proposeColumns, stripTypeSuffix, toMapp
 import type { ProposeContext } from './columns';
 import { reasonsText, type LayoutReason, type LayoutReasonCode } from './layoutReasons';
 import { canonicalFromKey, headerKey, normaliseUnit } from './vocab';
-import { unitsRowNotFolded } from '../parse/shared';
+import { mergedValue, unitsRowNotFolded } from '../parse/shared';
 
 /*
  * Layout kinds, as TablePlan / LayoutPlan describe them:
@@ -137,7 +137,8 @@ function detectLong(sheet: RawSheet, proposals: readonly ColumnProposal[], decim
     const distinct = new Set<string>();
     let n = 0;
     for (const r of sheet.rows) {
-      const c = r.cells[col] ?? null;
+      // a name merged down several rows of a workbook is the name of each (the merged-away cells read as blank): without it a sheet whose every parameter is merged never repeats, and is not seen as long
+      const c = r.cells[col] ?? mergedValue(sheet, col, r.line) ?? null;
       if (isBlankCell(c)) continue;
       n++;
       distinct.add(String(c).trim());

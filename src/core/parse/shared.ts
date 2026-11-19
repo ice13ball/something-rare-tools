@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import type { Finding, RawCell, RawRow } from '../types';
+import type { Finding, RawCell, RawRow, RawSheet } from '../types';
 import { makeFinding } from '../rules/registryCheck';
 import type { DecodedText, LegacyEncoding } from '../values/encoding';
 import { parseNumber } from '../values/numbers';
@@ -315,4 +315,21 @@ function scanUnitsRow(header: readonly string[], rows: readonly RawRow[], decima
     changed++;
   }
   return { header: out, line: first.line, changed, failing, plainOk, ...(example === undefined ? {} : { example }) };
+}
+
+const rowsByLine = new WeakMap<RawSheet, Map<number, RawRow>>();
+/**
+ * A workbook cell merged down a column holds its value only in the top cell; the cells below read as blank. The value of the merge that covers `line` in column `index`
+ * (the top cell's), or undefined when no vertical merge covers it, the line is the top cell itself, or the top cell is blank. Only the merge's own column is ever read.
+ */
+export function mergedValue(sheet: RawSheet, index: number, line: number): RawCell | undefined {
+  const m = sheet.mergedDown?.find((x) => x.index === index && x.from < line && line <= x.to);
+  if (m === undefined) return undefined;
+  let byLine = rowsByLine.get(sheet);
+  if (byLine === undefined) {
+    byLine = new Map(sheet.rows.map((r) => [r.line, r]));
+    rowsByLine.set(sheet, byLine);
+  }
+  const top = byLine.get(m.from)?.cells[index] ?? null;
+  return top === null || (typeof top === 'string' && top.trim() === '') ? undefined : top;
 }

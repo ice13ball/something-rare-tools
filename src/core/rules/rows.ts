@@ -129,6 +129,8 @@ const SHIP_DECLARED = {
  *   ROW-JOIN-AMBIGUOUS    right   field = the key (columns joined with " + "), value = an example key, lines = the rows of the measurement sheet that could not be placed; right = the sheet that holds several rows of that key with different positions or dates
  *   ROW-LONG-VALUE-SKIPPED count   field = one parameter as an example, lines = the rows whose value was not read: another row of a long sheet has the same key and parameter with a different value (count = such values)
  *   ROW-LONG-KEY-EXTENDED columns, count   lines = some of the rows the columns separate (at most 20); columns = the headers (comma-separated) added; count = how many (info; field is empty)
+ *   ROW-LONG-NO-PARAMETER count, column   lines = the rows of a long sheet that have a value and no name in the parameter column (not read; one finding per sheet); column = the header of the parameter column; /convert has its own (CONV-LONG-NO-PARAMETER)
+ *   ROW-LONG-PARAMETER-MERGED count, column   lines = the rows whose parameter name was taken from a cell merged down the workbook (the rows below the top cell, with a value); column = the header of the parameter column (info)
  *   ROW-KEY-IGNORED  columns, count   lines = some of the rows of the clean CSV that look alike (at most 20); columns = the headers (comma-separated) of the columns the person set to ignore that differ between them (long or wide sheet); count = how many (field is empty)
  *   ROW-JOIN-KEY-BLANK    right   field = the key (columns joined with " + "), lines = the rows whose key has a blank part and that have no position of their own; right = the sheet that would give it
  *   ROW-DATE-YYMMDD       interpreted, order   field = column, value = example as written (once per column); interpreted = that example as read, YYYY-MM-DD (the century chosen); order = ymd | dmy | mdy, the order the column was read in (from its cells, or declared in /convert)
@@ -555,6 +557,34 @@ export const ROW_RULES: readonly RuleSpec[] = [
       fr: `Valeurs non lues dans « {sheet} » : {count} ({+lines:ligne|lignes} {lines}). Une autre ligne a la même clé et le même paramètre (ex. « {field} ») avec une autre valeur, et aucune colonne de la feuille n'a pu servir sans risque à distinguer ces lignes ; une seule valeur est gardée et vérifiée.`,
     },
     technical: `{file}, {sheet}:{lines} field {field}: in a long sheet (parameter and value columns) {count} value(s) differ from the value already kept for the same key (sample, position, date, depth) and parameter, and no column could safely be used to tell those rows apart (a column is refused when it is unique on every row, when it cuts the measurements of one key into rows with no parameter in common, when two columns are equally good, or when it leaves a collision in a key it varies in); one value of a pair is read (the first, or the first after a blank or missing one) and nothing is averaged. Values equal to the kept one are not counted.`,
+  },
+  {
+    id: 'ROW-LONG-NO-PARAMETER',
+    category: 'B',
+    severity: 'warning',
+    exportPolicy: 'block',
+    params: ['count', 'column'],
+    plain: {
+      pl: `W „{sheet}” {count} {+count:wiersz ma|wiersze mają|wierszy ma} wartość, ale puste pole w kolumnie „{column}” ({+lines:wiersz|wiersze|wierszy} {lines}). Nie da się jej odczytać, bo nic nie mówi, co mierzy. Wpisz nazwę parametru (jeśli komórka była scalona, scalenie musi obejmować te wiersze).`,
+      en: `In "{sheet}" {count} {+count:row has|rows have} a value but nothing in the column "{column}" ({+lines:line|lines} {lines}). It cannot be read, because nothing says what it measures. Write the parameter name (if the cell was merged, the merge has to cover these rows).`,
+      de: `In „{sheet}“ {+count:hat|haben} {count} {+count:Zeile|Zeilen} einen Wert, aber nichts in der Spalte „{column}“ ({+lines:Zeile|Zeilen} {lines}). Er lässt sich nicht lesen, weil nichts sagt, was er misst. Tragen Sie den Parameternamen ein (war die Zelle verbunden, muss die Verbindung diese Zeilen umfassen).`,
+      fr: `Dans « {sheet} », {count} {+count:ligne a|lignes ont} une valeur mais rien dans la colonne « {column} » ({+lines:ligne|lignes} {lines}). Elle ne peut pas être lue, car rien n'indique ce qu'elle mesure. Écrivez le nom du paramètre (si la cellule était fusionnée, la fusion doit couvrir ces lignes).`,
+    },
+    technical: `{file}, {sheet}:{lines} {count} row(s) of a long sheet (parameter and value columns) have a value and a blank parameter cell ("{column}"), and no merged cell above them gives one. The row is not read; nothing is guessed from the unit or the value. A row whose value is blank too is not counted. /check only: the converter blocks such rows with CONV-LONG-NO-PARAMETER.`,
+  },
+  {
+    id: 'ROW-LONG-PARAMETER-MERGED',
+    category: 'B',
+    severity: 'info',
+    exportPolicy: 'show',
+    params: ['count', 'column'],
+    plain: {
+      pl: `W „{sheet}” komórka kolumny „{column}” jest w skoroszycie scalona na kilka wierszy; jej nazwa dotyczy wszystkich wierszy scalenia: {count} {+count:wiersz poniżej|wiersze poniżej|wierszy poniżej} pierwszej komórki ({+lines:wiersz|wiersze|wierszy} {lines}) czytano z niej. Sprawdź, czy to właściwy parametr.`,
+      en: `In "{sheet}" a cell of the column "{column}" is merged over several rows in the workbook; its name applies to every row of the merge: {count} {+count:row|rows} below the first cell ({+lines:line|lines} {lines}) {+count:was|were} read with it. Check that this is the parameter you meant.`,
+      de: `In „{sheet}“ ist eine Zelle der Spalte „{column}“ in der Arbeitsmappe über mehrere Zeilen verbunden; ihr Name gilt für alle Zeilen der Verbindung: {count} {+count:Zeile|Zeilen} unter der ersten Zelle ({+lines:Zeile|Zeilen} {lines}) {+count:wurde|wurden} damit gelesen. Prüfen Sie, ob das der gemeinte Parameter ist.`,
+      fr: `Dans « {sheet} », une cellule de la colonne « {column} » est fusionnée sur plusieurs lignes dans le classeur ; son nom vaut pour toutes les lignes de la fusion : {count} {+count:ligne sous|lignes sous} la première cellule ({+lines:ligne|lignes} {lines}) {+count:a été lue|ont été lues} avec elle. Vérifiez le paramètre.`,
+    },
+    technical: `{file}, {sheet}:{lines} the parameter cell ("{column}") of a long workbook sheet is merged down several rows (SheetJS !merges); only its top cell holds the name, so the cells below read as blank. The name of the top cell is read for every row of the merge that has a value; {count} row(s) below the top cell were filled that way (the lines). Only the parameter column is filled, only from a merge the workbook declares, only on rows with a value. The same note is shown on /convert.`,
   },
   {
     id: 'ROW-LONG-KEY-EXTENDED',

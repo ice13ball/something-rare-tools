@@ -20,6 +20,7 @@ import type { DescriptiveColumn, DescriptiveLeftEmpty, RoundedTimes,
 } from './types';
 import { checkRawTable } from './checks/dwc';
 import { makeFinding } from './rules/registryCheck';
+import { mergedValue } from './parse/shared';
 import { dwcTermOf, isBlankCell, proposeColumns, toMapping, unitFromHeader } from './recognize/columns';
 import { hemisphereBoundAgrees } from './recognize/headerWords';
 import { isYearName, monthOf } from './recognize/dateParts';
@@ -39,7 +40,7 @@ import { SUMMARY_LABEL_EN } from './summaryLabels';
 
 /* ---------- findings collector ---------- */
 
-type RowRuleId = 'ROW-LONG-VALUE-SKIPPED' | 'ROW-LONG-KEY-EXTENDED' | 'ROW-KEY-IGNORED' | 'ROW-JOIN-AMBIGUOUS' | 'ROW-JOIN-KEY-BLANK' | 'ROW-DM-COORDS' | 'ROW-HEMISPHERE-CONFLICT' | 'ROW-HEMISPHERE-MISSING' | 'ROW-HEMISPHERE-UNPAIRED' | 'ROW-LON-360' | 'ROW-DATE-UNPARSEABLE' | 'ROW-TIME-OTHER-DAY' | 'ROW-DATE-YYMMDD' | 'ROW-DATE-YY-AMBIGUOUS' | 'ROW-TZ-UNKNOWN' | 'ROW-NON-NUMERIC' | 'ROW-NA-VARIANT';
+type RowRuleId = 'ROW-LONG-VALUE-SKIPPED' | 'ROW-LONG-KEY-EXTENDED' | 'ROW-LONG-NO-PARAMETER' | 'ROW-LONG-PARAMETER-MERGED' | 'ROW-KEY-IGNORED' | 'ROW-JOIN-AMBIGUOUS' | 'ROW-JOIN-KEY-BLANK' | 'ROW-DM-COORDS' | 'ROW-HEMISPHERE-CONFLICT' | 'ROW-HEMISPHERE-MISSING' | 'ROW-HEMISPHERE-UNPAIRED' | 'ROW-LON-360' | 'ROW-DATE-UNPARSEABLE' | 'ROW-TIME-OTHER-DAY' | 'ROW-DATE-YYMMDD' | 'ROW-DATE-YY-AMBIGUOUS' | 'ROW-TZ-UNKNOWN' | 'ROW-NON-NUMERIC' | 'ROW-NA-VARIANT';
 const MAX_TOKENS = 5; // distinct tokens listed in `value`; the once-per-column info rules list one example
 
 interface Acc {
@@ -1365,7 +1366,28 @@ function reportKeyIgnored(c: Collector, sheet: RawSheet, rows: readonly DataRow[
   if (told.length > 0) for (const line of lines) c.add('ROW-KEY-IGNORED', sheet.name, '', line, undefined, true, { columns: told.map((i) => sheet.header[i]).join(', '), count: told.length });
 }
 
-function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePlan['long']>, specs: Specs, lookup: Lookup | undefined, namespace: boolean, c: Collector, explicitIgnore: () => ReadonlySet<number>): Built {
+/**
+ * A parameter cell merged down a workbook column holds its name in the top cell only. The sheet with that name written into the blank cells below it (only in rows that have a value, only in the parameter
+ * column, only for a merge the workbook declares), and the lines it was written into, so they are said (ROW-LONG-PARAMETER-MERGED). Without a merge the sheet is returned as it is.
+ */
+function withMergedParameter(sheet: RawSheet, plan: NonNullable<TablePlan['long']>): { sheet: RawSheet; filled: number[] } {
+  const filled: number[] = [];
+  if (sheet.mergedDown === undefined || !sheet.mergedDown.some((m) => m.index === plan.parameterCol)) return { sheet, filled };
+  const rows = sheet.rows.map((r) => {
+    if (str(r.cells[plan.parameterCol] ?? null) !== undefined || isBlankCell(r.cells[plan.valueCol] ?? null)) return r;
+    const name = mergedValue(sheet, plan.parameterCol, r.line);
+    if (name === undefined) return r;
+    filled.push(r.line);
+    const cells = [...r.cells];
+    while (cells.length <= plan.parameterCol) cells.push(null);
+    cells[plan.parameterCol] = name;
+    return { ...r, cells };
+  });
+  return filled.length === 0 ? { sheet, filled } : { sheet: { ...sheet, rows }, filled };
+}
+
+function buildLong(file: ParsedFile, source: RawSheet, plan: NonNullable<TablePlan['long']>, specs: Specs, lookup: Lookup | undefined, namespace: boolean, c: Collector, explicitIgnore: () => ReadonlySet<number>): Built {
+  const { sheet, filled } = withMergedParameter(source, plan);
   const dc = file.decimalComma;
   const parse = metaParser(file, sheet, specs, c, { keepMillis: true });
   const skip = new Set(longColumns(plan));
@@ -1404,13 +1426,17 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
   const lostCols = new Map<number, number>();
   const year = yearColumnOf(sheet, specs);
   const skippedDiffer: number[] = [];
+  const noParameter: number[] = [];
   let skippedExample: string | undefined;
   const sourceRow = new Int32Array(sheet.rows.length).fill(-1);
   let sourceAt = -1;
   for (const r of sheet.rows) {
     sourceAt++;
     const param = str(r.cells[plan.parameterCol] ?? null);
-    if (param === undefined) continue;
+    if (param === undefined) {
+      if (!isBlankCell(r.cells[plan.valueCol] ?? null)) noParameter.push(r.line);
+      continue;
+    }
     const id = JSON.stringify(keyCols.map((i) => str(r.cells[i] ?? null) ?? ''));
     let n = groups.get(id);
     if (n === undefined) {
@@ -1464,6 +1490,10 @@ function buildLong(file: ParsedFile, sheet: RawSheet, plan: NonNullable<TablePla
       skippedExample ??= param;
     }
   }
+  // a row with a value and no parameter name was not read, and a name taken from a merged cell is said: both with their lines
+  const parameterHeader = sheet.header[plan.parameterCol] ?? '';
+  for (const line of noParameter) c.add('ROW-LONG-NO-PARAMETER', sheet.name, '', line, undefined, true, { count: noParameter.length, column: parameterHeader });
+  for (const line of filled) c.add('ROW-LONG-PARAMETER-MERGED', sheet.name, '', line, undefined, true, { count: filled.length, column: parameterHeader });
   for (const line of skippedDiffer) c.add('ROW-LONG-VALUE-SKIPPED', sheet.name, skippedExample ?? '', line, undefined, true, { count: skippedDiffer.length });
   // The key columns no fixed column carries are written too, or rows that differ only there look identical: a time with no date, a sediment depth, a depth bottom, a replicate. A key column is
   // "carried" when every cell of it gave something to the date, position, depth, station, cruise or sample. One with NO cell used is written whole (it is nowhere else in the file); one with only some

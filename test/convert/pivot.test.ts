@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // The converter's reader of a LONG environmental sheet (one row per measured parameter): core/convert/pivot.ts. Synthetic sheets only; the stations are invented.
+import * as XLSX from 'xlsx';
 import { describe, expect, it } from 'vitest';
+import { parseXlsx } from '../../src/core/parse/xlsx';
 import { convert } from '../../src/core/convert/build';
-import { MAX_PAIRS, pivotConvertFile } from '../../src/core/convert/pivot';
+import { MAX_PAIRS, pivotConvertFile, pivotNoteFindings } from '../../src/core/convert/pivot';
 import { judge, rulesWithPolicy } from '../../src/core/convert/policy';
 import { makeConvertFinding, renderConvertPlain } from '../../src/core/rules/convert';
 import { LANGS } from '../../src/core/types';
@@ -404,5 +406,39 @@ describe('texts', () => {
     expect(renderConvertPlain(one, 'pl')).toContain('1 próbkę');
     expect(renderConvertPlain({ ...one, params: { ...one.params, samples: 3 } }, 'pl')).toContain('3 próbki');
     expect(renderConvertPlain({ ...one, params: { ...one.params, samples: 5 } }, 'pl')).toContain('5 próbek');
+  });
+});
+
+describe('a merged parameter cell in a long workbook (round 4 K1)', () => {
+  const book = (merges: XLSX.Range[]) => {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['Station', 'Date', 'Parameter', 'Value'],
+      ['ZL1', '2023-06-14', 'Nitrate', 1.1],
+      ['ZL2', '2023-06-14', null, 1.2],
+      ['ZL3', '2023-06-14', null, 1.3],
+      ['ZL4', '2023-06-14', 'Silicate', 2.1],
+    ] as never);
+    ws['!merges'] = merges;
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'S');
+    return parseXlsx(new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx' })), 'm.xlsx');
+  };
+  it('the pivot reads the three rows as Nitrate and raises no CONV-LONG-NO-PARAMETER', () => {
+    const file = pivotConvertFile(book([{ s: { r: 1, c: 2 }, e: { r: 3, c: 2 } }]));
+    expect(file.sheets[0].header).toEqual(['Station', 'Date', 'Nitrate', 'Silicate']);
+    expect(file.sheets[0].rows.map((r) => r.cells[2])).toEqual([1.1, 1.2, 1.3, null]);
+    expect(file.sheets[0].pivot?.unnamed).toEqual([]);
+    expect(file.sheets[0].pivot?.merged).toEqual([3, 4]);
+    const note = pivotNoteFindings('m.xlsx', 'S', file.sheets[0].pivot!).find((f) => f.ruleId === 'ROW-LONG-PARAMETER-MERGED');
+    expect(note?.lines).toEqual([3, 4]);
+    expect(note?.params).toMatchObject({ count: 2, column: 'Parameter' });
+  });
+  it('without the merge the two rows are still blocked as before', () => {
+    const file = pivotConvertFile(book([]));
+    expect(file.sheets[0].pivot?.unnamed).toEqual([3, 4]);
+  });
+  it('a merge in another column changes nothing', () => {
+    const file = pivotConvertFile(book([{ s: { r: 1, c: 0 }, e: { r: 3, c: 0 } }]));
+    expect(file.sheets[0].pivot?.unnamed).toEqual([3, 4]);
   });
 });
