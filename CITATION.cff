@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-message: "If you use these tools, please cite this software record (10.5281/zenodo.PLACEHOLDER-CODE-DOI) and the article describing the tools (10.5281/zenodo.24159769)."
+message: "If you use these tools, please cite this software record (10.5281/zenodo.24366744) and the article describing the tools (10.5281/zenodo.24366743)."
 title: "Abyssal Claims Tools: browser-based checks of marine data files, metadata and licences"
 abstract: >-
   Web tools that check marine datasets before they are published or reused.
@@ -17,7 +17,7 @@ abstract: >-
 type: software
 version: 1.1.0
 date-released: "2026-11-19"  # PLACEHOLDER: set to the real release date when tagging
-doi: "10.5281/zenodo.PLACEHOLDER-CODE-DOI"  # PLACEHOLDER: replace with the code record DOI of 1.1.0 after publishing
+doi: "10.5281/zenodo.24366744"
 license: AGPL-3.0-or-later
 url: "https://tools.something-rare.com"
 repository-code: "https://github.com/ice13ball/something-rare-tools"
@@ -46,7 +46,7 @@ authors:
 identifiers:
   - description: "Article describing the tools"
     type: doi
-    value: "10.5281/zenodo.24159769"
+    value: "10.5281/zenodo.24366743"
   - description: "Live tools"
     type: url
     value: "https://tools.something-rare.com"
