@@ -7,12 +7,33 @@ import { ParseError, foldStatisticSubheader, foldUnitsRow } from './shared';
 
 type Grid = Map<number, Map<number, XLSX.CellObject>>;
 
+/** A number format that shows a percent sign: `%` outside "quoted text", `\x` escapes and `[...]` brackets. `0%`, `0.00%`, `[Red]0.0%` are; `0"%"`, `0\%` and `General` are not. */
+export function isPercentFormat(z: string): boolean {
+  return z.replace(/"[^"]*"/g, '').replace(/\\./g, '').replace(/\[[^\]]*\]/g, '').includes('%');
+}
+
+/** The number a percent format shows: the decimal point of String(v) moved two places right, exactly (never v * 100: 0.07 * 100 is 7.000000000000001; never the cell's rounded `.w`). */
+export function percentValue(v: number): number {
+  const m = /^(-?)(\d+)(?:\.(\d+))?(?:e([+-]?\d+))?$/i.exec(String(v));
+  if (!m) return v; // NaN / Infinity: nothing to move
+  const [, sign, int, frac = '', exp = '0'] = m;
+  const digits = int + frac;
+  const point = int.length + Number(exp) + 2; // digits before the decimal point after the move
+  let out: string;
+  if (point <= 0) out = `0.${'0'.repeat(-point)}${digits}`;
+  else if (point >= digits.length) out = digits + '0'.repeat(point - digits.length);
+  else out = `${digits.slice(0, point)}.${digits.slice(point)}`;
+  const n = Number(sign + out);
+  return n === 0 ? 0 : n;
+}
+
 /** Cell value as the checker sees it: numbers stay numbers, everything else is trimmed text, empty is null. */
 function cellValue(cell: XLSX.CellObject | undefined): RawCell {
   if (!cell || cell.t === 'z') return null;
   switch (cell.t) {
     case 'n':
-      return typeof cell.v === 'number' ? cell.v : null;
+      if (typeof cell.v !== 'number') return null;
+      return typeof cell.z === 'string' && isPercentFormat(cell.z) ? percentValue(cell.v) : cell.v;
     case 'b':
       return cell.v ? 'TRUE' : 'FALSE';
     case 'e':
@@ -77,6 +98,7 @@ function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, finding
   const dated = new Array<number>(width).fill(0);
   const timed = new Array<number>(width).fill(0);
   const fractional = new Array<boolean>(width).fill(false);
+  const percent = new Map<number, { count: number; line: number; stored: string; shown: string }>();
   for (const r of rowsAsc) {
     if (r <= headerRow) continue;
     const cells = grid.get(r)!;
@@ -89,6 +111,11 @@ function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, finding
       out[c] = v;
       if (typeof v === 'number' && c < width) {
         numeric[c]++;
+        if (cell.t === 'n' && typeof cell.v === 'number' && typeof cell.z === 'string' && !XLSX.SSF.is_date(cell.z) && isPercentFormat(cell.z)) {
+          const p = percent.get(c);
+          if (p) p.count++;
+          else percent.set(c, { count: 1, line: r + 1, stored: String(cell.v), shown: String(v) });
+        }
         if (typeof cell.z === 'string' && XLSX.SSF.is_date(cell.z)) {
           dated[c]++;
           if (isTimeOnlyFormat(cell.z)) timed[c]++;
@@ -136,6 +163,9 @@ function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, finding
       timed.push(0);
       fractional.push(false);
     }
+  }
+  for (const [c, p] of [...percent].sort((a, b) => a[0] - b[0])) {
+    if (c < header.length) findings.push(makeFinding('IN-PERCENT-READ', { file: fileName, sheet: name, lines: [p.line], params: { column: header[c], count: p.count, stored: p.stored, shown: p.shown } }));
   }
   const dateFormatted = header.map((_, c) => numeric[c] > 0 && dated[c] * 2 > numeric[c]);
   // columns whose date formats are TIME-ONLY (hh:mm, [h]:mm, h:mm:ss) in the majority of their date cells; set only when there is one

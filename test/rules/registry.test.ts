@@ -32,6 +32,7 @@ const EXPECTED: Record<string, [Severity, string]> = {
   'IN-HEADER-SHORT': ['warning', 'input'],
   'IN-HEADER-UNITS-READ': ['info', 'input'],
   'IN-HEADER-UNITS-NAMED': ['info', 'input'],
+  'IN-PERCENT-READ': ['info', 'input'],
   'IN-DATE1904': ['info', 'input'],
   'IN-PANGAEA-EVENT-USED': ['info', 'input'],
   'IN-PANGAEA-EVENT-NOT-USED': ['warning', 'input'],
@@ -131,9 +132,9 @@ describe('rule table', () => {
   it('has exactly the planned ids, each once, with the planned severity and category', () => {
     const ids = RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
-    // the 115 rules of the checks, then the converter's CONV-* rules (registered at the reveal of /convert; their own table is test/convert/rules.test.ts)
-    expect(ids.filter((id) => !id.startsWith('CONV-')).length).toBe(115);
-    expect(ids.length).toBe(115 + CONVERT_RULES.length);
+    // the 116 rules of the checks, then the converter's CONV-* rules (registered at the reveal of /convert; their own table is test/convert/rules.test.ts)
+    expect(ids.filter((id) => !id.startsWith('CONV-')).length).toBe(116);
+    expect(ids.length).toBe(116 + CONVERT_RULES.length);
     expect([...ids.filter((id) => !id.startsWith('CONV-'))].sort()).toEqual(Object.keys(EXPECTED).sort());
     for (const r of RULES.filter((x) => !x.id.startsWith('CONV-'))) {
       expect([r.severity, r.category], r.id).toEqual(EXPECTED[r.id]);

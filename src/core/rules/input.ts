@@ -30,6 +30,7 @@ import type { RuleSpec } from './spec';
  *   IN-HEADER-SHORT         header, count, rows, width, extra, range   header names, rows with the modal field count, data rows, that count, names missing, the added columns' numbers ('48' or '48…49'); file + sheet
  *   IN-HEADER-UNITS-READ    count, example    columns that got a unit from the row under the header (at least 1; the row's line is in `lines`), and the first of them as it now reads ('a [h]'); file + sheet
  *   IN-HEADER-UNITS-NAMED   (none)   a row of units under a header whose names all carry their units already: not a data row (the row's line is in `lines`); file + sheet
+ *   IN-PERCENT-READ         column, count, stored, shown   a column of an Excel sheet whose numeric cells have a percent number format and were read as shown (count cells; the first stored 0.95 read as 95); lines = the first such cell; file + sheet
  *   IN-DATE1904             (none)
  *   IN-PANGAEA-EVENT-USED   columns, events, count   a PANGAEA table without position/date columns got Latitude, Longitude and/or Date/Time from its Event(s) header block (columns = the names added, events = how many events the block lists, count = rows filled)
  *   IN-PANGAEA-EVENT-NOT-USED events    the block was not used; optional several (= events) = several events and no Event column to match them, track = the one event's position is a track
@@ -433,6 +434,20 @@ export const INPUT_RULES: readonly RuleSpec[] = [
       fr: `La ligne {lines} contient des unités, pas des données : les noms des colonnes les portent aussi. Cette ligne n'est pas comptée comme une ligne de données, et les numéros de ligne de ce rapport restent ceux du fichier.`,
     },
     technical: `{file} sheet {sheet}: line {lines} is a second header row in which every filled cell is a unit, and every column it names carries the same unit in its header too. No name is changed; the row is not a data row.`,
+  },
+  {
+    id: 'IN-PERCENT-READ',
+    category: 'input',
+    severity: 'info',
+    exportPolicy: 'show',
+    params: ['column', 'count', 'stored', 'shown'],
+    plain: {
+      pl: `{count} {+count:komórka|komórki|komórek} kolumny „{column}” {+count:ma|mają|mają} format procentowy i {+count:odczytano|odczytano|odczytano} tak, jak są widoczne ({stored} odczytano jako {shown}).`,
+      en: `{count} {+count:cell|cells} of column "{column}" {+count:is|are} formatted as a percentage and {+count:was|were} read as shown ({stored} is read as {shown}).`,
+      de: `{count} {+count:Zelle|Zellen} der Spalte „{column}“ {+count:ist|sind} als Prozent formatiert und {+count:wurde|wurden} so gelesen, wie sie angezeigt {+count:wird|werden} ({stored} wird als {shown} gelesen).`,
+      fr: `{count} {+count:cellule|cellules} de la colonne « {column} » {+count:est mise|sont mises} en forme de pourcentage et {+count:a été lue|ont été lues} telle qu'affichée ({stored} est lu comme {shown}).`,
+    },
+    technical: `{file} sheet {sheet}: {count} numeric cells of column "{column}" have a number format with a percent sign; the stored number's decimal point was moved two places right (first: {stored} read as {shown}). The cell's formatted text (rounded) is not used.`,
   },
   {
     id: 'IN-DATE1904',

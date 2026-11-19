@@ -61,6 +61,7 @@ const EXEMPT: Record<string, string> = {
   'CONV-JOIN-CONFLICT-CHOSEN': '(b) the person chose which value of the two sheets is written',
   'IN-DATE1904': '(c) the workbook states its own date system; the reader only follows it',
   'IN-HEADER-UNITS-READ': '(c) a row of units under the header; a row with a number is never folded (parse/shared.ts foldUnitsRow)',
+  'IN-PERCENT-READ': "(c) the cell's own number format",
   'IN-HEADER-UNITS-NAMED': '(c) the same fold, the units are named in the header',
   'ROW-LON-360': '(c) a longitude written 0-360 is the same place, no value is lost',
   'ROW-DM-COORDS': '(c) degrees and minutes are read as written',

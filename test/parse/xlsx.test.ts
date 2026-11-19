@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import * as XLSX from 'xlsx';
 import { describe, expect, it } from 'vitest';
-import { parseXlsx } from '../../src/core/parse/xlsx';
+import { isPercentFormat, parseXlsx, percentValue } from '../../src/core/parse/xlsx';
 import { parseFile, ParseError } from '../../src/core/parse';
 
 type Cell = XLSX.CellObject;
@@ -98,5 +98,26 @@ describe('parseXlsx', () => {
   it('throws ParseError, not a raw library error, on a corrupt workbook', () => {
     const bad = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 1, 2, 3, 4, 5]);
     expect(() => parseFile('bad.xlsx', bad)).toThrow(ParseError);
+  });
+});
+
+describe('a percent number format is read as displayed', () => {
+  it('percentValue moves the decimal point exactly', () => {
+    const cases: [number, number][] = [[0.95, 95], [0.123, 12.3], [1.005, 100.5], [0.07, 7], [-0.5, -50], [1e-7, 0.00001], [0, 0], [0.955, 95.5], [1, 100]];
+    for (const [v, want] of cases) expect(percentValue(v), String(v)).toBe(want);
+  });
+  it('isPercentFormat ignores quoted and escaped percent signs', () => {
+    for (const z of ['0%', '0.00%', '[Red]0.0%']) expect(isPercentFormat(z), z).toBe(true);
+    for (const z of ['0"%"', '0\\%', 'General', '0.00', '@']) expect(isPercentFormat(z), z).toBe(false);
+  });
+  it('reads percent cells as shown, notes the column once, leaves plain and date cells alone', () => {
+    const ws = aoa([['O2 sat [%]', 'plain', 'when'], [{ t: 'n', v: 0.95, z: '0%' }, 0.95, dateCell(45000)], [{ t: 'n', v: 0.955, z: '0%' }, 0.07, dateCell(45001)]]);
+    const f = parseXlsx(wbOf({ S: ws }), 'p.xlsx');
+    expect(f.sheets[0].rows.map((r) => r.cells[0])).toEqual([95, 95.5]);
+    expect(f.sheets[0].rows.map((r) => r.cells[1])).toEqual([0.95, 0.07]);
+    expect(f.sheets[0].rows[0].cells[2]).toBe(45000);
+    const n = f.findings.filter((x) => x.ruleId === 'IN-PERCENT-READ');
+    expect(n).toHaveLength(1);
+    expect(n[0].params).toMatchObject({ column: 'O2 sat [%]', count: 2, stored: '0.95', shown: '95' });
   });
 });

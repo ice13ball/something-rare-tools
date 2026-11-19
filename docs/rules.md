@@ -31,6 +31,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | IN-HEADER-SHORT | warning | accept | input | — | —<a id="IN-HEADER-SHORT"></a> |
 | IN-HEADER-UNITS-READ | info | show | input | — | —<a id="IN-HEADER-UNITS-READ"></a> |
 | IN-HEADER-UNITS-NAMED | info | show | input | — | —<a id="IN-HEADER-UNITS-NAMED"></a> |
+| IN-PERCENT-READ | info | show | input | — | —<a id="IN-PERCENT-READ"></a> |
 | IN-DATE1904 | info | show | input | — | [Microsoft Support, Date systems in Excel](https://support.microsoft.com/en-us/office/date-systems-in-excel-e7fe7167-48a9-4b96-bb53-5612a800b487), 1900 and 1904 date systems; "The difference between the two date systems is 1,462 days."<a id="IN-DATE1904"></a> |
 | IN-PANGAEA-EVENT-USED | info | show | input | — | —<a id="IN-PANGAEA-EVENT-USED"></a> |
 | IN-PANGAEA-EVENT-NOT-USED | warning | show | input | — | —<a id="IN-PANGAEA-EVENT-NOT-USED"></a> |
