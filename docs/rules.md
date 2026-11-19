@@ -84,10 +84,10 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | ROW-DATE-MISSING | info | show | B | — | —<a id="ROW-DATE-MISSING"></a> |
 | ROW-YEAR-OUTLIER | warning | show | B | — | —<a id="ROW-YEAR-OUTLIER"></a> |
 | ROW-JOIN-AMBIGUOUS | warning | show | B | — | —<a id="ROW-JOIN-AMBIGUOUS"></a> |
-| ROW-LONG-VALUE-SKIPPED | warning | show | B | — | —<a id="ROW-LONG-VALUE-SKIPPED"></a> |
+| ROW-LONG-VALUE-SKIPPED | warning | accept | B | — | —<a id="ROW-LONG-VALUE-SKIPPED"></a> |
 | ROW-LONG-NO-PARAMETER | warning | block | B | — | —<a id="ROW-LONG-NO-PARAMETER"></a> |
 | ROW-LONG-PARAMETER-MERGED | info | accept | B | — | —<a id="ROW-LONG-PARAMETER-MERGED"></a> |
-| ROW-LONG-KEY-EXTENDED | info | show | B | — | —<a id="ROW-LONG-KEY-EXTENDED"></a> |
+| ROW-LONG-KEY-EXTENDED | info | accept | B | — | —<a id="ROW-LONG-KEY-EXTENDED"></a> |
 | ROW-KEY-IGNORED | info | show | B | — | —<a id="ROW-KEY-IGNORED"></a> |
 | ROW-JOIN-KEY-BLANK | warning | show | B | — | —<a id="ROW-JOIN-KEY-BLANK"></a> |
 | ROW-DATE-YYMMDD | info | accept | B | — | —<a id="ROW-DATE-YYMMDD"></a> |
@@ -95,7 +95,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | ROW-TZ-UNKNOWN | info | show | B | — | —<a id="ROW-TZ-UNKNOWN"></a> |
 | ROW-UNIT-MISSING | warning | show | B | — | —<a id="ROW-UNIT-MISSING"></a> |
 | ROW-HEADER-CODE-SHAPE | warning | show | B | — | [NERC Vocabulary Server (NVS), collections P01 (BODC Parameter Usage Vocabulary) and P06 (BODC data storage units); read 2026-10-29](https://vocab.nerc.ac.uk/collection/P06/current/), Every concept of P06 has a four-character code (411 of 411 codes read, e.g. UPAA) and every concept of P01 an eight-character one (50 613 of 50 613 codes read, e.g. TEMPPR01; 66 begin with a digit); a code of another length has no concept page: https://vocab.nerc.ac.uk/collection/P01/current/D13CMOP11/ answers 404, https://vocab.nerc.ac.uk/collection/P01/current/D13CMOP1/ is a concept.<a id="ROW-HEADER-CODE-SHAPE"></a> |
-| ROW-DEPTH-SIGN | info | show | B | — | —<a id="ROW-DEPTH-SIGN"></a> |
+| ROW-DEPTH-SIGN | info | accept | B | — | —<a id="ROW-DEPTH-SIGN"></a> |
 | ROW-DEPTH-MIXED-SIGN | warning | accept | B | — | —<a id="ROW-DEPTH-MIXED-SIGN"></a> |
 | ROW-MISSING-CODE | warning | block | B | — | —<a id="ROW-MISSING-CODE"></a> |
 | ROW-DM-COORDS | info | show | B | — | —<a id="ROW-DM-COORDS"></a> |

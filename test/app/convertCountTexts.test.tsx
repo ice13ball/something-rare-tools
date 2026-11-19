@@ -270,10 +270,10 @@ describe('the companion file', () => {
 
   it('keeps the answer by sheet, counts and the hash of the text: the file holds neither text', async () => {
     const text = await answered();
-    expect(text).toContain(`countText=absence:1:4:hauls.csv:6:${shortHash('tabsent')}`);
+    expect(text).toContain(`countTextAt=absence:1:4:hauls.csv:6:${shortHash('tabsent')}`);
     expect(text).not.toContain('absent');
     expect(text).not.toContain('nie stwierdzono');
-    expect(text).not.toContain('countText=leave-out');
+    expect(text).not.toContain('countTextAt=leave-out');
   });
 
   it('is applied again from the file (fromFile) for the same sheet, rows, text and cells; the other text is still asked', async () => {
@@ -319,7 +319,7 @@ describe('the companion file', () => {
     fireEvent.click(screen.getByRole('button', { name: T['convert.companion.button'] }));
     const text = run.download.mock.calls[0][0] as string;
     expect(text).toContain('countTextColumn=absence:3:7:hauls.csv:6');
-    expect(text).not.toMatch(/^countText=/m);
+    expect(text).not.toMatch(/^countTextAt=/m);
     expect(text).not.toContain('none seen');
   });
 
@@ -354,8 +354,8 @@ describe('the companion file', () => {
     expect(lastSheet().countTexts).toEqual({ '6\u001f+': { answer: 'present', count: 1 }, '7\u001f+': { answer: 'absence', count: 1 } });
     fireEvent.click(screen.getByRole('button', { name: T['convert.companion.button'] }));
     const text = run.download.mock.calls[0][0] as string;
-    expect(text).toContain(`countText=present:1:4:hauls.csv:6:${shortHash('t+')}`);
-    expect(text).toContain(`countText=absence:1:4:hauls.csv:7:${shortHash('t+')}`);
+    expect(text).toContain(`countTextAt=present:1:4:hauls.csv:6:${shortHash('t+')}`);
+    expect(text).toContain(`countTextAt=absence:1:4:hauls.csv:7:${shortHash('t+')}`);
     expect(text).not.toContain('+,');
     cleanup();
     await load([{ name: 'hauls.csv', text: two }, { name: 'c.csv', text }]);
@@ -366,7 +366,7 @@ describe('the companion file', () => {
   });
 
   it('I1: a line of the old format (no column) is not applied and the text is asked again, visibly', async () => {
-    const text = (await answered()).replace(`:6:${shortHash('tabsent')}`, `:${shortHash('tabsent')}`);
+    const text = (await answered()).replace(`countTextAt=absence:1:4:hauls.csv:6:${shortHash('tabsent')}`, `countText=absence:1:4:hauls.csv:${shortHash('tabsent')}`);
     expect(text).toContain(`countText=absence:1:4:hauls.csv:${shortHash('tabsent')}`);
     cleanup();
     await load([{ name: 'hauls.csv', text: FILE }, { name: 'c.csv', text }]);

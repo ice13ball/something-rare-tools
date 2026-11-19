@@ -329,7 +329,7 @@ describe('the count-text answer in the companion file (round 4, Task 17)', () =>
   it('round trips the answer by sheet, count, rows and the hash of the text (a colon in the sheet name is safe); the line holds no text', () => {
     const settings = { countText: [{ sheet: 'hauls.csv', answer: 'absence' as const, count: 2, rows: 9, index: 6, hash: h }, { sheet: 'a:b.csv', answer: 'present' as const, count: 1, rows: 40, index: 7, hash: '00ff00ff' }], countTextColumn: [{ sheet: 'a:b.csv', answer: 'leave-out' as const, count: 4, rows: 40, index: 7 }] };
     const text = writeConvertSidecar(settings);
-    expect(text).toContain(`countText=absence:2:9:hauls.csv:6:${h}`);
+    expect(text).toContain(`countTextAt=absence:2:9:hauls.csv:6:${h}`);
     expect(text).toContain('countTextColumn=leave-out:4:40:a:b.csv:7');
     const back = readConvertSettings(textFile('c.sidecar.csv', text));
     expect(back?.countText).toEqual(settings.countText);
@@ -337,14 +337,24 @@ describe('the count-text answer in the companion file (round 4, Task 17)', () =>
   });
 
   it('a malformed line (another answer, count 0, a bad hash) and a duplicate are not kept', () => {
-    const lines = [`countText=maybe:2:9:a.csv:6:${h}`, `countText=absence:0:9:a.csv:6:${h}`, 'countText=absence:2:9:a.csv:6:XYZ', `countText=absence:2:9:a.csv:6:${h}`, `countText=leave-out:3:9:a.csv:6:${h}`, `countText=absence:2:9:a.csv:${h}`];
+    const lines = [`countTextAt=maybe:2:9:a.csv:6:${h}`, `countTextAt=absence:0:9:a.csv:6:${h}`, 'countTextAt=absence:2:9:a.csv:6:XYZ', `countTextAt=absence:2:9:a.csv:6:${h}`, `countTextAt=leave-out:3:9:a.csv:6:${h}`, `countText=absence:2:9:a.csv:${h}`, `countText=absence:2:9:a.csv:6:${h}`, `countText=absence:2:9:x:12:${h}`];
     const text = ['original_column,output_column,unit,unit_source,p01', ...lines.map((l) => `(setting),${l},,,`)].join('\n') + '\n';
     expect(readConvertSettings(textFile('c.sidecar.csv', text))?.countText).toEqual([{ answer: 'absence', count: 2, rows: 9, sheet: 'a.csv', index: 6, hash: h }]);
-    // (the last line is the old format, with no column index: it is not read)
+    // the last three are the old key (no column index), whatever follows the sheet name, even ":12" or ":6" there: never read as a column
+    expect(readConvertSettings(textFile('c.sidecar.csv', text))?.countText).toHaveLength(1);
+  });
+
+  it('a sheet name that ends in ":12" is a sheet name; the old key, which had no column, is never read as one with a column', () => {
+    const settings = { countText: [{ sheet: 'x:12', answer: 'absence' as const, count: 2, rows: 9, index: 3, hash: h }] };
+    const text = writeConvertSidecar(settings);
+    expect(readConvertSettings(textFile('c.sidecar.csv', text))?.countText).toEqual(settings.countText);
+    const old = ['original_column,output_column,unit,unit_source,p01', `(setting),countText=absence:2:9:x:12:${h},,,`].join('\n') + '\n';
+    expect(readConvertSettings(textFile('c.sidecar.csv', old))?.countText).toBeUndefined();
   });
 
   it('is not written for an answer that is none or a hash that is not a hash', () => {
     const out = writeConvertSidecar({ countText: [{ sheet: 'a.csv', answer: 'sideways' as never, count: 2, rows: 3, index: 6, hash: h }, { sheet: 'a.csv', answer: 'absence', count: 0, rows: 3, index: 6, hash: h }, { sheet: 'a.csv', answer: 'absence', count: 1, rows: 3, index: 6, hash: 'raw text' }] });
+    expect(out).not.toContain('countTextAt=');
     expect(out).not.toContain('countText=');
   });
 });

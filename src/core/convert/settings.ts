@@ -64,7 +64,7 @@ import type { ParsedFile } from '../types';
  *                     writes them (real) and says the answer came from the file. A sheet name, a hash and a count, never a value.
  *   summaryRows=<leave-out|keep>:<count>:<rows>:<sheet>  the person answered "leave them out (summary rows)" or "keep (a real station)" (CONV-SUMMARY-ROW-UNDECIDED) for the <count> rows a sheet of <rows> rows
  *                     holds back as summary rows. Holds only while the sheet has the same number of rows AND the converter holds back the same <count> rows; the converter then says the answer came from the file. No row label.
- *   countText=<absence|leave-out|present>:<count>:<rows>:<sheet>:<colIndex>:<hash>  the person answered "absence", "leave out" or "present (the text in the remarks)" (CONV-TEXT-IN-TAXON-CELL) for the <count> cells
+ *   countTextAt=<absence|leave-out|present>:<count>:<rows>:<sheet>:<colIndex>:<hash>  the person answered "absence", "leave out" or "present (the text in the remarks)" (CONV-TEXT-IN-TAXON-CELL) for the <count> cells
  *                     that hold one text in a count column of a sheet of <rows> rows. <hash> is the hash (core/convert/keySetting.ts `shortHash`) of 't' + the cell's trimmed text, NEVER the text: a text such as
  *                     "nie stwierdzono" or "<0.5" is a data value. Holds only when a text of that sheet has that hash, the same <count> cells and the sheet has the same number of rows; the page then pre-picks it
  *                     and the converter says the answer came from the file. An answer is for ONE column
@@ -119,7 +119,10 @@ export const YY_ORDER_SETTING = 'yyOrder=';
 export const DECIMAL_READING_SETTING = 'decimalReading=';
 export const MISSING_CODE_SETTING = 'missingCode=';
 export const SUMMARY_ROWS_SETTING = 'summaryRows=';
-export const COUNT_TEXT_SETTING = 'countText=';
+export const COUNT_TEXT_SETTING = 'countTextAt=';
+/** The key of the first (round 4, Task 17) form of the answer, which had no column: `countText=<answer>:<count>:<rows>:<sheet>:<hash>`. It is never read. A new key, not a new field, because a sheet name may end in ":12" and then an old
+ * line is character for character a new one with a column index: only a different key tells them apart. */
+export const COUNT_TEXT_OLD_SETTING = 'countText=';
 export const COUNT_TEXT_COLUMN_SETTING = 'countTextColumn=';
 export const ENCODING_SETTING = 'encoding=';
 export const DECLARED_POSITION_SETTING = 'declaredPosition=';

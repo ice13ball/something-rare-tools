@@ -97,12 +97,7 @@ const EXEMPT: Record<string, string> = {
 };
 
 /** A rule that is `show` now and has a task that changes it. */
-const PENDING: Record<string, string> = {
-  // found by the widened scan (I2); their policy was not changed by that fix, and each is a reader choice or leave-out still to be judged
-  'ROW-DEPTH-SIGN': 'a depth sign the reader may have read by convention; to be judged',
-  'ROW-LONG-KEY-EXTENDED': 'the reader picks the column that separates repeated rows; to be judged',
-  'ROW-LONG-VALUE-SKIPPED': 'a value of a long sheet is not read; to be judged against the ledger',
-};
+const PENDING: Record<string, string> = {};
 
 /** The ids the test looks at, with where each came from. */
 export function judged(): Map<string, string> {

@@ -550,7 +550,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-LONG-VALUE-SKIPPED',
     category: 'B',
     severity: 'warning',
-    exportPolicy: 'show',
+    exportPolicy: 'accept',
     params: ['count'],
     plain: {
       pl: `Nieodczytane wartości w „{sheet}”: {count} ({+lines:wiersz|wiersze|wierszy} {lines}). Inny wiersz ma ten sam klucz i parametr (np. „{field}”) z inną wartością, a żadnej kolumny arkusza nie dało się bezpiecznie użyć do rozróżnienia tych wierszy; zachowano i sprawdzono jedną wartość.`,
@@ -592,7 +592,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-LONG-KEY-EXTENDED',
     category: 'B',
     severity: 'info',
-    exportPolicy: 'show',
+    exportPolicy: 'accept',
     params: ['columns', 'count'],
     plain: {
       pl: `W „{sheet}” wiersze o tym samym kluczu i parametrze miały różne wartości. {+count:Kolumna|Kolumny|Kolumny} ({columns}) {+count:stała|stały|stały} się częścią klucza, więc wartości rozdzielonych wierszy (np. {+lines:wiersz|wiersze|wierszy} {lines}) są odczytywane i sprawdzane. Czysty CSV zapisuje {+count:ją|je|je} też, chyba że sam ustawiłeś kolumnę jako pomijaną.`,
@@ -706,7 +706,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     id: 'ROW-DEPTH-SIGN',
     category: 'B',
     severity: 'info',
-    exportPolicy: 'show',
+    exportPolicy: 'accept',
     params: ['header'],
     plain: {
       pl: `Nie wiadomo, czy głębokość w kolumnie „{header}” liczona jest w dół (wartości dodatnie), czy w górę. Opisz przyjętą konwencję w nagłówku lub w opisie.`,
