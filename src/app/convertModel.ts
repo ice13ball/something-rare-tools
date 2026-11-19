@@ -15,7 +15,7 @@ import type { ConvertOptions } from '../core/convert';
 import type { ApprovedSplits } from '../core/convert';
 import type { WormsLookup } from '../core/convert';
 import type { NercColumnDecision, NercDecisions, NercPick } from '../core/convert/nerc';
-import { keyHashes, resolveKeyHashes } from '../core/convert/keySetting';
+import { keyHashes, resolveKeyHashes, shortHash } from '../core/convert/keySetting';
 import { defaultKeyPrefix } from '../core/convert/sampleKey';
 import { ownRecordsEligible } from '../core/convert/ownRecords';
 
@@ -115,6 +115,12 @@ export interface SheetChoice {
   missingCodesFile?: number[];
   /** The person's answer to the summary-rows question (CONV-SUMMARY-ROW-UNDECIDED) for the sheet, with the number of held rows it was given for (`held`). Never preselected; prefilled only by a companion file that still holds (`fromFile`: same name, same number of rows; the converter also checks the count). On a joined workbook it lives on the results sheet. */
   summaryRows?: { answer: 'leave-out' | 'keep'; count: number; fromFile?: boolean };
+  /** The person's answer for each text found in a count column (CONV-TEXT-IN-TAXON-CELL), by the trimmed text (case kept), with the cells it was given for (`held`). Never preselected; prefilled only from a companion file that still holds (`countTextsSaved`, matched below). */
+  countTexts?: Record<string, { answer: CountTextAnswer; count: number; fromFile?: boolean }>;
+  /** The answer given once for a column (by index): it applies to the texts of that column no text answer covers; its count is the cells of the column that hold a text. Never preselected. */
+  countTextColumns?: Record<number, { answer: CountTextAnswer; count: number; fromFile?: boolean }>;
+  /** The answers a companion file recorded for this sheet (same name, same number of rows), by the hash of 't' + the text. A pre-pick only for a text of the sheet that has that hash and as many cells; each is used once (`applySavedCountTexts`). */
+  countTextsSaved?: { answer: CountTextAnswer; count: number; hash: string }[];
   /** The one position the person typed for this sheet (it has no latitude / longitude column), as typed. Empty strings = none. Sent only when all three are filled. */
   positionLat: string;
   positionLon: string;
@@ -338,6 +344,15 @@ function slotRequest(c: SheetChoice, slot: OrderSlot): Pick<ConvertRequestBody['
 }
 const orderRequest = (c: SheetChoice): Pick<ConvertRequestBody['sheets'][number], 'dayMonthOrder' | 'dayMonthOrderFromFile' | 'yyOrder' | 'yyOrderFromFile'> => ({ ...slotRequest(c, 'dayMonthOrder'), ...slotRequest(c, 'yyOrder') });
 
+/** What the person says a text in a count column means. */
+export type CountTextAnswer = 'absence' | 'leave-out' | 'present';
+
+/** The count-text answers of a sheet, as the request carries them. */
+const countTextsRequest = (c: SheetChoice): Pick<ConvertRequestBody['sheets'][number], 'countTexts' | 'countTextColumns'> => ({
+  ...(c.countTexts !== undefined && Object.keys(c.countTexts).length > 0 ? { countTexts: c.countTexts } : {}),
+  ...(c.countTextColumns !== undefined && Object.keys(c.countTextColumns).length > 0 ? { countTextColumns: c.countTextColumns } : {}),
+});
+
 /** The summary-rows answer of a sheet, as the request carries it. */
 const summaryRowsRequest = (c: SheetChoice): Pick<ConvertRequestBody['sheets'][number], 'summaryRows'> => (c.summaryRows === undefined ? {} : { summaryRows: c.summaryRows });
 
@@ -431,12 +446,12 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
       const nerc = s.nerc ? nercDecisionsOf(nercColumnsOf(s.parsed, s.mappings, s.choices), s.nerc, f.fileId, m.sheet) : undefined;
       if (c.profile) {
         // a profile sheet has no quantity, device or mesh size: only its roles, its cruise code and the user's approval of depth-based level IDs are sent
-        sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(handSet.length > 0 ? { handSet } : {}), profile: { ...(c.profileDepthIds ? { depthIds: true } : {}), ...(c.profileIgnoreCast ? { ignoreCast: true } : {}), ...(c.profilePosition ? { positionStation: true } : {}) }, ...orderRequest(c), ...missingCodeRequest(c), ...summaryRowsRequest(c), ...declaredRequest(c, m, positionJoinedFrom(s, f.fileId, m.sheet)), ...declaredDateRequest(c), ...(nerc ? { nerc } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }) });
+        sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(handSet.length > 0 ? { handSet } : {}), profile: { ...(c.profileDepthIds ? { depthIds: true } : {}), ...(c.profileIgnoreCast ? { ignoreCast: true } : {}), ...(c.profilePosition ? { positionStation: true } : {}) }, ...orderRequest(c), ...missingCodeRequest(c), ...summaryRowsRequest(c), ...countTextsRequest(c), ...declaredRequest(c, m, positionJoinedFrom(s, f.fileId, m.sheet)), ...declaredDateRequest(c), ...(nerc ? { nerc } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }) });
         continue;
       }
       const q = declarationOf(c.quantity);
       const dev = deviceOf(c);
-      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(handSet.length > 0 ? { handSet } : {}), ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(c.presenceOnly && !m.columns.some((col) => col.role.kind === 'quantity') ? { presenceOnly: true } : {}), ...(c.totalOnce ? { totalOnce: true } : {}), ...(c.realCounts ? { realCounts: true } : {}), ...(c.dropCopies ? { dropCopies: true } : {}), ...(!c.dropCopies && (c.dropCopiesAnswer ?? c.dropCopiesFile) !== undefined ? { dropCopiesCount: (c.dropCopiesAnswer ?? c.dropCopiesFile) as number, ...(c.dropCopiesAnswer === undefined ? { dropCopiesFromFile: true } : {}) } : {}), ...(!c.totalOnce && (c.totalOnceAnswer ?? c.totalOnceFile) !== undefined ? { totalOnceCount: (c.totalOnceAnswer ?? c.totalOnceFile) as number, ...(c.totalOnceAnswer === undefined ? { totalOnceFromFile: true } : {}) } : {}), ...(c.realCountsAnswer !== undefined && !c.realCounts ? { realCountsRows: c.realCountsAnswer } : {}), ...(c.realCountsFile !== undefined && !c.realCounts ? { realCountsRowsFile: c.realCountsFile } : {}), ...ownRequest(c, ownRecordsAllowed(f, m, c)), ...(c.leaveOut !== undefined && c.leaveOut.length > 0 ? { leaveOut: c.leaveOut } : {}), ...(c.leaveOutFile !== undefined && c.leaveOutFile.length > 0 ? { leaveOutFile: c.leaveOutFile } : {}), ...orderRequest(c), ...missingCodeRequest(c), ...summaryRowsRequest(c), ...declaredRequest(c, m, positionJoinedFrom(s, f.fileId, m.sheet)), ...declaredDateRequest(c), ...(c.sampleKey !== undefined && c.sampleKey.length > 0 ? { sampleKey: { columns: c.sampleKey, ...(c.sampleKeyPrefix === undefined ? {} : { prefix: c.sampleKeyPrefix }) }, ...(c.sampleKeyFromFile === true ? { sampleKeyFromFile: true } : {}) } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
+      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(handSet.length > 0 ? { handSet } : {}), ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(c.presenceOnly && !m.columns.some((col) => col.role.kind === 'quantity') ? { presenceOnly: true } : {}), ...(c.totalOnce ? { totalOnce: true } : {}), ...(c.realCounts ? { realCounts: true } : {}), ...(c.dropCopies ? { dropCopies: true } : {}), ...(!c.dropCopies && (c.dropCopiesAnswer ?? c.dropCopiesFile) !== undefined ? { dropCopiesCount: (c.dropCopiesAnswer ?? c.dropCopiesFile) as number, ...(c.dropCopiesAnswer === undefined ? { dropCopiesFromFile: true } : {}) } : {}), ...(!c.totalOnce && (c.totalOnceAnswer ?? c.totalOnceFile) !== undefined ? { totalOnceCount: (c.totalOnceAnswer ?? c.totalOnceFile) as number, ...(c.totalOnceAnswer === undefined ? { totalOnceFromFile: true } : {}) } : {}), ...(c.realCountsAnswer !== undefined && !c.realCounts ? { realCountsRows: c.realCountsAnswer } : {}), ...(c.realCountsFile !== undefined && !c.realCounts ? { realCountsRowsFile: c.realCountsFile } : {}), ...ownRequest(c, ownRecordsAllowed(f, m, c)), ...(c.leaveOut !== undefined && c.leaveOut.length > 0 ? { leaveOut: c.leaveOut } : {}), ...(c.leaveOutFile !== undefined && c.leaveOutFile.length > 0 ? { leaveOutFile: c.leaveOutFile } : {}), ...orderRequest(c), ...missingCodeRequest(c), ...summaryRowsRequest(c), ...countTextsRequest(c), ...declaredRequest(c, m, positionJoinedFrom(s, f.fileId, m.sheet)), ...declaredDateRequest(c), ...(c.sampleKey !== undefined && c.sampleKey.length > 0 ? { sampleKey: { columns: c.sampleKey, ...(c.sampleKeyPrefix === undefined ? {} : { prefix: c.sampleKeyPrefix }) }, ...(c.sampleKeyFromFile === true ? { sampleKeyFromFile: true } : {}) } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
     }
   }
   const confirmed = (s.joins ?? []).filter((j) => j.state === 'confirmed');
@@ -507,6 +522,52 @@ const savedOrders = (settings: ConvertParseResult['settings'], sheet: { name: st
 function savedSummaryRows(settings: ConvertParseResult['settings'], sheet: { name: string; rowCount: number }): Pick<SheetChoice, 'summaryRows'> {
   const d = (settings.summaryRows ?? []).find((x) => x.sheet === sheet.name && x.rows === sheet.rowCount);
   return d === undefined ? {} : { summaryRows: { answer: d.answer, count: d.count, fromFile: true } };
+}
+
+/** The count-text answers a companion file recorded for a sheet: kept for a pre-pick only for the same sheet name with the same number of rows; matched to a text by hash once the converter names the texts. */
+function savedCountTexts(settings: ConvertParseResult['settings'], sheet: { name: string; rowCount: number }): Pick<SheetChoice, 'countTextsSaved'> {
+  const saved = (settings.countText ?? []).filter((d) => d.sheet === sheet.name && d.rows === sheet.rowCount).map((d) => ({ answer: d.answer, count: d.count, hash: d.hash }));
+  return saved.length === 0 ? {} : { countTextsSaved: saved };
+}
+
+/**
+ * The saved count-text answers that hold today: for each CONV-TEXT-IN-TAXON-CELL the converter asks, a saved answer whose hash is the hash of 't' + that text and whose count is the cells the question names (`held`)
+ * becomes the sheet's answer for that text (`fromFile`). Each saved answer is used once, so "Ask again" asks again. The text is only ever compared by its hash. Returns the same object when nothing applies.
+ */
+export function applySavedCountTexts(parsed: ConvertParseResult, choices: Record<string, SheetChoice>, findings: readonly Finding[]): Record<string, SheetChoice> {
+  let out = choices;
+  for (const f of findings) {
+    if (f.ruleId !== 'CONV-TEXT-IN-TAXON-CELL' || f.sheet === undefined || f.value === undefined) continue;
+    const file = parsed.files.find((x) => x.fileName === f.file);
+    if (file === undefined) continue;
+    const key = sheetKey(file.fileId, f.sheet);
+    const c = out[key];
+    const saved = c?.countTextsSaved;
+    if (c === undefined || saved === undefined) continue;
+    const hash = shortHash('t' + f.value);
+    const held = Number(f.params.held);
+    const at = saved.findIndex((d) => d.hash === hash && d.count === held);
+    if (at < 0) continue;
+    const rest = saved.filter((_, i) => i !== at);
+    const { countTextsSaved: _gone, ...without } = c;
+    out = { ...out, [key]: { ...without, ...(rest.length === 0 ? {} : { countTextsSaved: rest }), countTexts: { ...(c.countTexts ?? {}), [f.value]: { answer: saved[at].answer, count: held, fromFile: true } } } };
+  }
+  return out;
+}
+
+/** The count-text answers a companion file records: one line per text the converter said as decided today (CONV-COUNT-TEXT-DECIDED), also a text a whole-column answer settled. The sheet, the answer, the cells it was given for, the rows of the sheet and the hash of 't' + the text; never the text. */
+export function countTextSettingsOf(parsed: ConvertParseResult, said: readonly Finding[]): NonNullable<ConvertSettings['countText']> {
+  const out: NonNullable<ConvertSettings['countText']> = [];
+  for (const f of said) {
+    if (f.ruleId !== 'CONV-COUNT-TEXT-DECIDED' || f.sheet === undefined || f.value === undefined) continue;
+    const answer = f.params.answer;
+    const held = Number(f.params.held);
+    const sh = parsed.files.find((x) => x.fileName === f.file)?.sheets.find((x) => x.name === f.sheet);
+    if (sh === undefined || (answer !== 'absence' && answer !== 'leave-out' && answer !== 'present') || !Number.isInteger(held) || held < 1) continue;
+    const hash = shortHash('t' + f.value);
+    if (!out.some((o) => o.sheet === f.sheet && o.hash === hash)) out.push({ sheet: f.sheet, answer, count: held, rows: sh.rowCount, hash });
+  }
+  return out;
 }
 
 /**
@@ -598,7 +659,7 @@ export function initialChoices(parsed: ConvertParseResult): Record<string, Sheet
       const match = profile ? { kind: 'none' as const } : savedKeyFor(parsed, f, sh);
       const saved = match.kind === 'found' ? match.entry : undefined;
       const savedColumns = saved === undefined ? undefined : resolveKeyHashes(sh.header, saved.hashes);
-      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: false, realCounts: false, dropCopies: false, ...ownAnswers(parsed.settings, sh), ...savedOrders(parsed.settings, sh), ...savedMissingCodes(parsed.settings, sh), ...savedSummaryRows(parsed.settings, sh), ...savedPosition(parsed.settings, sh), ...savedDate(parsed.settings, sh), ...(savedColumns === undefined ? {} : { sampleKey: savedColumns, sampleKeyFromFile: true, ...(saved?.prefix === undefined ? {} : { sampleKeyPrefix: saved.prefix }) }), ...(match.kind === 'ambiguous' ? { sampleKeyAmbiguous: true as const } : {}) };
+      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: false, realCounts: false, dropCopies: false, ...ownAnswers(parsed.settings, sh), ...savedOrders(parsed.settings, sh), ...savedMissingCodes(parsed.settings, sh), ...savedSummaryRows(parsed.settings, sh), ...savedCountTexts(parsed.settings, sh), ...savedPosition(parsed.settings, sh), ...savedDate(parsed.settings, sh), ...(savedColumns === undefined ? {} : { sampleKey: savedColumns, sampleKeyFromFile: true, ...(saved?.prefix === undefined ? {} : { sampleKeyPrefix: saved.prefix }) }), ...(match.kind === 'ambiguous' ? { sampleKeyAmbiguous: true as const } : {}) };
     }
   }
   return out;

@@ -31,7 +31,8 @@ import { defaultKeyPrefix } from '../../core/convert/sampleKey';
 import { VETO_NAME_SEP } from '../../core/convert/vetoedNumbers';
 import type { SheetKeyReport } from '../../core/convert/sampleKey';
 import { Layout } from '../components/Layout';
-import { yyOrderSettingsOf, decimalReadingSettingsOf, missingCodeSettingsOf, summaryOwnerOf, summaryRowsSettingsOf, encodingSettingsOf, candidatesOf, candidateKey, handKey, printOf, tickHolds, ROLE_RULE, initialChoices, initialJoins, sampleJoinSettingsOf, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, turnedSettingsOf, dayMonthOrderSettingsOf, declaredPositionSettingsOf, declaredDateSettingsOf, positionJoinedFrom, ownRecordsSettingsOf, ownRecordsAllowed, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type JoinChoice, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
+import { shortHash } from '../../core/convert/keySetting';
+import { yyOrderSettingsOf, decimalReadingSettingsOf, missingCodeSettingsOf, summaryOwnerOf, summaryRowsSettingsOf, countTextSettingsOf, applySavedCountTexts, type CountTextAnswer, encodingSettingsOf, candidatesOf, candidateKey, handKey, printOf, tickHolds, ROLE_RULE, initialChoices, initialJoins, sampleJoinSettingsOf, nercColumnsOf, plainOf, profileSettingsOf, presenceSettingsOf, sampleKeySettingsOf, turnedSettingsOf, dayMonthOrderSettingsOf, declaredPositionSettingsOf, declaredDateSettingsOf, positionJoinedFrom, ownRecordsSettingsOf, ownRecordsAllowed, sheetFlagSettingsOf, transposedSettingsOf, requestOf, sheetKey, codesFileName, tableMetadataOf, typeContext, unitContext, type NercColumn, type JoinChoice, type NercPicks, type SheetChoice, type StoredPick } from '../convertModel';
 import { downloadBlob, downloadText } from '../download';
 import { t, useLang } from '../i18n';
 import type { LegacyEncoding } from '../../core/values/encoding';
@@ -53,6 +54,39 @@ export interface ConvertPageProps {
 }
 
 type Phase = 'input' | 'reading' | 'work';
+/** The three answers to a text in a count column, as buttons. */
+type CountTextChoice = 'countAbsence' | 'countLeaveOut' | 'countPresent';
+type ChooseChoice = 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'yyymd' | 'yydmy' | 'yymdy' | 'decimal' | 'thousands' | 'missingCode' | 'realCode' | 'askAgain' | 'declarePosition' | 'declareDate' | 'openTurn' | 'ownRecords' | 'keepCopies' | 'summaryLeaveOut' | 'summaryKeep' | CountTextChoice;
+const COUNT_CHOICE: Record<CountTextChoice, CountTextAnswer> = { countAbsence: 'absence', countLeaveOut: 'leave-out', countPresent: 'present' };
+/** One column of a sheet that holds texts nobody has answered for: the control that answers all of them at once (`texts` of them, over `cells` cells in the column). */
+interface CountColumn {
+  key: string;
+  fileName: string;
+  sheet: string;
+  index: number;
+  name: string;
+  texts: number;
+  cells: number;
+}
+/** The columns with texts still asked, from the questions the converter shows: the column's text cells come from `columnTexts` (`index:n`), the name from the question's own column list. A column with a single asked text has no control (its text button does the same). */
+function countColumnsOf(findings: readonly Finding[]): CountColumn[] {
+  const out = new Map<string, CountColumn>();
+  for (const f of findings) {
+    if (f.ruleId !== 'CONV-TEXT-IN-TAXON-CELL' || f.sheet === undefined) continue;
+    const indexes = String(f.params.indexes ?? '').split(',').filter((x) => x !== '').map(Number);
+    const names = String(f.params.columns ?? '').split(', ');
+    const cells = new Map(String(f.params.columnTexts ?? '').split(',').map((p) => p.split(':').map(Number) as [number, number]));
+    indexes.forEach((index, i) => {
+      const n = cells.get(index);
+      if (!Number.isInteger(index) || n === undefined || !(n >= 1)) return;
+      const key = `${f.file}\u0000${f.sheet}\u0000${index}`;
+      const seen = out.get(key);
+      if (seen !== undefined) seen.texts += 1;
+      else out.set(key, { key, fileName: f.file ?? '', sheet: f.sheet as string, index, name: names.length === indexes.length ? names[i] : `#${index + 1}`, texts: 1, cells: n });
+    });
+  }
+  return [...out.values()].filter((c) => c.texts >= 2);
+}
 
 const messageOf = (e: unknown): string => (e instanceof Error && e.message ? e.message : String(e));
 
@@ -297,6 +331,14 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     return () => clearTimeout(timer);
   }, [engine, phase, parsed, mappings, choices, fullList, prefixStation, flattenStation, flattenCruise, approved, confirmed, joins, tableMeta, wormsLookup, nercPicks]);
 
+  // the answers a companion file gave to texts in count columns: matched to a text of the sheet only by its hash, once the converter names the texts; each is used once (the conversion then runs again with it)
+  useEffect(() => {
+    if (!parsed || !view) return;
+    const asked = view.findings.filter((f) => f.ruleId === 'CONV-TEXT-IN-TAXON-CELL');
+    if (asked.length === 0) return;
+    setChoices((prev) => applySavedCountTexts(parsed, prev, asked));
+  }, [parsed, view]);
+
   // what the ticked columns of the picker would make: the converter's own report for the request with that key on that sheet (the same run as the export), asked after a short pause; nothing is kept
   // in the request, so ticking changes nothing until "Use this key". Only the latest question of a sheet counts (an older answer is dropped), a sheet is asked again only when its ticks or the request
   // changed, and a failure is shown at the picker with a way to try again.
@@ -386,8 +428,20 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   };
   const own: OwnRecordsView = { offered: (f) => ownSheetOf(f).allowed, on: (f) => ownSheetOf(f).on };
 
+  // "Absence" / "Leave out" / "Present" for every text still asked in one column: the answer for the column, with the cells of the column that hold a text; a text answered by itself keeps its own answer
+  const chooseForColumn = (col: CountColumn, choice: CountTextChoice): void => {
+    const file = files.find((x) => x.fileName === col.fileName);
+    if (file === undefined) return;
+    const key = sheetKey(file.fileId, col.sheet);
+    setChoices((prev) => {
+      const c = prev[key];
+      if (c === undefined) return prev;
+      return { ...prev, [key]: { ...c, countTextColumns: { ...(c.countTextColumns ?? {}), [col.index]: { answer: COUNT_CHOICE[choice], count: col.cells } } } };
+    });
+  };
+
   // CONV-QUANTITY-REPEATED / CONV-ROW-COPIES: the user's choice for the sheet of the finding; the conversion runs again with the sheet's tick
-  const chooseForSheet = (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'yyymd' | 'yydmy' | 'yymdy' | 'decimal' | 'thousands' | 'missingCode' | 'realCode' | 'askAgain' | 'declarePosition' | 'declareDate' | 'openTurn' | 'ownRecords' | 'keepCopies' | 'summaryLeaveOut' | 'summaryKeep'): void => {
+  const chooseForSheet = (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'yyymd' | 'yydmy' | 'yymdy' | 'decimal' | 'thousands' | 'missingCode' | 'realCode' | 'askAgain' | 'declarePosition' | 'declareDate' | 'openTurn' | 'ownRecords' | 'keepCopies' | 'summaryLeaveOut' | 'summaryKeep' | CountTextChoice): void => {
     const file = files.find((x) => x.fileName === f.file);
     if (file === undefined || f.sheet === undefined) return;
     const key = sheetKey(file.fileId, f.sheet);
@@ -403,6 +457,34 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
         if (c === undefined) return prev;
         const { summaryRows: _s, ...rest } = c;
         return { ...prev, [ownerKey]: choice === 'askAgain' ? rest : { ...rest, summaryRows: { answer: choice === 'summaryKeep' ? 'keep' : 'leave-out', count: held } } };
+      });
+      return;
+    }
+    // "Absence" / "Leave out" / "Present" on a text in a count column, and "Ask again" on that answer: the person's own answer for that text, for the cells the finding names (`held`). A text answered
+    // "again" while a whole-column answer covers its column falls back to that answer (it is shown as decided by the column, with its own "Ask again").
+    if (choice === 'countAbsence' || choice === 'countLeaveOut' || choice === 'countPresent' || (choice === 'askAgain' && f.ruleId === 'CONV-COUNT-TEXT-DECIDED')) {
+      const text = f.value;
+      const held = Number(f.params.held);
+      if (text === undefined || text === '') return;
+      const answer: CountTextAnswer | undefined = choice === 'countAbsence' ? 'absence' : choice === 'countLeaveOut' ? 'leave-out' : choice === 'countPresent' ? 'present' : undefined;
+      if (answer !== undefined && (!Number.isInteger(held) || held < 1)) return;
+      const indexes = String(f.params.indexes ?? '').split(',').filter((x) => x !== '').map(Number);
+      setChoices((prev) => {
+        const c = prev[key];
+        if (c === undefined) return prev;
+        const hash = shortHash('t' + text);
+        const saved = c.countTextsSaved?.filter((d) => d.hash !== hash);
+        const { countTexts: own, countTextColumns: cols, countTextsSaved: _saved, ...rest } = c;
+        const next: SheetChoice = { ...rest, ...(saved !== undefined && saved.length > 0 ? { countTextsSaved: saved } : {}) };
+        if (answer !== undefined) return { ...prev, [key]: { ...next, ...(cols === undefined ? {} : { countTextColumns: cols }), countTexts: { ...(own ?? {}), [text]: { answer, count: held } } } };
+        // "Ask again": a text the whole column's answer settled takes back that column's answer (only the columns of this text that hold the answer shown), and a text of its own is removed; answers the person gave
+        // other texts, or other columns, stay
+        if (f.params.via === 'column') {
+          const left = Object.fromEntries(Object.entries(cols ?? {}).filter(([i, a]) => !(indexes.includes(Number(i)) && a.answer === f.params.answer)));
+          return { ...prev, [key]: { ...next, ...(own === undefined ? {} : { countTexts: own }), ...(Object.keys(left).length === 0 ? {} : { countTextColumns: left as never }) } };
+        }
+        const { [text]: _gone, ...others } = own ?? {};
+        return { ...prev, [key]: { ...next, ...(Object.keys(others).length === 0 ? {} : { countTexts: others }), ...(cols === undefined ? {} : { countTextColumns: cols }) } };
       });
       return;
     }
@@ -1151,6 +1233,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const decimalReading = parsed ? decimalReadingSettingsOf(parsed, choices) : [];
     const missingCode = parsed ? missingCodeSettingsOf(parsed, choices, said) : [];
     const summaryRows = parsed ? summaryRowsSettingsOf(parsed, choices, said) : [];
+    const countText = parsed ? countTextSettingsOf(parsed, said) : [];
     const encoding = parsed ? encodingSettingsOf(parsed, choices) : [];
     // the position the person declared for a sheet without one: their own typed values, the one thing besides names and counts the file holds
     const declaredPosition = parsed ? declaredPositionSettingsOf(parsed, choices) : [];
@@ -1161,7 +1244,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const biomassBasis = biomassBasisOf(files.flatMap((f) => mappings[f.fileId] ?? f.mappings));
     // the ticks "of each organism" the user set or took back (only what differs from the proposal), kept by sheet and column header
     const perOccurrence = files.flatMap((f) => perOccurrenceOf(mappings[f.fileId] ?? f.mappings, f.proposals));
-    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(perOccurrence.length > 0 ? { perOccurrence } : {}), ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(presenceOnly.length > 0 ? { presenceOnly } : {}), ...(dropCopiesRows.length > 0 ? { dropCopiesRows } : {}), ...(ownRecords.length > 0 ? { ownRecords } : {}), ...(keepCopiesRows.length > 0 ? { keepCopiesRows } : {}), ...(totalOnceGroups.length > 0 ? { totalOnceGroups } : {}), ...(leaveOut.length > 0 ? { leaveOut } : {}), ...(realCountsRows.length > 0 ? { realCountsRows } : {}), ...(sampleKey.length > 0 ? { sampleKey } : {}), ...(turned.length > 0 ? { turned } : {}), ...(dayMonthOrder.length > 0 ? { dayMonthOrder } : {}), ...(yyOrder.length > 0 ? { yyOrder } : {}), ...(decimalReading.length > 0 ? { decimalReading } : {}), ...(missingCode.length > 0 ? { missingCode } : {}), ...(summaryRows.length > 0 ? { summaryRows } : {}), ...(encoding.length > 0 ? { encoding } : {}), ...(declaredPosition.length > 0 ? { declaredPosition } : {}), ...(declaredDate.length > 0 ? { declaredDate } : {}), ...sampleJoins, ...(biomassBasis.length > 0 ? { biomassBasis } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
+    download(writeConvertSidecar({ fullList, prefixStation, worms: wormsOn, nvs: nvsOn, ...(perOccurrence.length > 0 ? { perOccurrence } : {}), ...(longAsTable.length > 0 ? { longAsTable } : {}), ...(transposedAsTable.length > 0 ? { transposedAsTable } : {}), ...(presenceOnly.length > 0 ? { presenceOnly } : {}), ...(dropCopiesRows.length > 0 ? { dropCopiesRows } : {}), ...(ownRecords.length > 0 ? { ownRecords } : {}), ...(keepCopiesRows.length > 0 ? { keepCopiesRows } : {}), ...(totalOnceGroups.length > 0 ? { totalOnceGroups } : {}), ...(leaveOut.length > 0 ? { leaveOut } : {}), ...(realCountsRows.length > 0 ? { realCountsRows } : {}), ...(sampleKey.length > 0 ? { sampleKey } : {}), ...(turned.length > 0 ? { turned } : {}), ...(dayMonthOrder.length > 0 ? { dayMonthOrder } : {}), ...(yyOrder.length > 0 ? { yyOrder } : {}), ...(decimalReading.length > 0 ? { decimalReading } : {}), ...(missingCode.length > 0 ? { missingCode } : {}), ...(summaryRows.length > 0 ? { summaryRows } : {}), ...(countText.length > 0 ? { countText } : {}), ...(encoding.length > 0 ? { encoding } : {}), ...(declaredPosition.length > 0 ? { declaredPosition } : {}), ...(declaredDate.length > 0 ? { declaredDate } : {}), ...sampleJoins, ...(biomassBasis.length > 0 ? { biomassBasis } : {}), ...(profile.profileSheets.length > 0 ? { profileSheets: profile.profileSheets, ...(profile.profileDepthIds.length > 0 ? { profileDepthIds: profile.profileDepthIds } : {}), ...(profile.profileIgnoreCast.length > 0 ? { profileIgnoreCast: profile.profileIgnoreCast } : {}) } : {}) }), 'convert-companion.csv', 'text/csv');
   };
 
   return (
@@ -1701,7 +1784,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                     {t('convert.taxa.unconfirmed', { n: unconfirmed.length })}
                   </p>
                 )}
-                <FindingList titleKey="convert.summary.blocking" findings={blocking} kind="error" onUseReplicate={useAsReplicate} onChoose={chooseForSheet} onChooseJoin={chooseForJoin} own={own} enc={enc} />
+                <FindingList titleKey="convert.summary.blocking" findings={blocking} kind="error" countColumns={countColumnsOf(blocking)} onChooseColumn={chooseForColumn} onUseReplicate={useAsReplicate} onChoose={chooseForSheet} onChooseJoin={chooseForJoin} own={own} enc={enc} />
                 {(judged.acceptRules.length > 0 || unconfirmed.length > 0) && (
                   <div className="convert-accept">
                     <HeadingTip tip="convertAccept">
@@ -1855,7 +1938,7 @@ interface OwnRecordsView {
   on: (f: Finding) => boolean;
 }
 
-function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin, own, enc }: { findings: Finding[]; own?: OwnRecordsView; enc?: EncodingView; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'yyymd' | 'yydmy' | 'yymdy' | 'decimal' | 'thousands' | 'missingCode' | 'realCode' | 'askAgain' | 'declarePosition' | 'declareDate' | 'openTurn' | 'ownRecords' | 'keepCopies' | 'summaryLeaveOut' | 'summaryKeep') => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement {
+function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin, own, enc }: { findings: Finding[]; own?: OwnRecordsView; enc?: EncodingView; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'yyymd' | 'yydmy' | 'yymdy' | 'decimal' | 'thousands' | 'missingCode' | 'realCode' | 'askAgain' | 'declarePosition' | 'declareDate' | 'openTurn' | 'ownRecords' | 'keepCopies' | 'summaryLeaveOut' | 'summaryKeep' | CountTextChoice) => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement {
   const { lang } = useLang();
   return (
     <ul>
@@ -2001,6 +2084,20 @@ function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose,
               </button>
             </>
           )}
+          {f.ruleId === 'CONV-TEXT-IN-TAXON-CELL' && onChoose !== undefined && f.params.held !== undefined && (
+            <>
+              {' '}
+              <button type="button" className="button" data-testid="count-absence" onClick={() => onChoose(f, 'countAbsence')}>
+                {t('convert.finding.countAbsence')}
+              </button>{' '}
+              <button type="button" className="button" data-testid="count-leave-out" onClick={() => onChoose(f, 'countLeaveOut')}>
+                {t('convert.finding.countLeaveOut')}
+              </button>{' '}
+              <button type="button" className="button" data-testid="count-present" onClick={() => onChoose(f, 'countPresent')}>
+                {t('convert.finding.countPresent')}
+              </button>
+            </>
+          )}
           {f.ruleId === 'CONV-DATE-ORDER-UNDECLARED' && onChoose !== undefined && f.params.variant === 'two-digit-year' && (
             <>
               {String(f.params.readings ?? '')
@@ -2049,7 +2146,7 @@ function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose,
               </button>
             </>
           )}
-          {(f.ruleId === 'CONV-ROW-LEFT-OUT' || f.ruleId === 'CONV-DATE-ORDER-DECLARED' || f.ruleId === 'CONV-DECIMAL-DECLARED' || f.ruleId === 'CONV-MISSING-CODE-DECLARED' || f.ruleId === 'CONV-DATE-ORDER-CONTRADICTED' || f.ruleId === 'CONV-ROW-COPIES-DROPPED' || f.ruleId === 'CONV-ROW-COPIES-KEPT' || f.ruleId === 'CONV-OWN-RECORDS' || f.ruleId === 'CONV-QUANTITY-REPEATED-ONCE' || f.ruleId === 'CONV-QUANTITY-REAL-COUNTS' || f.ruleId === 'CONV-KEY-PICKED' || f.ruleId === 'CONV-SUMMARY-ROW-SKIPPED') && onChoose !== undefined && (
+          {(f.ruleId === 'CONV-ROW-LEFT-OUT' || f.ruleId === 'CONV-DATE-ORDER-DECLARED' || f.ruleId === 'CONV-DECIMAL-DECLARED' || f.ruleId === 'CONV-MISSING-CODE-DECLARED' || f.ruleId === 'CONV-DATE-ORDER-CONTRADICTED' || f.ruleId === 'CONV-ROW-COPIES-DROPPED' || f.ruleId === 'CONV-ROW-COPIES-KEPT' || f.ruleId === 'CONV-OWN-RECORDS' || f.ruleId === 'CONV-QUANTITY-REPEATED-ONCE' || f.ruleId === 'CONV-QUANTITY-REAL-COUNTS' || f.ruleId === 'CONV-KEY-PICKED' || f.ruleId === 'CONV-SUMMARY-ROW-SKIPPED' || f.ruleId === 'CONV-COUNT-TEXT-DECIDED') && onChoose !== undefined && (
             <>
               {' '}
               <button type="button" className="button" data-testid="ask-again" onClick={() => onChoose(f, 'askAgain')}>
@@ -2069,12 +2166,48 @@ function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose,
   );
 }
 
-function FindingList({ titleKey, findings, kind, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin, own, enc }: { own?: OwnRecordsView; enc?: EncodingView; titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity']; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'yyymd' | 'yydmy' | 'yymdy' | 'decimal' | 'thousands' | 'missingCode' | 'realCode' | 'askAgain' | 'declarePosition' | 'declareDate' | 'openTurn' | 'ownRecords' | 'keepCopies' | 'summaryLeaveOut' | 'summaryKeep') => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement | null {
+/** More texts than this in one column are listed in a collapsed group per column, with their count; the column control stays visible above it. */
+const MANY_TEXTS = 5;
+const COUNT_TEXT_RULES = new Set(['CONV-TEXT-IN-TAXON-CELL', 'CONV-COUNT-TEXT-DECIDED']);
+
+function FindingList({ titleKey, findings, kind, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin, own, enc, countColumns, onChooseColumn }: { own?: OwnRecordsView; enc?: EncodingView; countColumns?: CountColumn[]; onChooseColumn?: (c: CountColumn, choice: CountTextChoice) => void; titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity']; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: ChooseChoice) => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement | null {
   if (findings.length === 0) return null;
+  const items = (list: Finding[]): React.ReactElement => (
+    <FindingItems findings={list} {...(onUseReplicate === undefined ? {} : { onUseReplicate })} {...(onReadAsMeasurement === undefined ? {} : { onReadAsMeasurement })} {...(onChoose === undefined ? {} : { onChoose })} {...(onChooseJoin === undefined ? {} : { onChooseJoin })} {...(own === undefined ? {} : { own })} {...(enc === undefined ? {} : { enc })} />
+  );
+  // texts in count columns: a few are listed as any finding; many are grouped per column, collapsed, so the page stays usable
+  const texts = findings.filter((f) => COUNT_TEXT_RULES.has(f.ruleId));
+  const grouped = texts.length > MANY_TEXTS;
+  const groups = new Map<string, Finding[]>();
+  if (grouped) for (const f of texts) groups.set(`${f.file}\u0000${f.sheet}\u0000${f.field}\u0000${f.ruleId}`, [...(groups.get(`${f.file}\u0000${f.sheet}\u0000${f.field}\u0000${f.ruleId}`) ?? []), f]);
   return (
     <div className="convert-findings" data-kind={kind}>
       <h3>{t(titleKey, { n: findings.length })}</h3>
-      <FindingItems findings={findings} {...(onUseReplicate === undefined ? {} : { onUseReplicate })} {...(onReadAsMeasurement === undefined ? {} : { onReadAsMeasurement })} {...(onChoose === undefined ? {} : { onChoose })} {...(onChooseJoin === undefined ? {} : { onChooseJoin })} {...(own === undefined ? {} : { own })} {...(enc === undefined ? {} : { enc })} />
+      {countColumns !== undefined && onChooseColumn !== undefined && countColumns.length > 0 && (
+        <div className="convert-count-columns">
+          {countColumns.map((c) => (
+            <p key={c.key} data-testid="count-text-column" data-column={c.index}>
+              {t('convert.countText.column', { column: c.name })}{' '}
+              <button type="button" className="button" data-testid="count-column-absence" onClick={() => onChooseColumn(c, 'countAbsence')}>
+                {t('convert.finding.countAbsence')}
+              </button>{' '}
+              <button type="button" className="button" data-testid="count-column-leave-out" onClick={() => onChooseColumn(c, 'countLeaveOut')}>
+                {t('convert.finding.countLeaveOut')}
+              </button>{' '}
+              <button type="button" className="button" data-testid="count-column-present" onClick={() => onChooseColumn(c, 'countPresent')}>
+                {t('convert.finding.countPresent')}
+              </button>
+            </p>
+          ))}
+        </div>
+      )}
+      {items(grouped ? findings.filter((f) => !COUNT_TEXT_RULES.has(f.ruleId)) : findings)}
+      {[...groups.entries()].map(([k, list]) => (
+        <details key={k} className="convert-count-texts" data-testid="count-texts-group">
+          <summary>{t('convert.countText.group', { column: list[0].field ?? '', n: list.length })}</summary>
+          {items(list)}
+        </details>
+      ))}
     </div>
   );
 }

@@ -843,3 +843,40 @@ describe('the summary-rows answer of the request (round 4, Task 15)', () => {
     }
   });
 });
+
+describe('the count-text answers of the request (round 4, Task 17)', () => {
+  const CSV = 'Cruise,Station,Sample,Latitude,Longitude,Date,Oithona similis\nCR,S1,a,50.2,1.6,2020-05-01,5\nCR,S2,b,50.3,1.5,2020-05-02,absent\nCR,S3,c,50.4,1.4,2020-05-03,6\nCR,S4,d,50.5,1.3,2020-05-04,7\n';
+  async function run(extra: Record<string, unknown>) {
+    const e = createDirectConvertEngine();
+    const p = await e.parse([file('hauls.csv', CSV)]);
+    const f = p.files[0];
+    const sheet = { fileId: f.fileId, sheet: 'hauls.csv', mapping: f.mappings[0], shape: 'wide' as const, quantity: { kind: 'count' as const }, ...extra };
+    const v = await e.convert({ sheets: [sheet as ConvertRequestBody['sheets'][number]], options: {}, approvedSplits: {} });
+    return (id: string) => v.findings.filter((x) => x.ruleId === id);
+  }
+
+  it('without an answer the text is asked; each of the three answers reaches the converter, fromFile is said', async () => {
+    expect((await run({}))('CONV-TEXT-IN-TAXON-CELL')).toHaveLength(1);
+    for (const answer of ['absence', 'leave-out', 'present']) {
+      const r = await run({ countTexts: { absent: { answer, count: 1, fromFile: true } } });
+      expect(r('CONV-TEXT-IN-TAXON-CELL')).toHaveLength(0);
+      expect(r('CONV-COUNT-TEXT-DECIDED')[0].params).toMatchObject({ answer, fromFile: 'yes' });
+    }
+  });
+
+  it('a column answer reaches the converter too, and a text answered by itself keeps its own answer', async () => {
+    const col = await run({ countTextColumns: { 6: { answer: 'absence', count: 1 } } });
+    expect(col('CONV-TEXT-IN-TAXON-CELL')).toHaveLength(0);
+    expect(col('CONV-COUNT-TEXT-DECIDED')[0].params).toMatchObject({ answer: 'absence', via: 'column' });
+    const both = await run({ countTextColumns: { 6: { answer: 'absence', count: 1 } }, countTexts: { absent: { answer: 'present', count: 1 } } });
+    expect(both('CONV-COUNT-TEXT-DECIDED')[0].params).toMatchObject({ answer: 'present' });
+  });
+
+  it('a malformed answer (count 0, 1.5, a text, another answer, not an object) is dropped: the text is asked; a text called __proto__ stays a plain key', async () => {
+    for (const bad of [{ answer: 'absence', count: 0 }, { answer: 'absence', count: 1.5 }, { answer: 'absence', count: '1' }, { answer: 'drop', count: 1 }, 'absence', null]) {
+      expect((await run({ countTexts: { absent: bad } }))('CONV-TEXT-IN-TAXON-CELL')).toHaveLength(1);
+    }
+    expect((await run({ countTextColumns: { x: { answer: 'absence', count: 1 }, 6: { answer: 'absence', count: 0 } } }))('CONV-TEXT-IN-TAXON-CELL')).toHaveLength(1);
+    expect((await run({ countTexts: JSON.parse('{"__proto__":{"answer":"absence","count":1}}') }))('CONV-TEXT-IN-TAXON-CELL')).toHaveLength(1);
+  });
+});

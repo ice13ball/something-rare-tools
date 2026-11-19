@@ -152,6 +152,9 @@ export interface ConvertSheetRequest {
   missingCodesFromFile?: number[];
   /** The PERSON's answer for the rows the sheet holds back as summary rows (CONV-SUMMARY-ROW-UNDECIDED): `leave-out` or `keep`, for `count` rows (the finding's `held`). `fromFile` = a companion file gave it. The converter honours it only while `count` is the number of rows it holds back today. */
   summaryRows?: { answer: 'leave-out' | 'keep'; count: number; fromFile?: boolean };
+  /** The PERSON's answers to the texts found in count columns (CONV-TEXT-IN-TAXON-CELL), by the trimmed text (case kept), each with the cells it was given for (the finding's `held`); `countTextColumns` is the answer given once for a column (by index; its count is the cells of that column that hold a text). Never preselected. */
+  countTexts?: Record<string, { answer: 'absence' | 'leave-out' | 'present'; count: number; fromFile?: boolean }>;
+  countTextColumns?: Record<number, { answer: 'absence' | 'leave-out' | 'present'; count: number; fromFile?: boolean }>;
   /**
    * The one position the PERSON typed for this sheet (latitude, longitude, uncertainty in metres, as typed). Sent only when all three are filled; never guessed. `declaredPositionFromFile` says it was
    * read from a companion file and has not been edited since.
