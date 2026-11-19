@@ -65,7 +65,7 @@ export type Contradiction =
   /** A repeated rights entry (DataCite rightsList, Zenodo rights[]) that is no recognised licence and no neutral access value, next to a recognised licence of the same record. */
   | { kind: 'other-rights-entry'; source: AnalysedSource; statement: AnalysedStatement; licence: string }
   /** A restriction written in a field of its own (ISO otherConstraints / useLimitation, Dataverse termsOfUse) next to a recognised licence of the same source, narrowing it: access for partners only, non-commercial, on request, contact first. */
-  | { kind: 'separate-restriction'; source: AnalysedSource; statement: AnalysedStatement; licence: string; licenceField: string }
+  | { kind: 'separate-restriction'; source: AnalysedSource; statement: AnalysedStatement; licence: string; licenceField: string; fields: string[] }
   | { kind: 'restriction-code'; codes: string[]; licence: string }
   | { kind: 'datacite-empty'; licence: string };
 
@@ -259,27 +259,39 @@ export function analyseLicences(records: readonly MetadataRecord[], opts: Analys
     }
   }
 
-  // A restriction in a field of its own next to a recognised licence of the same source ("Data access restricted to project partners" as
-  // the second otherConstraints). Not looked at: statements that are a licence, a conflict of their own (the rules for those exist),
-  // repeated rights entries (LIC-OTHER-RIGHTS-ENTRY) and restriction codes (LIC-RESTRICTION-CONFLICT). One finding per restriction.
-  for (const source of sources) {
-    const licence = source.statements.find((a) => a.classification.kind === 'spdx');
-    if (!licence || licence.classification.kind !== 'spdx') continue;
-    const id = licence.classification.id;
-    for (const a of source.statements) {
-      if (a === licence || a.conflict || a.classification.kind === 'spdx' || isRepeatedEntry(a.statement)) continue;
-      const kind = narrowingOf(a.statement.text);
-      if (!kind || !narrowsLicence(kind, id)) continue;
-      contradictions.push({ kind: 'separate-restriction', source, statement: a, licence: licence.info ? `${licence.info.name} (${id})` : id, licenceField: licence.statement.field });
-    }
-  }
-
   // Restriction codes against an open licence: a recognised open id, or a statement that names an open family without being
   // recognised (versionless "CC BY", "CC BY 4.0, commercial use requires permission"). NC / ND never count. The statement keeps its class.
   const codes = [...new Set(records.flatMap((r) => r.restrictionCodes.map((c) => c.code)).filter(isConflictingCode))];
   const openStated = statements.find((a) => a.open);
   const openNamed = openStated ? shownOf(openStated) : statements.map((a) => openLicenceNamed(a.statement)).find((x) => !!x);
   if (codes.length > 0 && openNamed) contradictions.push({ kind: 'restriction-code', codes, licence: openNamed });
+
+  // A restriction in a field of its own next to a recognised licence of the same source ("Data access restricted to project partners" as
+  // the second otherConstraints). Not looked at: statements that are a licence, a conflict of their own (the rules for those exist),
+  // repeated rights entries (LIC-OTHER-RIGHTS-ENTRY). One finding per fact: the same sentence in two fields is one finding naming both
+  // fields, and an access restriction next to a restriction code that already conflicts is left to LIC-RESTRICTION-CONFLICT.
+  const codeConflict = codes.length > 0 && !!openNamed;
+  for (const source of sources) {
+    const licence = source.statements.find((a) => a.classification.kind === 'spdx');
+    if (!licence || licence.classification.kind !== 'spdx') continue;
+    const id = licence.classification.id;
+    const seen = new Map<string, Extract<Contradiction, { kind: 'separate-restriction' }>>();
+    for (const a of source.statements) {
+      if (a === licence || a.conflict || a.classification.kind === 'spdx' || isRepeatedEntry(a.statement)) continue;
+      const kind = narrowingOf(a.statement.text);
+      if (!kind || !narrowsLicence(kind, id)) continue;
+      if (kind === 'access' && codeConflict) continue;
+      const key = (a.statement.text ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+      const same = seen.get(key);
+      if (same) {
+        if (!same.fields.includes(a.statement.field)) same.fields.push(a.statement.field);
+        continue;
+      }
+      const c = { kind: 'separate-restriction' as const, source, statement: a, licence: licence.info ? `${licence.info.name} (${id})` : id, licenceField: licence.statement.field, fields: [a.statement.field] };
+      seen.set(key, c);
+      contradictions.push(c);
+    }
+  }
 
   // DataCite read but silent while another source states a licence, or while the main record could not be read (then licence = '—').
   const empty = sources.find((s) => s.source === 'datacite' && s.state === 'missing');

@@ -315,3 +315,133 @@ describe('L1: texts', () => {
     }
   });
 });
+
+// Fix round after review of T1: false warnings on text that restricts nothing, missed restrictions, one warning per fact.
+describe('L1 fix: sentences that restrict nothing stay silent (negation, scale or area limits, attribution conditions)', () => {
+  it.each([
+    // negated access words
+    'No embargo',
+    'Embargo period: none',
+    'Embargo: n/a',
+    'The embargo ended in 2019',
+    'The embargo has been lifted',
+    'The data contain no confidential information',
+    'Data are not confidential',
+    'Not confidential',
+    // limits of the data, not of the rights
+    'Use limited to scales of 1:50 000 or smaller',
+    'Data are restricted to depths above 200 m',
+    'The dataset is limited to the Baltic Sea',
+    'Data are open to all users, not only project members',
+    'Open to everyone, not just project partners',
+    // attribution conditions, in any language
+    'Users must not redistribute the data without acknowledging the source',
+    'Data must not be altered without indicating the changes',
+    'Data may be used if the source is cited',
+    'Available to all users with attribution',
+    'Nutzung nur mit Quellenangabe',
+    'Nutzung nur unter Angabe der Quelle',
+    'Weitergabe nicht ohne Quellenangabe',
+    'Accès libre sous réserve de citer la source',
+    'Utilisation uniquement avec mention de la source',
+    'Dostęp tylko z podaniem źródła',
+    'Wykorzystanie danych tylko z podaniem źródła',
+    'Redystrybucja bez podania źródła jest zabroniona',
+    // negated access words in de / fr / pl
+    'Der Zugang ist nicht beschränkt',
+    'Zugang ohne Beschränkung',
+    'Accès non restreint',
+    "L'accès n'est pas restreint",
+    'Dostęp nieograniczony',
+    'Dostęp nie jest ograniczony',
+    // registration and agreements that are NOT required
+    'No registration required',
+    'Registration is not required',
+    'No data use agreement is needed',
+    // data of another period, not this dataset
+    'Data are available on request from the PI for the period before 2010',
+    // commercial use is free, nothing to contact about
+    'For commercial use no contact is needed',
+    'Commercial use is permitted, contact us if you have questions',
+  ])('"%s" next to CC BY 4.0 is silent', (text) => {
+    for (const tag of ['otherConstraints', 'useLimitation'] as const) {
+      const rec = iso([licenceConstraint(), { tag, text }]);
+      expect(lic(rec).filter((id) => id === RULE), `${tag}: ${text}`).toEqual([]);
+    }
+  });
+});
+
+describe('L1 fix: restrictions the first matcher missed are found', () => {
+  it.each([
+    'Restricted to project members',
+    'Restricted to registered users',
+    'Use restricted to the project team',
+    'Data cannot be used without permission of the owner',
+    'Only for scientific use',
+    'Only for research purposes',
+    'May only be used for research',
+    'May only be used for educational purposes',
+    'For commercial use contact data@example.org',
+    'For commercial use please contact the data owner',
+    'Commercial use: please contact the data owner',
+    'Access requires registration',
+    'Registration is required to download the data',
+    'Users must register before downloading',
+    'Users must sign a data use agreement',
+    'A data use agreement must be signed',
+    'Public access limited according to Article 13(1)(e) of the INSPIRE Directive',
+    'Limitations on public access: Art. 13(1)(a) of the INSPIRE Directive',
+    'Kommerzielle Nutzung untersagt',
+    'Die kommerzielle Nutzung ist nicht gestattet',
+    'Nur für wissenschaftliche Zwecke',
+    'Usage commercial interdit',
+    'Utilisation commerciale interdite',
+    'Réservé à la recherche scientifique',
+    'Wykorzystanie komercyjne zabronione',
+    'Zakaz wykorzystania komercyjnego',
+    'Dane udostępnione wyłącznie do celów naukowych',
+    'Dane tylko do celów badawczych',
+  ])('"%s" next to CC BY 4.0 warns', (text) => {
+    for (const tag of ['otherConstraints', 'useLimitation'] as const) {
+      const rec = iso([licenceConstraint(), { tag, text }]);
+      expect(lic(rec), `${tag}: ${text}`).toEqual([RULE]);
+    }
+  });
+});
+
+describe('L1 fix: one warning per fact', () => {
+  it('the same sentence in useLimitation and otherConstraints is one warning that names both fields', () => {
+    const t = 'Access limited to consortium members';
+    const rec = iso([licenceConstraint(), { tag: 'useLimitation', text: t }, { tag: 'otherConstraints', text: t.toLowerCase() + '.' }]);
+    const f = run(rec).filter((x) => x.ruleId === RULE);
+    expect(f).toHaveLength(1);
+    expect(f[0].field).toContain('useLimitation');
+    expect(f[0].field).toContain('otherConstraints');
+    expect(renderPlain(f[0], 'en')).toContain('useLimitation, otherConstraints');
+  });
+
+  it('an access restriction next to a restriction code that already conflicts is reported once, by the code rule', () => {
+    const rec = iso([licenceConstraint(), { tag: 'otherConstraints', text: 'Access restricted to project partners' }], { codes: ['restricted'] });
+    expect(lic(rec)).toEqual(['LIC-RESTRICTION-CONFLICT']);
+  });
+
+  it('a different fact next to the same code (non-commercial) is still reported', () => {
+    const rec = iso([licenceConstraint(), { tag: 'otherConstraints', text: 'Non-commercial use only' }], { codes: ['restricted'] });
+    expect(lic(rec).sort()).toEqual(['LIC-RESTRICTION-CONFLICT', RULE]);
+  });
+});
+
+describe('L1 fix: the text says "the licence", never "open licence"', () => {
+  it('en, pl, de and fr do not call the licence open and keep the restriction and the fields', () => {
+    const f = run(withBy({ tag: 'otherConstraints', text: 'Data access restricted to project partners' })).find((x) => x.ruleId === RULE)!;
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
+      const plain = renderPlain(f, lang);
+      expect(plain, lang).not.toMatch(/open licen|licencja otwarta|offene lizenz|licence ouverte/i);
+      expect(plain, lang).not.toMatch(/exclude|wykluczaj|schlie(?:ß|ss)en sich aus|s'excluent/i);
+    }
+  });
+  it('a NonCommercial licence with an access restriction is not called open either', () => {
+    const f = run(iso([licenceConstraint(NC_NAME, NC), { tag: 'useLimitation', text: 'Access limited to project partners' }])).find((x) => x.ruleId === RULE)!;
+    expect(renderPlain(f, 'en')).not.toMatch(/open/i);
+  });
+});
