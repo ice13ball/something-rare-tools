@@ -195,16 +195,15 @@ A file that cannot be read at all (damaged workbook, malformed XML or JSON, JSON
 a DataCite nor a Zenodo record) throws a `ParseError` whose message names the file. Everything
 merely odd in a readable file is a finding, never an exception.
 
-**Text.** `decodeText` (`values/encoding.ts`) tries strict UTF-8 first (a BOM is removed). On
+**Text.** `decodeText` (`values/encoding.ts`) reads UTF-16 first when the file has a UTF-16 BOM or the NUL-byte pattern of UTF-16LE or BE (deterministic, nothing is asked). Otherwise it tries strict UTF-8 (a BOM is removed). On
 invalid UTF-8 it chooses windows-1250 when one of the bytes `0x8A 0x9A 0x8C 0x9C 0x8F 0x9F` is
-present (letters in 1250 but control characters in ISO-8859-2), else ISO-8859-2, and raises
-`IN-ENCODING-FALLBACK` because the choice is a guess.
+present (letters in 1250 but control characters in ISO-8859-2), else ISO-8859-2, and decodes the same bytes also as windows-1252 (the same reading in every browser and in tests, with ’ and € and not control characters). When the three readings give the same text for the bytes present the pick is the reader's decision and raises `IN-ENCODING-FALLBACK` (accepted once). When they differ, `IN-ENCODING-AMBIGUOUS` (warning) shows a few differing words in each reading on `/check`; `/convert` blocks until the person names the encoding (kept in the companion file, keyed by the file hash). A strict NUL rule means a BOM-less UTF-16 file with few NUL bytes can still be read as before.
 
 **Delimited text** (`parse/csv.ts`). The delimiter is chosen among tab, semicolon and comma by
 the one whose field counts are most consistent over the first 50 non-empty lines (`SNIFF_LINES`);
 ties go to tab, then semicolon, then comma. The decimal comma is assumed (`looksDecimalComma`,
-`IN-DECIMAL-COMMA`) when the delimiter is `;` or tab and at least 80 % of the cells that carry a
-decimal separator in the first 50 rows are written `n,n`. A trailing empty header cell is dropped
+`IN-DECIMAL-COMMA`, accepted once) when the delimiter is `;` or tab and at least 80 % of the cells that carry a
+decimal separator in the first 50 rows are written `n,n`. A column is **ambiguous** (`IN-DECIMAL-AMBIGUOUS`, warning) when every cell with a comma has exactly three digits after it (`1,250` is 1.25 or 1250); one value with 1, 2 or 4 or more decimals settles it, and so does a cell written `1.250,5`, while a cell written `1,250,000` keeps the question and is named in it. `/check` reports both readings and keeps the decimal one; `/convert` blocks until the person declares the column "decimal comma" or "thousands separator" (kept in the companion file by header hash). A trailing empty header cell is dropped
 only when every line has the matching empty trailing cell.
 
 **Short headers.** `extendShortHeader` (`parse/shared.ts`): when the most common field count of
@@ -316,11 +315,9 @@ with `T` or a space and a time, `Z` or an offset kept as written); `DD.MM.YYYY` 
 convention); `YYYY/MM/DD` and `YYYY.MM.DD` (year first, so the order is certain); `DD/MM/YYYY` or `MM/DD/YYYY` (also with `-`) **only** when one part above 12 decides
 the order, or when the column's order is decided by `detectDayMonthOrder` from all cells of the
 column (a column that mixes unambiguous DD/MM and MM/DD cells is `conflict` and every such date
-that differs in its parts is unparseable); `YY-MM-DD` (century inferred, always flagged
-`ROW-DATE-YYMMDD`); an ISO interval `start/end` (the start is the date; the end must parse and not
-precede the start); a bare 4-digit year string. In a column that **is** the date (its role, `datumColumn`; never by a guess from the header or the cells) eight digits are `YYYYMMDD` (text or a whole number, validated: month and day must exist) and a whole four-digit number is a year, as the text `2000` is; eight digits anywhere else stay an ID. A header that states the format in a bracket (`Date (YYYYMMDD)`, `Date [DD/MM/YYYY]`) is the name `Date` with the format as its unit text. An Excel serial is read as a date **only** when the
-most of the column's numeric cells are date-formatted (`dateFormatted` is a per-column flag of the sheet), and the 1900 or 1904 system is applied; a number in a
-text column is never guessed to be a serial. Calendar dates are validated (`2021-02-30` is
+that differs in its parts is unparseable); `NN-NN-NN` (read in the one order its own cells allow: a part above 31, or above 12 in a month place, rules readings out; the century is inferred and flagged `ROW-DATE-YYMMDD`, accepted once; when more than one order fits every cell and the dates differ, `ROW-DATE-YY-AMBIGUOUS` (warning) names the other readings, once per column, and `/convert` blocks until the person declares the order of that column, separately from its day/month answer); an ISO interval `start/end` (the start is the date; the end must parse and not
+precede the start); a bare 4-digit year string. In a column that **is** the date (its role, `datumColumn`; never by a guess from the header or the cells) eight digits are `YYYYMMDD` (text or a whole number, validated: month and day must exist) and a whole four-digit number is a year, as the text `2000` is; eight digits anywhere else stay an ID. A header that states the format in a bracket (`Date (YYYYMMDD)`, `Date [DD/MM/YYYY]`) is the name `Date` with the format as its unit text. An Excel serial is read as a date **only** when the cell itself carries a date format in a column most of whose numeric cells do (`dateFormatted` is a per-column flag of the sheet), and the 1900 or 1904 system is applied; a number without a date format in such a column is reported as an unreadable date on its line (`ROW-DATE-UNPARSEABLE`), and a number in a
+text column is never guessed to be a serial. A numeric workbook cell whose number format contains `%` is read as the person sees it: the stored fraction with the decimal point moved two places (0.95 is 95), never the rounded display text, with `IN-PERCENT-READ` (info) per column. Calendar dates are validated (`2021-02-30` is
 unparseable). All arithmetic is on UTC milliseconds, so the machine's time zone cannot move a
 date. **Fractions of a second.** An Excel serial is rounded to the whole second by default (`excelSerialToDate`). `/convert` always reads it so, because its event IDs depend on it: it never passes `keepMillis` (`metaParser` takes it as an option, off by default; `convert/build.ts` and the whole of `src/core/convert` are unchanged; `test/convert/fraction-unchanged.test.ts` pins eventDates, event and occurrence IDs and the absence of `CONV-ID-REVISIT`). `/check` sets it in the wide, long and lookup builders, for the values that go to the clean CSV (the date column, a separate time column, a time column holding a full datetime, a key column written by `keyCellText`). The rule, per **column** (`values/fractionEvidence.ts`, computed once per date or time column of a sheet, on `/check`'s path only):
 1. The column is **shown** (every cell is kept to the millisecond: `2021-06-01T12:00:00.250`; `00:00:00.250` is not a date-only value; precision `second`) when its number format shows a fraction of a second (`ss.0`, `ss.000`, `[ss].000`; sheet flag `fractionShown`), or when, among its numeric cells that are at least 0.5 ms from a whole second, at least half are plainly real: at least **50 ms** from a whole second with more than 8 decimals. (The whole column is read, not only the rows that reach the output; reading less would need the builders' row selection and is not cheap.)
@@ -1555,19 +1552,18 @@ code" (the button above applies it).
   (`CONV-SAMPLE-CODE-MISSING`); a repeated id blocks (`CONV-ID-DUPLICATE`; a repeated occurrenceID it reports is not reported a second time by the output table's `DWC-OCCURRENCEID-DUPLICATE`); rows of one sample that
   disagree on date, position or depth block (`CONV-SAMPLE-CONFLICT`); rows whose sample code or
   station is exactly `total`, `suma`, `razem`, `summe`, `gesamt` or `somme` (any case,
-  `SUMMARY_LABEL`, `convert/ids.ts`) are skipped and said (`CONV-SUMMARY-ROW-SKIPPED`). **Statistics
+  `SUMMARY_LABEL`, `convert/ids.ts`) are **held back and asked about**, never skipped by the word alone (a station really called `Somme` is a real station). **Statistics
   lines** (`Mean`, `Average`, `Median`, `SD`, `StDev`, `Sum`, `Średnia`, `Mittelwert`, `Moyenne`,
   `Écart-type`, and the short `Min`, `Max`, `n`, `SE`, `CV`, `Count`; one list with `/check`,
   `core/summaryLabels.ts`) are decided by the row, not by the word alone, because a station can be
   called `Max`, `N` or `E`. The label is the whole cell of the sample-code column (also under a real
   station: `St1 | Mean | 2` is a station subtotal), or of the station column when the sample code is
   blank or a label too (a station `Max` with a real sample code is a station). A row with a date or a
-  position of its own is a station and is kept silently. A row with neither is skipped and said
-  (`CONV-SUMMARY-ROW-SKIPPED`) when its label is unambiguous (`Mean`, `SD`, ...) or it stands in a
+  position of its own is a station and is kept silently. A row with neither is held back when its label is unambiguous (`Mean`, `SD`, ...) or it stands in a
   block of two or more label rows in a row that holds at least one unambiguous label (two short codes side
   by side, `N` and `SE`, `Min` and `Max`, are not a block); an unambiguous label in the sample-code
-  column with a date copied down (`St1 | Mean | 2020-01-01`) is a summary row too: skipped in a block,
-  else kept with the warning; a short ambiguous label (`n`, `SE`, `CV`, `Min`, `Max`,
+  column with a date copied down (`St1 | Mean | 2020-01-01`) is held back in a block, else kept with the warning.
+  The held-back rows are listed and **block the export** (`CONV-SUMMARY-ROW-UNDECIDED`, reason `summary-undecided` in the list of rows not written) until the person answers for the sheet "leave them out (summary rows)" or "keep (a real station or sample)"; the answer holds for that number of rows and is reported by `CONV-SUMMARY-ROW-SKIPPED` (info). A short ambiguous label (`n`, `SE`, `CV`, `Min`, `Max`,
   `Count`) on its own is **never skipped silently**: the row is kept as a sample and said
   (`CONV-SUMMARY-ROW-KEPT`, a warning to accept).
 - **Visits:** a code that repeats at **one** station on rows that differ in date (then time of
@@ -1716,8 +1712,8 @@ around it, for kind, unit, vocabulary hints, taxon names and the text shown to t
 ### 8.8 What blocks an export and why (`convert/policy.ts`, `convert/validate.ts`)
 
 Severity alone is not the policy. Each finding is **blocking**, **needs an acceptance**, or **only
-shown**, decided by lists of rule ids; a rule on no list blocks when its severity is `error` (a rule
-nobody judged must not let a bad archive through) and is only shown otherwise.
+shown**, decided by the **`exportPolicy` field of the rule's definition** (`block`, `accept` or `show`; `convert/policy.ts` only reads it, and it follows the rule, not the severity of a finding). A rule id no registry knows blocks when its severity is `error` (a rule
+nobody judged must not let a bad archive through) and is only shown otherwise. A pinned table of the policy of every rule guards against a rule changing policy by accident, and a test fails when a rule raised at a leave-out, a default value or a reader decision is only `show`. The principle: an outcome that follows from the person's own explicit answer (a column set to ignore, rows chosen to be left out) is `show`; an outcome that follows from a tool default or a reader decision (a proposed ignore left untouched, zeros skipped by default, a decimal comma read by the reader) is `accept`; what the converter cannot settle from the file (a thousands or decimal comma, an encoding, a two-digit-year order, a -99 code, summary-looking rows, a text in a count column) is `block` until the person answers.
 
 A sheet with no position at all is named in its own terms (`CONV-POSITION-NONE`, blocks); the output table's empty-column finding is not repeated.
 
@@ -1730,12 +1726,12 @@ A sample without a date blocks (OBIS requires eventDate); blank date cells can b
   `CONV-*` errors (undeclared quantity, missing sample code, duplicate ids, a tab or line break in a
   value, eMoF rows that name a missing event or occurrence or have an empty value or type, no
   licence, no basis of record, missing dataset description, undecided splits or WoRMS choices, no
-  occurrences). See `BLOCK_OUTPUT_RULES`, `BLOCK_INPUT_RULES`, `BLOCK_CONV_RULES`.
+  occurrences), and the reader questions above. `rulesWithPolicy('block')` lists them.
 - **Needs an acceptance** (one tick per rule per run, valid only for the findings it was given for:
   a changed mapping makes a tick void): for example `IN-HEADER-SHORT`, `ROW-NON-NUMERIC`,
   `ROW-INVISIBLE-CHAR`, `ROW-DATE-FUTURE`, `ROW-DEPTH-RANGE`, the hemisphere rules, unconfirmed
   vocabulary ids, a missing sampling device, an unmatched profile station, a licence that differs
-  from the one the dropped metadata state. See `ACCEPT_RULES`.
+  from the one the dropped metadata state. `rulesWithPolicy('accept')` lists them.
 - **Roles the file does not state** `CONV-ROLE-UNCONFIRMED` (accept, one finding per sheet, `src/core/convert/roleUnconfirmed.ts`): a column the proposer gave the role taxon, quantity, date, latitude or longitude and
   that the file does not state by name (`src/core/convert/stated.ts`: an exact Darwin Core term after folding case and underscores, an exact vocabulary entry, a unit the header declares for a name that means
   two things, a PANGAEA geocode; the cells can only take that away) is listed with its proposed role, named as the column table names it (`Quantity`, `Date and time`, ...), and its first three distinct cells; the
@@ -1747,9 +1743,9 @@ A sample without a date blocks (OBIS requires eventDate); blank date cells can b
   entry is not listed; since 2026-11-12 (Michał's decision of 2026-11-06) that includes a few whole names in other languages: `Breitengrad`, `Längengrad`, `Szerokość geograficzna`, `Długość geograficzna`,
   `Scientific name` (and `Nom scientifique`, `Wissenschaftlicher Name`, `Nazwa naukowa`, marked only where the proposal is already a taxon) and `Date (UTC)`. A file whose headers are the author's own words, an
   inexact spelling or a word with two meanings (`Latitude_dd`, `Date of sampling`, `Breite`, `Data`, `Datum`, `Date (GMT)`, `Abundance (ind)`) lists them, and that is the price of "stated by name". The wide sheet's taxon headers keep their own confirmation ("Confirm all shown"); they are not listed here.
-- **Only shown**, never blocks, never asks: the prefixes `CHEM-`, `ROW-SHIP-SPEED`, `ROW-ON-LAND`,
-  `XF-`, `META-`, `LIC-` (`SHOW_ONLY_PREFIXES`) and the note `ROW-STATION-SPREAD` (a transect legitimately
-  spans more than 10 km). `ROW-STATION-MOVED` and `ROW-STATION-SPREAD-FAR` need an acceptance.
+- **Only shown**, never blocks, never asks: for example `CHEM-`, `ROW-SHIP-SPEED`, `ROW-ON-LAND`,
+  `XF-`, `META-`, `LIC-` rules and the note `ROW-STATION-SPREAD` (a transect legitimately
+  spans more than 10 km); `rulesWithPolicy('show')` lists them. `ROW-STATION-MOVED` and `ROW-STATION-SPREAD-FAR` need an acceptance.
 
 **The station checks run on the input rows.** The Event table has no station name to compare (the
 station is a parent event, and every `eventID` is its own "station" there), so `ROW-STATION-MOVED`,
@@ -2150,23 +2146,22 @@ worker never fetches. Tests drive the same handlers in the calling thread (`crea
 ## 13. Rule families
 
 Counts were computed from the rule registry (`RULES` in `src/core/rules/registry.ts`, which
-assembles the per-category files) by a throwaway script run outside the commit, at this release
-(the rule set of commit `7f99a18`, unchanged by the documentation commits after it; recomputed from `docs/rules.md`, which a test keeps equal to the registry). The total, **215 rules**, equals the number of rule rows in
+assembles the per-category files) by a throwaway script run outside the commit, at release 1.1.0 (counted at commit `8da0499`; 215 rules at `v1.0.0`, 48 added, none removed or renamed, listed in `docs/releases/v1.1.0.md`). The total, **263 rules**, equals the number of rule rows in
 [`docs/rules.md`](rules.md), which is generated from the same registry and **is the authoritative
 list** (ids, severities, thresholds, full citations): treat this table as a map to it, and
-regenerate it when rules change.
+regenerate it when rules change. Each tool also has its own printable reference, generated from the registry, of the rules the tool can raise, found by a static scan of its code (`docs/rules/check.md`, `licence.md`, `collection.md`, `convert.md`; `scripts/rules-docs-per-tool.ts`, kept current by `test/rules/rules-docs-per-tool.test.ts`). A rule can belong to several tools.
 
 | Prefix | Category in the registry | Rules | Error / Warning / Info | What it covers | Main sources it cites (as named in the rule definitions) |
 |---|---|---|---|---|---|
-| `IN-` | `input` | 32 | 12 / 11 / 9 | Getting and reading input: downloads (blocked, timeout, interrupted, host not allowed, archive limits), records with no data file, unreadable files, encoding, decimal comma, short header, 1904 dates, a PANGAEA table's position and date taken from its Event(s) block, unsupported layout, Darwin Core Archive reading. | Almost none: these are the tool's own handling. One cites Microsoft's description of the Excel date systems. |
+| `IN-` | `input` | 36 | 12 / 14 / 10 | Getting and reading input: downloads (blocked, timeout, interrupted, host not allowed, archive limits), records with no data file, unreadable files, encoding, decimal comma, short header, 1904 dates, a PANGAEA table's position and date taken from its Event(s) block, unsupported layout, Darwin Core Archive reading. | Almost none: these are the tool's own handling. One cites Microsoft's description of the Excel date systems. |
 | `LIC-` | `A` | 11 | 1 / 10 / 0 | Licence statements across ISO, DataCite, Zenodo and PANGAEA records (3.5, 6). | DataCite Metadata Schema 4.6 (Rights); Creative Commons FAQ; INSPIRE Technical Guidelines for ISO 19139 metadata; GO FAIR principle R1.1; OpenAIRE Guidelines for Data Archives; SPDX. |
 | `META-` | `A` | 8 | 2 / 4 / 2 | The record itself and the record against the data: links, version, extents, abstract variables, no dates, no positions. | The OBIS Manual (`META-NO-POSITIONS`: `decimalLatitude` and `decimalLongitude` are the minimally required location terms); the other rules are stated in their own text. |
-| `ROW-` | `B` | 43 | 6 / 24 / 13 | Row-level checks: coordinates (range, zero, swapped, hemisphere, land), dates, units, depth, ship speed, stations that move, invisible characters. | Argo QC manual for CTD data; Met Office marine-qc ("Track check"); OBIS obis-qc; GTSPP real-time QC manual; MEDATLAS protocol; World Ocean Database user's manual. |
+| `ROW-` | `B` | 48 | 6 / 28 / 14 | Row-level checks: coordinates (range, zero, swapped, hemisphere, land), dates, units, depth, ship speed, stations that move, invisible characters. | Argo QC manual for CTD data; Met Office marine-qc ("Track check"); OBIS obis-qc; GTSPP real-time QC manual; MEDATLAS protocol; World Ocean Database user's manual. |
 | `DWC-` | `B` | 9 | 6 / 3 / 0 | Darwin Core structure of a table or archive: required and recommended terms, ids, hierarchy, vocabularies. | OBIS obistools (`check_fields`, `check_eventids`); OBIS Manual; EMODnet BioCheck; OBIS obis-qc; GBIF basis-of-record vocabulary. |
 | `XF-` | `C` | 6 | 0 / 4 / 2 | Across several datasets (3.5). | Few (two rules cite GLODAP and UNESCO Technical Paper 44); "equal" is derived from reported precision, not from a threshold. |
 | `CHEM-` | `C` | 3 | 0 / 3 / 0 | Unit pairs by molar mass, DIC above total alkalinity, global range test. | Argo QC manuals (CTD, dissolved oxygen); CIAAW atomic weights; Dickson, Sabine & Christian (2007); GTSPP; TEOS-10. |
-| `CONV-` | `B` | 103 | 43 / 40 / 20 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
-| **Total** | | **215** | | | |
+| `CONV-` | `B` | 142 | 63 / 47 / 32 | The converter's own findings (section 8). | OBIS Manual (Darwin Core, eMoF, name matching, common issues); OBIS obistools; EMODnet BioCheck. |
+| **Total** | | **263** | 90 / 113 / 60 | | |
 
 (The "category" column is the field `category` of each rule definition (`input`, `A`, `B`, `C`);
 `META-` and `LIC-` share category `A`, and `CONV-` shares `B` with the row and Darwin Core rules.
@@ -2247,7 +2242,7 @@ Each item below is confirmed from code, a test, or a rule text.
   are not compared with each other (they may differ in date or position; the sample takes the span).
 - A statistics line is told from a station by its date and position and by its label (an
   unambiguous one, or a block of label rows); a station called `Mean` with neither a date nor a position
-  is skipped (and said, so it can be renamed). Short codes alone (`N`, `SE`) are asked about.
+  is held back and the export waits for the person's answer "leave out" or "keep" (`CONV-SUMMARY-ROW-UNDECIDED`). A short code alone (`N`, `SE`) is kept as a sample and said.
 - Revisits are told apart within one sheet only: the same station and code on different dates in
   different sheets or files still collide (`CONV-ID-DUPLICATE`).
 - A declared unit that does not fit the kind of quantity is not rejected: it is written as typed with
