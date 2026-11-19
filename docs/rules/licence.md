@@ -193,7 +193,7 @@ Severity: warning
 
 **What it checks.** Whether the Zenodo record or the PANGAEA dataset is openly accessible. Whatever licence the metadata states, the repository decides who may get the data.
 
-**When it fires.** Once per dataset, when a Zenodo record is embargoed, restricted or closed (the older access_right field and the newer access block are both read), or a PANGAEA licence entry says the data need a login or are restricted. For an embargo the finding names the end date when the record gives one. An embargo whose date has already passed, a lifted embargo and open access say nothing. Dataverse files held back have their own rule, LIC-FILES-HELD-BACK.
+**When it fires.** Once per dataset, when a Zenodo record is embargoed, restricted or closed (the older access_right field and the newer access block are both read), or a PANGAEA dataset states in its technical information that it needs a signup (a login) or access rights (restricted); the licence wording is never used for this. A PANGAEA dataset that needs access rights usually carries the licence UNKNOWN as a consequence; that licence is not reported separately, so this is its only finding. For an embargo the finding names the end date when the record gives one, and an embargo date that cannot be read is reported as an embargo without a date. An embargo whose date has already passed (in either Zenodo shape), a lifted embargo and open access say nothing. Dataverse files held back have their own rule, LIC-FILES-HELD-BACK.
 
 **Example.** A Zenodo record has access_right "embargoed" and an embargo_date in the future.
 

@@ -55,7 +55,7 @@ describe('Zenodo access state', () => {
   });
   it('InvenioRDM: a lifted or past embargo, and a public record, say nothing', () => {
     expect(found(parseZenodoRecord(rdm({ embargo: { active: false, until: '2020-01-01' } }), 'z', NOW))).toEqual([]);
-    expect(found(parseZenodoRecord(rdm({ files: 'restricted', embargo: { active: true, until: '2020-01-01' } }), 'z', NOW))[0]!.params.kind).toBe('restricted');
+    expect(found(parseZenodoRecord(rdm({ files: 'restricted', embargo: { active: true, until: '2020-01-01' } }), 'z', NOW))).toEqual([]);
     expect(found(parseZenodoRecord(rdm({}), 'z', NOW))).toEqual([]);
   });
   it('open access gives nothing, and a record with no access field gives nothing', () => {
@@ -68,13 +68,44 @@ describe('Zenodo access state', () => {
   });
 });
 
-describe('PANGAEA access state', () => {
+describe('unreadable embargo date', () => {
+  it('is an embargo without a date, in both shapes', () => {
+    const l = found(parseZenodoRecord(legacy({ access_right: 'embargoed', embargo_date: 'until publication' }), 'z', NOW));
+    expect(l).toHaveLength(1);
+    expect(l[0]!.params).toMatchObject({ kind: 'embargoed' });
+    expect(l[0]!.params.until).toBeUndefined();
+    const r = found(parseZenodoRecord(rdm({ embargo: { active: true, until: 'soon' } }), 'z', NOW));
+    expect(r).toHaveLength(1);
+    expect(r[0]!.params.until).toBeUndefined();
+  });
+});
+
+describe('PANGAEA access state (technicalInfo loginOption)', () => {
   const wrap = (inner: string): string => `<md:MetaData xmlns:md="http://www.pangaea.de/MetaData">${inner}</md:MetaData>`;
-  const lic = (label: string, name: string): string => `<md:license id="l1"><md:label>${label}</md:label><md:name>${name}</md:name></md:license>`;
-  it('login required and restricted access are reported; an open licence is not', () => {
-    expect(found(parsePangaeaMetainfo(wrap(lic('PANGAEA-LOGIN', 'Login required')), 'p'))[0]!.params.kind).toBe('login');
-    expect(found(parsePangaeaMetainfo(wrap(lic('PANGAEA-X', 'Data access is restricted')), 'p'))[0]!.params.kind).toBe('restricted');
-    expect(found(parsePangaeaMetainfo(wrap(lic('CC-BY-4.0', 'Creative Commons Attribution 4.0 International')), 'p'))).toEqual([]);
+  const lic = (label: string, name: string, uri: string): string => `<md:license id="l1"><md:label>${label}</md:label><md:name>${name}</md:name><md:URI>${uri}</md:URI></md:license>`;
+  const tech = (login: string | undefined): string => `<md:technicalInfo><md:entry key="status" value="published"/>${login === undefined ? '' : `<md:entry key="loginOption" value="${login}"/>`}</md:technicalInfo>`;
+  const CCBY = lic('CC-BY-4.0', 'Creative Commons Attribution 4.0 International', 'https://creativecommons.org/licenses/by/4.0/');
+  const UNKNOWN = lic('UNKNOWN', 'Licensing unknown: Please contact principal investigator/authors to gain access and request licensing terms', '');
+  const all = (r: MetadataRecord) => checkLicence([r], { label: 'x', inaccessible: false });
+  it('signup required is a login, even with a clean CC BY licence', () => {
+    const f = found(parsePangaeaMetainfo(wrap(CCBY + tech('signup required')), 'p'));
+    expect(f).toHaveLength(1);
+    expect(f[0]!.params.kind).toBe('login');
+  });
+  it('access rights needed is restricted, and with an unknown licence it is the only finding about the access', () => {
+    const r = parsePangaeaMetainfo(wrap(UNKNOWN + tech('access rights needed')), 'p');
+    const f = found(r);
+    expect(f).toHaveLength(1);
+    expect(f[0]!.params.kind).toBe('restricted');
+    // the licence text of such a record only repeats the access ("gain access"): no second finding says it
+    expect(all(r).filter((x) => x.ruleId.startsWith('LIC-')).map((x) => x.ruleId)).toEqual([RULE]);
+  });
+  it('unrestricted or no loginOption says nothing', () => {
+    expect(found(parsePangaeaMetainfo(wrap(CCBY + tech('unrestricted')), 'p'))).toEqual([]);
+    expect(found(parsePangaeaMetainfo(wrap(CCBY + tech(undefined)), 'p'))).toEqual([]);
+  });
+  it('licence wording never decides the access', () => {
+    expect(found(parsePangaeaMetainfo(wrap(lic('CC-BY-4.0', 'CC BY 4.0; login required, access is restricted', '') + tech('unrestricted')), 'p'))).toEqual([]);
   });
 });
 

@@ -73,15 +73,17 @@ function extentOfDates(dates: unknown): MetadataRecord['temporalExtent'] {
 
 /** Zenodo's access state: legacy `metadata.access_right` + `embargo_date`, InvenioRDM `access.record` / `access.files` / `access.embargo`. An embargo whose date has passed is open (Zenodo lifts it). */
 function accessOf(json: Obj, md: Obj, now: number): MetadataRecord['access'] {
-  const future = (d: string | undefined): boolean => {
-    const t = Date.parse(d ?? '');
-    return Number.isFinite(t) && t > now;
+  // A readable date is compared with now; one that cannot be read counts as an embargo without a date (never as lifted).
+  const lifted = (d: string): boolean => {
+    const t = Date.parse(d);
+    return Number.isFinite(t) && t <= now;
   };
+  const dated = (d: string): { kind: 'embargoed'; until?: string } => (Number.isFinite(Date.parse(d)) ? { kind: 'embargoed', until: d } : { kind: 'embargoed' });
   const right = str(md.access_right)?.toLowerCase();
   if (right === 'embargoed') {
     const until = str(md.embargo_date);
     if (until === undefined) return { kind: 'embargoed' };
-    return future(until) ? { kind: 'embargoed', until } : undefined;
+    return lifted(until) ? undefined : dated(until);
   }
   if (right === 'restricted' || right === 'closed') return { kind: right };
   const a = isObj(json.access) ? json.access : undefined;
@@ -90,7 +92,7 @@ function accessOf(json: Obj, md: Obj, now: number): MetadataRecord['access'] {
   if (e?.active === true) {
     const until = str(e.until);
     if (until === undefined) return { kind: 'embargoed' };
-    if (future(until)) return { kind: 'embargoed', until };
+    return lifted(until) ? undefined : dated(until);
   }
   if (str(a.record)?.toLowerCase() === 'restricted' || str(a.files)?.toLowerCase() === 'restricted') return { kind: 'restricted' };
   return undefined;

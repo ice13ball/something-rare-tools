@@ -8,9 +8,17 @@ import { buildStatement } from './licence';
 
 export const PANGAEA_NS = 'http://www.pangaea.de/MetaData';
 
-function accessOfLicenceText(t: string): MetadataRecord['access'] {
-  if (/\blogin\b/i.test(t)) return { kind: 'login' };
-  if (/\brestricted\s+access\b|\baccess\b[^.]{0,30}\brestricted\b|\brestricted\b[^.]{0,30}\baccess\b/i.test(t)) return { kind: 'restricted' };
+/**
+ * PANGAEA states the access of a dataset in `md:technicalInfo/md:entry[@key="loginOption"]` (checked on the live service), never in the licence entry:
+ * "signup required" = a login is needed, "access rights needed" = restricted, "unrestricted" or absent = open. (The JSON-LD conditionsOfAccess of the
+ * landing page says the same; this code reads no JSON-LD.)
+ */
+function accessOfLoginOption(root: Element): MetadataRecord['access'] {
+  const info = child(root, PANGAEA_NS, 'technicalInfo');
+  const entry = info ? children(info, PANGAEA_NS, 'entry').find((e) => e.getAttribute('key') === 'loginOption') : undefined;
+  const v = (entry?.getAttribute('value') ?? '').trim().toLowerCase();
+  if (v === 'signup required') return { kind: 'login' };
+  if (v === 'access rights needed') return { kind: 'restricted' };
   return undefined;
 }
 
@@ -49,9 +57,15 @@ export function parsePangaeaMetainfo(xml: string, label: string): MetadataRecord
   const abstract = text(child(root, PANGAEA_NS, 'abstract'));
   if (abstract) rec.abstract = abstract;
 
+  const access = accessOfLoginOption(root);
+  if (access) rec.access = access;
+
   for (const lic of descendants(root, PANGAEA_NS, 'license')) {
     const name = text(child(lic, PANGAEA_NS, 'name'));
     const id = text(child(lic, PANGAEA_NS, 'label'));
+    // Rule: a dataset that needs access rights carries the label UNKNOWN ("Licensing unknown: ... gain access ...") only because nobody granted the
+    // access yet. That is the access restriction again, not a licence statement: it is not read, so LIC-ACCESS-HELD-BACK is the one finding.
+    if (access?.kind === 'restricted' && id?.toUpperCase() === 'UNKNOWN') continue;
     const s: LicenceStatement | undefined = buildStatement({
       source: 'pangaea',
       field: 'license',
@@ -60,9 +74,6 @@ export function parsePangaeaMetainfo(xml: string, label: string): MetadataRecord
       uri: text(child(lic, PANGAEA_NS, 'URI')),
     });
     if (s) rec.licences.push(s);
-    // PANGAEA states a closed dataset in the licence entry itself ("Login required", "Data access is restricted").
-    const access = accessOfLicenceText([name, id].filter((x): x is string => !!x).join(' '));
-    if (access && !rec.access) rec.access = access;
   }
   return rec;
 }

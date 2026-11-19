@@ -44,7 +44,7 @@ export const TOOL_ENTRIES: Record<Tool, readonly string[]> = {
 /** Ids a scan cannot see (built at run time), per tool. Empty today. Each must exist in the registry (tested). */
 export const RUNTIME_BUILT: Record<Tool, readonly string[]> = { check: [], licence: [], collection: [], convert: [] };
 
-const LIC_IDS = ['LIC-MISSING', 'LIC-FREE-TEXT', 'LIC-TEXT-URI-CONFLICT', 'LIC-ADDED-CONDITIONS', 'LIC-EXTRA-TEXT', 'LIC-OTHER-RIGHTS-ENTRY', 'LIC-SEPARATE-RESTRICTION', 'LIC-SEVERAL-LICENCES', 'LIC-AMBIGUOUS', 'LIC-RESTRICTION-CONFLICT', 'LIC-FILES-HELD-BACK', 'LIC-DATACITE-EMPTY', 'LIC-MISMATCH'] as const;
+const LIC_IDS = ['LIC-MISSING', 'LIC-FREE-TEXT', 'LIC-TEXT-URI-CONFLICT', 'LIC-ADDED-CONDITIONS', 'LIC-EXTRA-TEXT', 'LIC-OTHER-RIGHTS-ENTRY', 'LIC-SEPARATE-RESTRICTION', 'LIC-SEVERAL-LICENCES', 'LIC-AMBIGUOUS', 'LIC-RESTRICTION-CONFLICT', 'LIC-FILES-HELD-BACK', 'LIC-ACCESS-HELD-BACK', 'LIC-DATACITE-EMPTY', 'LIC-MISMATCH'] as const;
 const RECORDLESS = 'convert/validate.ts:77 calls runChecks with records: [] and no ds.metadata; checks/run.ts:57-66 runs checkLicence only per session record';
 
 const COLLECTION_LOAD =

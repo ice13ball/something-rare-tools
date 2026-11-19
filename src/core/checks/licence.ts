@@ -100,7 +100,9 @@ export function checkLicence(
   const a = analyseLicences(records, { unreadable: ctx.unreadable, inaccessible: ctx.inaccessible });
 
   // A record that could not be read says nothing about a licence: IN-RECORD-INACCESSIBLE already reports it.
-  if (a.missing) out.push(makeFinding('LIC-MISSING', { file, ...(ctx.dataciteNotCompared ? { params: { dataciteCompared: 'no' } } : {}) }));
+  // PANGAEA "access rights needed": its UNKNOWN licence is the access restriction itself (pangaea.ts), which LIC-ACCESS-HELD-BACK says; no second "no licence" finding.
+  const unknownBecauseRestricted = records.some((r) => r.source === 'pangaea' && r.access?.kind === 'restricted' && r.licences.length === 0);
+  if (a.missing && !unknownBecauseRestricted) out.push(makeFinding('LIC-MISSING', { file, ...(ctx.dataciteNotCompared ? { params: { dataciteCompared: 'no' } } : {}) }));
 
   // Free text only: nothing machine-readable. One finding per record, not per source.
   if (a.freeText) {

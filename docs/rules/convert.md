@@ -7,7 +7,7 @@ Regenerate with `UPDATE_RULES_DOC=1 npx vitest run test/rules/rules-docs-per-too
 
 The list is the rules the tool can raise, found by a static scan of its code, so a few may never fire in practice. Severity is error, warning or info. Every number a rule compares against is listed with its source. Each rule has four short parts: what it checks, when it fires, an invented example, and what the person can do.
 
-202 rules.
+201 rules.
 
 ## IN-LAYOUT-UNSUPPORTED — The table is laid out in a way the tool cannot read as one header row and one row per sample, so it was not read
 
@@ -180,18 +180,6 @@ Severity: warning · Export policy: show
 **Example.** Rows 12 and 13 say station 7, and the block lists stations 1 to 6.
 
 **What you can do.** Fill the position and date for those rows in the table. In /convert this finding is only shown and never stops the export.
-
-## LIC-ACCESS-HELD-BACK — Whether the Zenodo record or the PANGAEA dataset is openly accessible
-
-Severity: warning · Export policy: show
-
-**What it checks.** Whether the Zenodo record or the PANGAEA dataset is openly accessible. Whatever licence the metadata states, the repository decides who may get the data.
-
-**When it fires.** Once per dataset, when a Zenodo record is embargoed, restricted or closed (the older access_right field and the newer access block are both read), or a PANGAEA licence entry says the data need a login or are restricted. For an embargo the finding names the end date when the record gives one. An embargo whose date has already passed, a lifted embargo and open access say nothing. Dataverse files held back have their own rule, LIC-FILES-HELD-BACK.
-
-**Example.** A Zenodo record has access_right "embargoed" and an embargo_date in the future.
-
-**What you can do.** If the data are the restricted part, say in the description how and when they can be obtained, or open them.
 
 ## META-NO-DATES — Neither the table nor the record holds any date
 
