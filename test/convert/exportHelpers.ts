@@ -58,6 +58,8 @@ export interface ExportOptions {
   fullList?: boolean;
   prefixStation?: boolean;
   edit?: Record<string, ColumnRole>;
+  /** The person's answers for texts in the count columns (V3), by text. */
+  countTexts?: Record<string, { answer: 'absence' | 'leave-out' | 'present'; count: number }>;
   decimalComma?: boolean;
   /** Approve every split as proposed (the page's "approve all"). Default true. */
   approve?: boolean;
@@ -81,7 +83,7 @@ export interface ExportOptions {
 /** A sheet through convert, validation and the writers, as the export does it. */
 export async function exportSheet(header: string[], rows: Cell[][], o: ExportOptions): Promise<Exported> {
   const file = fileOf(header, rows, 'S', o.decimalComma ? { decimalComma: true } : {});
-  const sheet = sheetInput(file, { quantity: o.quantity, ...(o.ignoreChosen ? { ignoreChosen: o.ignoreChosen } : {}), ...(o.missingCodes || o.realCodes ? { missingCodes: { ...Object.fromEntries((o.missingCodes ?? []).map((i) => [i, 'missing' as const])), ...Object.fromEntries((o.realCodes ?? []).map((i) => [i, 'real' as const])) } } : {}), ...(o.edit ? { edit: o.edit } : {}), ...(o.shape ? { shape: o.shape } : {}), ...(o.device ? { device: o.device } : {}), ...(o.meshUm === undefined ? {} : { meshUm: o.meshUm }), ...(o.nerc ? { nerc: o.nerc } : {}) });
+  const sheet = sheetInput(file, { quantity: o.quantity, ...(o.countTexts ? { countTexts: o.countTexts } : {}), ...(o.ignoreChosen ? { ignoreChosen: o.ignoreChosen } : {}), ...(o.missingCodes || o.realCodes ? { missingCodes: { ...Object.fromEntries((o.missingCodes ?? []).map((i) => [i, 'missing' as const])), ...Object.fromEntries((o.realCodes ?? []).map((i) => [i, 'real' as const])) } } : {}), ...(o.edit ? { edit: o.edit } : {}), ...(o.shape ? { shape: o.shape } : {}), ...(o.device ? { device: o.device } : {}), ...(o.meshUm === undefined ? {} : { meshUm: o.meshUm }), ...(o.nerc ? { nerc: o.nerc } : {}) });
   const approvedSplits = o.approve === false ? {} : Object.fromEntries(listSplits({ sheets: [sheet] }).filter((s) => s.needsDecision).map((s) => [s.verbatim, s.proposed]));
   const input: ConvertInput = { sheets: [sheet], options: { fullList: o.fullList === true, prefixStation: o.prefixStation === true }, approvedSplits, ...(o.worms ? { worms: o.worms } : {}) };
   const result = convert(input);

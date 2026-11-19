@@ -60,6 +60,7 @@ const EXEMPT: Record<string, string> = {
   'CONV-SHEET-TURNED': '(b) the person declared that the samples are the columns',
   'CONV-JOIN-CONFLICT-CHOSEN': '(b) the person chose which value of the two sheets is written',
   'CONV-SUMMARY-ROW-SKIPPED': '(b) the person answered "leave them out (summary rows)" or "keep"; the question that blocks is CONV-SUMMARY-ROW-UNDECIDED',
+  'CONV-COUNT-TEXT-DECIDED': '(b) the person answered what a text in a count column means (absence, leave out or present); the question that blocks is CONV-TEXT-IN-TAXON-CELL',
   'CONV-MISSING-CODE-DECLARED': '(b) the person answered "treat as missing" for the column; the question that blocks is ROW-MISSING-CODE',
   'IN-DATE1904': '(c) the workbook states its own date system; the reader only follows it',
   'IN-HEADER-UNITS-READ': '(c) a row of units under the header; a row with a number is never folded (parse/shared.ts foldUnitsRow)',

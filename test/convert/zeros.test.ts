@@ -3,6 +3,7 @@
 // Zeros and non-numbers in taxon cells (plan 2.7).
 import { describe, expect, it } from 'vitest';
 import { convert } from '../../src/core/convert/build';
+import { policyOf } from '../../src/core/convert/policy';
 import type { Finding } from '../../src/core/types';
 import { fileOf, sheetInput } from './helpers';
 import type { Cell } from './helpers';
@@ -56,18 +57,29 @@ describe('zeros', () => {
 });
 
 describe('text in a taxon cell ("+", "x")', () => {
-  it('is an accepted warning; the taxon is present without a quantity and the text is kept', () => {
-    const r = run([['A1', 'S', '+', 5], ['A2', 'S', 'x', 'x']], true);
+  const rows: Cell[][] = [['A1', 'S', '+', 5], ['A2', 'S', 'x', 'x']];
+  const answered = (a: 'absence' | 'leave-out' | 'present') => convert({ sheets: [sheetInput(fileOf([...HEADER, 'Latitude', 'Longitude', 'Date'], rows.map((r) => [...r, 55.1, 3.2, '2023-04-05'])), { quantity: { kind: 'count' }, countTexts: { '+': { answer: a, count: 1 }, x: { answer: a, count: 2 } } })], options: {} });
+
+  it('is a question that blocks, one per text: nothing is written for the cells until the person says what each means', () => {
+    const r = run(rows, true);
     const w = find(r.findings, 'CONV-TEXT-IN-TAXON-CELL');
     expect(w.map((f) => [f.severity, f.field, f.value, f.lines])).toEqual([
-      ['warning', 'Calanus finmarchicus', '+, x', [2, 3]],
-      ['warning', 'Oithona similis', 'x', [3]],
+      ['warning', 'Calanus finmarchicus', '+', [2]],
+      ['warning', 'Calanus finmarchicus', 'x', [3]],
     ]);
+    expect(w[1].params).toMatchObject({ count: 2, held: 2 });
+    expect(r.occurrences.filter((o) => o.occurrenceRemarks !== undefined)).toEqual([]);
+    expect(w.every((f) => policyOf(f) === 'block')).toBe(true);
+  });
+
+  it('answered "present": the taxon is present without a quantity and the text is kept', () => {
+    const r = answered('present');
     const plus = r.occurrences.find((o) => o.occurrenceRemarks === '+')!;
     expect(plus).toMatchObject({ occurrenceStatus: 'present', scientificName: 'Calanus finmarchicus' });
     expect(plus.individualCount).toBeUndefined();
     expect(plus.quantityText).toBeUndefined();
     expect(r.measurements.filter((m) => m.target.id === plus.id)).toEqual([]);
+    expect(find(r.findings, 'CONV-TEXT-IN-TAXON-CELL')).toEqual([]);
     expect(r.blocking).toEqual([]);
     expect(r.stats.textCells).toBe(3);
   });

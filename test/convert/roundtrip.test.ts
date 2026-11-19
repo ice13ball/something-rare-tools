@@ -20,6 +20,8 @@ interface Case {
   rows: Cell[][];
   quantity: QuantityDeclaration;
   edit?: Record<string, ColumnRole>;
+  /** The person's answers for the texts in the count columns (V3): every text of these fixtures means present, said by the person. */
+  presentTexts?: Record<string, number>;
 }
 
 const without = (header: string[], rows: Cell[][], drop: string): { header: string[]; rows: Cell[][] } => {
@@ -50,7 +52,7 @@ function withCodes(file: ParsedFile, codes: string[], header: string): ParsedFil
 }
 
 function input(file: ParsedFile, mapping: SheetMapping, c: Case): ConvertSheetInput {
-  return { file, sheet: file.sheets[0].name, mapping, shape: suggestConvertShape(mapping.columns) ?? 'wide', quantity: c.quantity };
+  return { file, sheet: file.sheets[0].name, mapping, shape: suggestConvertShape(mapping.columns) ?? 'wide', quantity: c.quantity, ...(c.presentTexts === undefined ? {} : { countTexts: Object.fromEntries(Object.entries(c.presentTexts).map(([t, n]) => [t, { answer: 'present' as const, count: n }])) }) };
 }
 
 function roundTrip(original: ParsedFile, c: Case): { a: ReturnType<typeof convert>; b: ReturnType<typeof convert>; csv: string } {
@@ -97,7 +99,7 @@ describe('CSV sources', () => {
   }
 
   it('presence marks and negative values come back as they were (no apostrophe is added to + or -)', () => {
-    const c: Case = { name: 'marks', header: ['Station', 'Latitude', 'Longitude', 'Date', 'Calanus finmarchicus', 'Oithona similis'], rows: [['S', 55, 3, '2020-01-01', '+', 4], ['S', 55, 3, '2020-01-02', 'x', 5], ['S', 56, 3, '2020-01-03', 3, -2]], quantity: { kind: 'count' } };
+    const c: Case = { name: 'marks', header: ['Station', 'Latitude', 'Longitude', 'Date', 'Calanus finmarchicus', 'Oithona similis'], rows: [['S', 55, 3, '2020-01-01', '+', 4], ['S', 55, 3, '2020-01-02', 'x', 5], ['S', 56, 3, '2020-01-03', 3, -2]], quantity: { kind: 'count' } , presentTexts: { '+': 1, x: 1 } };
     const original = textFile('marks.csv', csvText(c.header, c.rows, false));
     const { a, b, csv } = roundTrip(original, c);
     expect(csv).toContain(',+,');
@@ -119,7 +121,7 @@ describe('formula-looking text round-trips (the peer repro: a Uwagi column)', ()
     ['S5', '-54.60', '-5.30', '2020-01-05', '＝full', '\t=tab', "'already"],
   ];
   const taxon: ColumnRole = { kind: 'taxon', header: true };
-  const c: Case = { name: 'uwagi', header, rows, quantity: { kind: 'count' }, edit: { 'Calanus finmarchicus': taxon, 'Oithona similis': taxon } };
+  const c: Case = { name: 'uwagi', header, rows, quantity: { kind: 'count' }, edit: { 'Calanus finmarchicus': taxon, 'Oithona similis': taxon }, presentTexts: { '@notatka': 1, '=SUM(A1:A2)': 1, '-ok': 1, '+': 2, '＝full': 1, '=tab': 1 } };
   const original = (): ParsedFile => textFile('uwagi.csv', csvText(header, rows, false));
   const codesOf = (file: ParsedFile) => proposeSampleCodes(file, file.sheets[0], proposeConvertMapping(file.sheets[0], { decimalComma: false, date1904: false }))!;
 
@@ -177,6 +179,7 @@ describe('presence marks with spaces (round 4)', () => {
       header: ['Station', 'Latitude', 'Longitude', 'Date', 'Calanus finmarchicus', 'Oithona similis'],
       rows: [['S', 55, 3, '2020-01-01', '+ ', 4], ['S', 55, 3, '2020-01-02', ' +', 5], ['S', 56, 3, '2020-01-03', ' x', 2]],
       quantity: { kind: 'count' },
+      presentTexts: { '+': 2, x: 1 },
     };
     const original = textFile('spaced.csv', csvText(c.header, c.rows, false));
     const { a, b, csv } = roundTrip(original, c);

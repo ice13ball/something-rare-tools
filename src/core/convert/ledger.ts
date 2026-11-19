@@ -42,6 +42,8 @@ export type LedgerReason =
   | 'na-cell'
   | 'absent-mark'
   | 'bad-mark'
+  | 'count-text'
+  | 'text-cell'
   | 'no-station'
   | 'duplicate-level'
   | 'repeat-in-sample'
@@ -52,7 +54,6 @@ export type LedgerReason =
   | 'empty-parameter'
   | 'repeated-parameter'
   | 'quality-flag'
-  | 'text-cell'
   | 'position-no-taxon'
   | 'sample-no-taxon'
   | 'not-in-event'
@@ -72,8 +73,8 @@ export type LedgerReason =
 
 export const LEDGER_REASONS: readonly LedgerReason[] = [
   'ragged', 'summary-row', 'no-code', 'no-replicate', 'no-taxon', 'value-no-taxon', 'taxon-no-quantity', 'quantity-blank', 'nothing-to-record', 'duplicate-event', 'repeat-total', 'copy-dropped', 'zero', 'zero-with-biomass',
-  'negative', 'not-integer', 'cover-range', 'class-value', 'na-cell', 'absent-mark', 'bad-mark', 'no-station', 'duplicate-level', 'repeat-in-sample', 'absent-record', 'column-not-read', 'sheet-not-read', 'sheet-not-used',
-  'empty-parameter', 'repeated-parameter', 'quality-flag', 'text-cell', 'position-no-taxon', 'sample-no-taxon', 'not-in-event',
+  'negative', 'not-integer', 'cover-range', 'class-value', 'na-cell', 'absent-mark', 'bad-mark', 'count-text', 'text-cell', 'no-station', 'duplicate-level', 'repeat-in-sample', 'absent-record', 'column-not-read', 'sheet-not-read', 'sheet-not-used',
+  'empty-parameter', 'repeated-parameter', 'quality-flag', 'position-no-taxon', 'sample-no-taxon', 'not-in-event',
   'taxon-only-in-total', 'one-specimen-total', 'join-not-chosen', 'join-no-key', 'join-ambiguous', 'join-results-not-written', 'join-no-match', 'no-event-date',
   'turned-label', 'turn-no-name', 'turn-name-repeated', 'missing-code', 'summary-undecided',
 ];
@@ -572,7 +573,8 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
           written++;
           writtenWithoutValue++;
         } else if (text) nonNumbers++;
-        if (text) lose(pos, status === 'na-variant' ? 'na-cell' : 'text-cell');
+        // (the reason the builder gave this very cell, when it gave one: a text of a count column left out, held, or read as an absence says so; a cell nobody explained is a text cell)
+        if (text) lose(pos, status === 'na-variant' ? 'na-cell' : ((cf === undefined || cf[pos] === 0 ? undefined : LEDGER_REASONS[cf[pos] - 1]) ?? 'text-cell'));
         else if (typeof raw === 'string' && raw.trim() !== '') lose(pos, 'na-cell');
         continue;
       }

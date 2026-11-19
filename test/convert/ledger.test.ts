@@ -497,3 +497,20 @@ describe('ledger: the fate of every line, as data (what the list of rows not wri
     expect(l.lines.every((x) => x.cells !== undefined && x.cells.lost > 0)).toBe(true);
   });
 });
+
+describe('the reasons a cell can have fit the bits of a wide row', () => {
+  it('every reason given to a cell fate in the converter sources is among the first 31 reasons', async () => {
+    const { readdirSync, readFileSync } = await import('node:fs');
+    const { LEDGER_REASONS } = await import('../../src/core/convert/ledger');
+    const dir = new URL('../../src/core/convert/', import.meta.url).pathname;
+    const used = new Set<string>();
+    for (const f of readdirSync(dir).filter((x) => x.endsWith('.ts'))) {
+      const src = readFileSync(dir + f, 'utf8');
+      for (const m of src.matchAll(/(?:cellFate|\.cell)\([^;\n]*?'([a-z-]+)'\s*\)/g)) used.add(m[1]);
+    }
+    expect(used.size).toBeGreaterThan(8);
+    for (const reason of used) expect(LEDGER_REASONS.indexOf(reason as never), reason).toBeLessThan(31);
+    expect(LEDGER_REASONS.indexOf('count-text')).toBeLessThan(31);
+    expect(LEDGER_REASONS.indexOf('text-cell')).toBeLessThan(31);
+  });
+});

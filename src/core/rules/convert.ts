@@ -45,7 +45,8 @@ import type { RuleSpec } from './spec';
  *   CONV-JOIN-FILLED           count, column, from   one per column: count blank cells filled from sheet from (info)
  *   CONV-ID-DUPLICATE          kind, count, hint   kind = event | occurrence; value = an example id; lines = every row of a repeated id; hint = what to do
  *   CONV-TAB-IN-VALUE          count            field = column, value = an example (tab / line break shown as a space), lines = rows
- *   CONV-TEXT-IN-TAXON-CELL    count            field = column, value = the texts, lines = rows
+ *   CONV-TEXT-IN-TAXON-CELL    count, held, columns, indexes, columnTexts   value = ONE text (the cell's trimmed text, case kept), field = its first column, lines = rows; count = the cells of that text nobody has answered for, held = all the cells with that text in the sheet's quantity / taxon columns (the number an answer is given for), columns = their column names, indexes = their column indexes (comma list), columnTexts = `index:n,...` n = the cells of that whole column that hold a text (the number a per-column answer is given for); blocks the export until the person says absence, leave out or present (warning, block)
+ *   CONV-COUNT-TEXT-DECIDED    count, held, answer, columns, indexes, columnTexts   the person's answer to the above (info, show; "Ask again"): answer = absence | leave-out | present (variants CONV-COUNT-TEXT-DECIDED:leave-out / :present); optional via = column (the one answer given for the whole column), fromFile = yes
  *   CONV-TAXON-SAME-EVENT      count, columns, names   value = the scientific name, columns = the columns / rows that carry it in one sample; count = how many; names = the sheet's own spellings (verbatimIdentification)
  *   CONV-NA-SKIPPED            count            count = cells with NA (a missing-data token) in a taxon or quantity column of a wide sheet: no record, no lines (info); with rows = yes (a long sheet) count = rows with a taxon and an empty / NA quantity and no other value, lines = those rows (info)
  *   CONV-SAMPLE-PER-ROW        events, occurrences, ratio, shared   a long sheet with sample events for at least 80% of its occurrences (30 or more), at least half of the events sharing station, date and depth with another event: one sample split into an event per taxon row (warning, accept)
@@ -692,15 +693,41 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     id: 'CONV-TEXT-IN-TAXON-CELL',
     category: 'B',
     severity: 'warning',
-    exportPolicy: 'accept',
-    params: ['count'],
+    // export (/convert): a text where a count is expected is held back and nothing is written for it until the person says what it means, per text or for the whole column
+    exportPolicy: 'block',
+    params: ['count', 'held', 'columns', 'indexes', 'columnTexts'],
     plain: {
-      pl: `W kolumnie „{field}” zamiast liczby jest tekst ({value}) {+lineCount:w wierszu|w wierszach|w wierszach} {lines} (razem: {count}). Zapisano obecność taksonu bez ilości, a tekst trafił do uwag. Jeśli to nie znaczy „obecny”, popraw arkusz.`,
-      en: `Column "{field}" has text instead of a number ({value}) in {+lineCount:line|lines} {lines} ({count} in all). The taxon is recorded as present without a quantity and the text is kept in the remarks. If it does not mean "present", correct the sheet.`,
-      de: `Die Spalte „{field}“ enthält statt einer Zahl Text ({value}) in {+lineCount:der Zeile|den Zeilen} {lines} (insgesamt {count}). Das Taxon ist als anwesend ohne Menge erfasst, der Text steht in den Bemerkungen. Bedeutet er nicht „anwesend“, korrigieren Sie das Blatt.`,
-      fr: `La colonne « {field} » contient du texte au lieu d'un nombre ({value}) {+lineCount:à la ligne|aux lignes} {lines} ({count} au total). Le taxon est noté présent sans quantité et le texte est gardé dans les remarques. S'il ne signifie pas « présent », corrigez la feuille.`,
+      pl: `{count} {+count:komórka|komórki|komórek} z kolumn {columns} {+count:zawiera|zawierają|zawiera} tekst „{value}” tam, gdzie powinna być liczba. Powiedz, co on znaczy: brak (nieobecność), pomiń {+count:ją|je|je} albo obecność z tekstem w uwagach. Możesz też dać jedną odpowiedź dla każdego tekstu kolumny. Eksport czeka na odpowiedź.`,
+      en: `{count} {+count:cell|cells} of {columns} {+count:holds|hold} the text "{value}" where a number is expected. Say what it means: absence, leave {+count:it|them} out, or present with the text in the remarks. You can also give one answer for every text of a column. The export waits for the answer.`,
+      de: `{count} {+count:Zelle|Zellen} von {columns} {+count:enthält|enthalten} den Text „{value}“, wo eine Zahl erwartet wird. Sagen Sie, was er bedeutet: Abwesenheit, {+count:sie|sie} weglassen oder anwesend mit dem Text in den Bemerkungen. Auch eine Antwort für alle Texte einer Spalte ist möglich. Der Export wartet auf die Antwort.`,
+      fr: `{count} {+count:cellule|cellules} de {columns} {+count:contient|contiennent} le texte « {value} » là où un nombre est attendu. Dites ce qu'il signifie : absence, {+count:la|les} laisser de côté, ou présence avec le texte dans les remarques. Une réponse pour toute une colonne est aussi possible. L'export attend la réponse.`,
     },
-    technical: `{file}, {sheet}:{lines} field {field}: {count} non-numeric cell(s) in a taxon or quantity column ({value}). Each becomes an occurrence with occurrenceStatus present, no quantity, and the text in occurrenceRemarks.`,
+    technical: `{file}, {sheet}:{lines} field {field}: {count} of the {held} cell(s) with the text "{value}" in a quantity or taxon column ({columns}; column indexes {indexes}) are not numbers (NA tokens and NA variants are NA cells, not asked). Nothing is written for them (each is in the list of rows not written with the reason count-text) until the person answers for the text: absence (the cell is read as 0: occurrenceStatus absent with the full-list tick, else left out as a zero), leave out (left out, reason text-cell) or present (an occurrence present with the text in occurrenceRemarks), or gives one answer for every text of a column (the cells of each whole column that hold a text: {columnTexts}). A text is the cell's trimmed text, case kept; no word is read as an absence by the tool. An answer holds for the number of cells it was given for.`,
+  },
+  {
+    id: 'CONV-COUNT-TEXT-DECIDED',
+    category: 'B',
+    severity: 'info',
+    exportPolicy: 'show',
+    params: ['count', 'held', 'answer', 'columns', 'indexes', 'columnTexts'],
+    plain: {
+      pl: `Jak powiedziano, tekst „{value}” w {count} {+count:komórce|komórkach|komórkach} z kolumn {columns} oznacza brak: {+count:komórka jest czytana|komórki są czytane|komórki są czytane} jako 0 (nieobecny przy zaznaczonej pełnej liście, inaczej pominięty jak zero). „Zapytaj ponownie” cofa odpowiedź.`,
+      en: `As you said, the text "{value}" in {count} {+count:cell|cells} of {columns} means absence: {+count:the cell is|the cells are} read as 0 (absent with the full-list tick, otherwise left out like a zero). "Ask again" takes the answer back.`,
+      de: `Wie angegeben, bedeutet der Text „{value}“ in {count} {+count:Zelle|Zellen} von {columns} Abwesenheit: {+count:die Zelle wird|die Zellen werden} als 0 gelesen (abwesend mit dem Haken „vollständige Liste“, sonst wie eine Null weggelassen). „Erneut fragen“ nimmt die Antwort zurück.`,
+      fr: `Comme indiqué, le texte « {value} » dans {count} {+count:cellule|cellules} de {columns} signifie l'absence : {+count:la cellule est lue|les cellules sont lues} comme 0 (absent avec la case « liste complète », sinon laissé de côté comme un zéro). « Demander à nouveau » reprend la réponse.`,
+    },
+    plainIf: [
+      {
+        param: 'fromFile',
+        plain: {
+          pl: `Ta odpowiedź pochodzi z pliku towarzyszącego.`,
+          en: `This answer was read from the companion file.`,
+          de: `Diese Antwort stammt aus der Begleitdatei.`,
+          fr: `Cette réponse vient du fichier d'accompagnement.`,
+        },
+      },
+    ],
+    technical: `{file}, {sheet}:{lines} field {field}: {count} of the {held} cell(s) with the text "{value}" in a quantity or taxon column ({columns}; column indexes {indexes}; text cells per column {columnTexts}) were answered "{answer}" (CONV-TEXT-IN-TAXON-CELL asked). absence: the cell is read as the number 0 (occurrenceStatus absent, individualCount 0, with the full-list tick; otherwise left out as a zero, reason zero). leave-out: the cell is left out and listed (reason text-cell). present: an occurrence present with the text in occurrenceRemarks (CONV-COUNT-TEXT-DECIDED:present). via=column: the answer is the one given for the whole column. The answer holds for this number of cells only.`,
   },
   {
     id: 'CONV-TAXON-SAME-EVENT',
@@ -2670,6 +2697,26 @@ const quantityWhat = (what: string, lang: Lang): string => {
  * and renderConvertTechnical from the finding's own params; the registry keeps one rule per id.
  */
 export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, string>; technical: string }>> = {
+  // CONV-COUNT-TEXT-DECIDED when the person answered "leave out": the cells are left out and listed
+  'CONV-COUNT-TEXT-DECIDED:leave-out': {
+    plain: {
+      pl: `Jak powiedziano, tekst „{value}” w {count} {+count:komórce|komórkach|komórkach} z kolumn {columns} jest pominięty i {+count:jest|są|są} na liście niezapisanych komórek. „Zapytaj ponownie” cofa odpowiedź.`,
+      en: `As you said, the text "{value}" in {count} {+count:cell|cells} of {columns} is left out, and {+count:the cell is|the cells are} in the list of what was not written. "Ask again" takes the answer back.`,
+      de: `Wie angegeben, wird der Text „{value}“ in {count} {+count:Zelle|Zellen} von {columns} weggelassen; {+count:die Zelle steht|die Zellen stehen} in der Liste des Nicht-Geschriebenen. „Erneut fragen“ nimmt die Antwort zurück.`,
+      fr: `Comme indiqué, le texte « {value} » dans {count} {+count:cellule|cellules} de {columns} est laissé de côté et {+count:figure|figurent} dans la liste de ce qui n'est pas écrit. « Demander à nouveau » reprend la réponse.`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: {count} of the {held} cell(s) with the text "{value}" in a quantity or taxon column ({columns}) were answered "leave-out" (CONV-TEXT-IN-TAXON-CELL asked): nothing is written for them and each is in the list of rows not written with the reason text-cell. The answer holds for this number of cells only.`,
+  },
+  // CONV-COUNT-TEXT-DECIDED when the person answered "present": an occurrence present, the text in the remarks
+  'CONV-COUNT-TEXT-DECIDED:present': {
+    plain: {
+      pl: `Jak powiedziano, tekst „{value}” w {count} {+count:komórce|komórkach|komórkach} z kolumn {columns} oznacza obecność: zapisano obecność taksonu bez ilości, a tekst trafił do uwag. „Zapytaj ponownie” cofa odpowiedź.`,
+      en: `As you said, the text "{value}" in {count} {+count:cell|cells} of {columns} means present: the taxon is recorded as present without a quantity and the text is kept in the remarks. "Ask again" takes the answer back.`,
+      de: `Wie angegeben, bedeutet der Text „{value}“ in {count} {+count:Zelle|Zellen} von {columns} anwesend: das Taxon ist als anwesend ohne Menge erfasst, der Text steht in den Bemerkungen. „Erneut fragen“ nimmt die Antwort zurück.`,
+      fr: `Comme indiqué, le texte « {value} » dans {count} {+count:cellule|cellules} de {columns} signifie présent : le taxon est noté présent sans quantité et le texte est gardé dans les remarques. « Demander à nouveau » reprend la réponse.`,
+    },
+    technical: `{file}, {sheet}:{lines} field {field}: {count} of the {held} cell(s) with the text "{value}" in a quantity or taxon column ({columns}) were answered "present" (CONV-TEXT-IN-TAXON-CELL asked): each becomes an occurrence with occurrenceStatus present, no quantity, and the text in occurrenceRemarks. The answer holds for this number of cells only.`,
+  },
   // CONV-SUMMARY-ROW-SKIPPED when the person answered "keep": the rows are real stations or samples and are converted
   'CONV-SUMMARY-ROW-SKIPPED:keep': {
     plain: {
@@ -3180,6 +3227,7 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
 const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: string } | undefined => {
   if ((f.ruleId === 'CONV-DATE-ORDER-DECLARED' || f.ruleId === 'CONV-DATE-ORDER-CONTRADICTED') && f.params.variant === 'two-digit-year') return PROFILE_VARIANTS[`${f.ruleId}:two-digit-year`];
   if (f.ruleId === 'CONV-DATE-ORDER-UNDECLARED' && f.params.variant === 'two-digit-year') return PROFILE_VARIANTS['CONV-DATE-ORDER-UNDECLARED:two-digit-year'];
+  if (f.ruleId === 'CONV-COUNT-TEXT-DECIDED' && (f.params.answer === 'leave-out' || f.params.answer === 'present')) return PROFILE_VARIANTS[`CONV-COUNT-TEXT-DECIDED:${f.params.answer}`];
   if (f.ruleId === 'CONV-SUMMARY-ROW-SKIPPED' && f.params.answer === 'keep') return PROFILE_VARIANTS['CONV-SUMMARY-ROW-SKIPPED:keep'];
   if (f.ruleId === 'CONV-ROW-COPIES' && f.params.own === 'yes') return PROFILE_VARIANTS['CONV-ROW-COPIES:own'];
   if ((f.ruleId === 'CONV-ROW-COPIES' || f.ruleId === 'CONV-ROW-COPIES-DROPPED') && f.params.nosum === 'yes') return PROFILE_VARIANTS[`${f.ruleId}:nosum`];

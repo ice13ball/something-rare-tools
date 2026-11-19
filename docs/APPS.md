@@ -1668,8 +1668,11 @@ For each taxon cell (`convert/build.ts`):
   is not written and the rows are listed (`CONV-ZERO-WITH-BIOMASS`, a warning to accept), so neither value is kept
   silently;
 - a **non-integer** in a declared count blocks (`CONV-COUNT-NOT-INTEGER`);
-- a **text cell** (`+`, `x`) becomes an occurrence with status present, no quantity, and the text
-  in `occurrenceRemarks`, as a warning to accept (`CONV-TEXT-IN-TAXON-CELL`);
+- a **text cell** (`+`, `x`, `absent`, `<0.5`) in a count column is asked, one question per distinct text
+  (`CONV-TEXT-IN-TAXON-CELL`, blocks): the person says *absence* (read as 0), *leave out* (listed, reason
+  `text-cell`) or *present* (status present, no quantity, the text in `occurrenceRemarks`), or gives one answer
+  for every text of a column; no word is read as an absence by the tool, and the answers are reported by
+  `CONV-COUNT-TEXT-DECIDED`;
 - otherwise status **present**, with the quantity as declared in 8.3.
 
 The same taxon twice in one event is warned (`CONV-TAXON-SAME-EVENT`). **Presence-only species
@@ -1689,7 +1692,7 @@ full-species-list tick** (otherwise nothing is written, said as cells marked abs
 above 1, a negative number, other text) is **not guessed**: `CONV-PRESENCE-VALUE` blocks, naming the
 column, the values and the rows. The proposer takes a column of `+ x * ✓` marks for a species
 column; a column of words (`yes`, `tak`) is given the species role in the role table. Unticked,
-nothing changes (a text cell stays a present record with a warning, `CONV-TEXT-IN-TAXON-CELL`). A sheet with **measured variables and no taxon column, no
+a text cell is asked about as in any count column (`CONV-TEXT-IN-TAXON-CELL`). A sheet with **measured variables and no taxon column, no
 quantity column and no unconfirmed taxon candidate** (typically environmental data only) gets one
 blocking finding too, `CONV-ENV-ONLY-SHEET`, with a link to `/check`, in place of
 `CONV-NO-TAXON`, `CONV-QUANTITY-UNDECLARED` and `CONV-NO-OCCURRENCES`. Its text covers the other possibility

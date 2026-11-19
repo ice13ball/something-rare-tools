@@ -57,6 +57,8 @@ export const REASON_KIND: Record<LedgerReason, ReasonKind> = {
   'cover-range': 'covered',
   'class-value': 'covered',
   'bad-mark': 'covered',
+  // a text in a count cell the person has not answered for: held, nothing is written for it; CONV-TEXT-IN-TAXON-CELL is the one question per text
+  'count-text': 'covered',
   'sheet-not-read': 'covered',
   // two description rows of one key that differ: CONV-JOIN-AMBIGUOUS is the one question, found because the merge's findings are convert's own
   'join-ambiguous': 'covered',
@@ -108,6 +110,7 @@ export const COVERED_BY: Partial<Record<LedgerReason, readonly string[]>> = {
   'cover-range': ['CONV-COVER-RANGE'],
   'class-value': ['CONV-CLASS-VALUE'],
   'bad-mark': ['CONV-PRESENCE-VALUE'],
+  'count-text': ['CONV-TEXT-IN-TAXON-CELL'],
   'sheet-not-read': ['CONV-LONG-UNSUPPORTED', 'CONV-SHEET-TRANSPOSED', 'CONV-SHEET-UNITS-ROW'],
   'join-ambiguous': ['CONV-JOIN-AMBIGUOUS'],
   'join-no-match': ['CONV-JOIN-NO-MATCH'],
@@ -139,8 +142,8 @@ export const LISTED_BY: Partial<Record<LedgerReason, readonly string[]>> = {
   // a sheet no sample or taxon column reads from: the ledger lists the sheet, no finding names it
   'sheet-not-used': [],
   'quality-flag': ['CONV-LONG-FLAG-PARAMETERS'],
-  // a text in a count cell: the text goes to the occurrence's remarks and is listed by CONV-TEXT-IN-TAXON-CELL
-  'text-cell': ['CONV-TEXT-IN-TAXON-CELL'],
+  // a text in a count cell the person answered "leave out" for (CONV-COUNT-TEXT-DECIDED says it), or a text a value column cannot hold (the question of a count column is CONV-TEXT-IN-TAXON-CELL)
+  'text-cell': ['CONV-TEXT-IN-TAXON-CELL', 'CONV-COUNT-TEXT-DECIDED'],
   // wide-sheet rows with only a position or only a sample code: understood as spacers or headers and listed in the ledger (ConvertLedger "unplaced"); no finding is raised
   'position-no-taxon': [],
   'sample-no-taxon': [],
