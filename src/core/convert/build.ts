@@ -814,6 +814,11 @@ function isUnnamedColumn(sin: ConvertSheetInput, sheet: RawSheet, index: number)
   return sheet.unnamedFrom !== undefined && index >= sheet.unnamedFrom && !(sin.sampleJoin !== undefined && index >= sin.sampleJoin.results.width);
 }
 
+/** A workbook's column right of the last named header cell (IN-COLUMN-NO-HEADER): it has no IN-HEADER-SHORT behind it, so it is said as a column with no name, by its letter, like an empty header. */
+function isWorkbookNoHeader(sin: ConvertSheetInput, sheet: RawSheet, index: number): boolean {
+  return sin.file.kind === 'xlsx' && isUnnamedColumn(sin, sheet, index);
+}
+
 function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typeof specsOf>, ownCount = false): string[] {
   const used = readColumns(sin, cols, specs, ownCount);
   const consumed = sin.sampleJoin?.consumed;
@@ -824,8 +829,9 @@ function unreadColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typ
   const holdsData = (index: number): boolean => sheet !== undefined && sheet.rows.some((r) => !isBlankCell(r.cells[index] ?? null));
   const left = sin.mapping.columns.flatMap((c) => {
     if (c.role.kind !== 'ignore' || used.has(c.index) || consumed?.has(c.index) === true) return [];
-    if (sheet !== undefined && isUnnamedColumn(sin, sheet, c.index)) return [];
-    if (c.header.trim() === '') return holdsData(c.index) && !chosenIgnore(sin, c.index) ? [`[${columnLetters(c.index)}]`] : [];
+    const noHeader = sheet !== undefined && isWorkbookNoHeader(sin, sheet, c.index);
+    if (sheet !== undefined && !noHeader && isUnnamedColumn(sin, sheet, c.index)) return [];
+    if (c.header.trim() === '' || noHeader) return holdsData(c.index) && !chosenIgnore(sin, c.index) ? [`[${columnLetters(c.index)}]`] : [];
     if (sin.profile === undefined && isQuantityHeader(c.header) && holdsData(c.index) && !chosenIgnore(sin, c.index)) return [c.header.trim()];
     return [];
   });
@@ -849,8 +855,9 @@ function ignoredColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<ty
   const proposed: string[] = [];
   for (const c of sin.mapping.columns) {
     if (c.role.kind !== 'ignore' || used.has(c.index) || sin.sampleJoin?.consumed.has(c.index) === true) continue;
-    if (isUnnamedColumn(sin, sheet, c.index)) continue;
-    const header = c.header.trim();
+    const noHeader = isWorkbookNoHeader(sin, sheet, c.index);
+    if (!noHeader && isUnnamedColumn(sin, sheet, c.index)) continue;
+    const header = noHeader ? '' : c.header.trim();
     const holds = sheet.rows.some((r) => !isBlankCell(r.cells[c.index] ?? null));
     // a column with an empty header is named by CONV-COLUMN-NOT-EXPORTED while it is the converter's proposal; the person's own is named here by its letter
     if (header === '') {

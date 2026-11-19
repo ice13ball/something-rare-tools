@@ -62,6 +62,7 @@ const EXEMPT: Record<string, string> = {
   'IN-DATE1904': '(c) the workbook states its own date system; the reader only follows it',
   'IN-HEADER-UNITS-READ': '(c) a row of units under the header; a row with a number is never folded (parse/shared.ts foldUnitsRow)',
   'IN-PERCENT-READ': "(c) the cell's own number format",
+  'IN-COLUMN-NO-HEADER': "(c) the cell's column; its fate on /convert is the role's own finding (CONV-COLUMN-NOT-EXPORTED / -IGNORED)",
   'IN-HEADER-UNITS-NAMED': '(c) the same fold, the units are named in the header',
   'ROW-LON-360': '(c) a longitude written 0-360 is the same place, no value is lost',
   'ROW-DM-COORDS': '(c) degrees and minutes are read as written',

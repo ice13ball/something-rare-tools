@@ -3,7 +3,8 @@
 import * as XLSX from 'xlsx';
 import type { Finding, ParsedFile, RawCell, RawRow, RawSheet } from '../types';
 import { makeFinding } from '../rules/registryCheck';
-import { ParseError, foldStatisticSubheader, foldUnitsRow } from './shared';
+import { ParseError, foldStatisticSubheader, foldUnitsRow, unnamedColumn } from './shared';
+import { columnLetters } from '../convert/columnLetters';
 
 type Grid = Map<number, Map<number, XLSX.CellObject>>;
 
@@ -106,10 +107,13 @@ function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, finding
   }
 
   const rows: RawRow[] = [];
-  const numeric = new Array<number>(width).fill(0);
-  const dated = new Array<number>(width).fill(0);
-  const timed = new Array<number>(width).fill(0);
-  const fractional = new Array<boolean>(width).fill(false);
+  // the widest row below the header (only cells with a value count): cells right of the header are read too, as an unnamed column
+  let reach = width;
+  for (const r of rowsAsc) if (r > headerRow) reach = Math.max(reach, lastCol(grid.get(r)!, true) + 1);
+  const numeric = new Array<number>(reach).fill(0);
+  const dated = new Array<number>(reach).fill(0);
+  const timed = new Array<number>(reach).fill(0);
+  const fractional = new Array<boolean>(reach).fill(false);
   // per row, the columns of its numeric cells that have no date format (kept only for the columns that end up date-formatted)
   const plainOf = new Map<RawRow, number[]>();
   const percent = new Map<number, { count: number; line: number; stored: string; shown: string }>();
@@ -124,7 +128,7 @@ function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, finding
       const v = cellValue(cell);
       if (v === null) continue;
       out[c] = v;
-      if (typeof v === 'number' && c < width) {
+      if (typeof v === 'number') {
         numeric[c]++;
         if (isPercentCell(cell)) {
           // the note names the first cell the reading changed; a column of zeros changes nothing and gets none
@@ -184,6 +188,24 @@ function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, finding
       fractional.push(false);
     }
   }
+  // cells right of the last named header cell are a column without a name, never dropped: the header grows to the last one that holds a value in a row kept (a blank in the MIDDLE of the header is left as it is)
+  let unnamedFrom: number | undefined;
+  let widest = header.length;
+  for (const row of rows) for (let c = row.cells.length - 1; c >= widest; c--) if (row.cells[c] !== null) widest = c + 1;
+  if (widest > header.length) {
+    unnamedFrom = header.length;
+    for (let c = header.length; c < widest; c++) header.push(unnamedColumn(c + 1));
+    while (numeric.length < header.length) {
+      numeric.push(0);
+      dated.push(0);
+      timed.push(0);
+      fractional.push(false);
+    }
+    for (let c = unnamedFrom; c < header.length; c++) {
+      const lines = rows.filter((row) => row.cells[c] !== undefined && row.cells[c] !== null).map((row) => row.line);
+      if (lines.length > 0) findings.push(makeFinding('IN-COLUMN-NO-HEADER', { file: fileName, sheet: name, lines, params: { column: columnLetters(c), count: lines.length } }));
+    }
+  }
   for (const [c, p] of [...percent].sort((a, b) => a[0] - b[0])) {
     if (c < header.length && p.line > 0) findings.push(makeFinding('IN-PERCENT-READ', { file: fileName, sheet: name, lines: [p.line], params: { column: header[c], count: p.count, stored: p.stored, shown: p.shown } }));
   }
@@ -200,7 +222,7 @@ function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, finding
   const timeAll = header.map((_, c) => dateAll[c] && timed[c] === numeric[c]);
   // some numeric cell of the column has a date format that shows a fraction of a second (ss.0, ss.000): a fraction in the column is a real one. Set only when there is one.
   const fractionShown = header.map((_, c) => fractional[c] === true);
-  return { name, header, headerLine: headerRow + 1, rows, ...(fold || unitsFold ? { subHeaderLine: (fold2 ?? unitsFold ?? fold)!.line } : {}), ...(unitsFold ? { unitsRowLine: unitsFold.line } : {}), dateFormatted, ...(timeFormatted.some(Boolean) ? { timeFormatted } : {}), ...(dateAll.some(Boolean) ? { dateAll } : {}), ...(timeAll.some(Boolean) ? { timeAll } : {}), ...(fractionShown.some(Boolean) ? { fractionShown } : {}) };
+  return { name, header, headerLine: headerRow + 1, rows, ...(unnamedFrom === undefined ? {} : { unnamedFrom }), ...(fold || unitsFold ? { subHeaderLine: (fold2 ?? unitsFold ?? fold)!.line } : {}), ...(unitsFold ? { unitsRowLine: unitsFold.line } : {}), dateFormatted, ...(timeFormatted.some(Boolean) ? { timeFormatted } : {}), ...(dateAll.some(Boolean) ? { dateAll } : {}), ...(timeAll.some(Boolean) ? { timeAll } : {}), ...(fractionShown.some(Boolean) ? { fractionShown } : {}) };
 }
 
 /** A date format that shows a fraction of a second: "hh:mm:ss.000", "ss.0", "[ss].000", "mm:ss.00". Quoted text, escaped characters, `[$locale]` brackets, `_x` (a space) and `*x` (a fill) are ignored. */
@@ -221,8 +243,7 @@ export function isTimeOnlyFormat(z: string): boolean {
 
 /**
  * Reads .xlsx, legacy .xls and OpenDocument .ods (all through SheetJS). Row numbers are Excel row numbers (taken from the cell address), columns stay
- * aligned to column A, a row may be longer than the header when cells sit to its right (never trimmed or
- * realigned; no finding is raised for that). Throws ParseError when the workbook cannot be read.
+ * aligned to column A; cells right of the last named header cell become an unnamed column (`Column N`, `unnamedFrom`, IN-COLUMN-NO-HEADER with its lines), nothing is trimmed or realigned. Throws ParseError when the workbook cannot be read.
  */
 export function parseXlsx(bytes: Uint8Array, fileName: string): ParsedFile {
   let wb: XLSX.WorkBook;

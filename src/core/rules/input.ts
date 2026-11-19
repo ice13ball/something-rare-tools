@@ -31,6 +31,7 @@ import type { RuleSpec } from './spec';
  *   IN-HEADER-UNITS-READ    count, example    columns that got a unit from the row under the header (at least 1; the row's line is in `lines`), and the first of them as it now reads ('a [h]'); file + sheet
  *   IN-HEADER-UNITS-NAMED   (none)   a row of units under a header whose names all carry their units already: not a data row (the row's line is in `lines`); file + sheet
  *   IN-PERCENT-READ         column, count, stored, shown   a column of an Excel sheet whose numeric cells have a percent number format and were read as shown (count cells; the first stored 0.95 read as 95); lines = the first such cell; file + sheet
+ *   IN-COLUMN-NO-HEADER     column, count   a column of an Excel sheet with values right of the last named header cell: its letter, the rows with a value (lines); read as an unnamed column; file + sheet
  *   IN-DATE1904             (none)
  *   IN-PANGAEA-EVENT-USED   columns, events, count   a PANGAEA table without position/date columns got Latitude, Longitude and/or Date/Time from its Event(s) header block (columns = the names added, events = how many events the block lists, count = rows filled)
  *   IN-PANGAEA-EVENT-NOT-USED events    the block was not used; optional several (= events) = several events and no Event column to match them, track = the one event's position is a track
@@ -448,6 +449,20 @@ export const INPUT_RULES: readonly RuleSpec[] = [
       fr: `{count} {+count:cellule|cellules} de la colonne « {column} » {+count:est mise|sont mises} en forme de pourcentage et {+count:a été lue|ont été lues} {+count:telle qu'affichée|telles qu'affichées} ({stored} est lu comme {shown}).`,
     },
     technical: `{file} sheet {sheet}: {count} numeric cells of column "{column}" have a number format with a percent sign; the stored number's decimal point was moved two places right (first: {stored} read as {shown}). The cell's formatted text (rounded) is not used.`,
+  },
+  {
+    id: 'IN-COLUMN-NO-HEADER',
+    category: 'input',
+    severity: 'warning',
+    exportPolicy: 'show',
+    params: ['column', 'count'],
+    plain: {
+      pl: `Kolumna {column} ma wartości w {count} {+count:wierszu|wierszach|wierszach}, ale nie ma nazwy w nagłówku ({+lines:wiersz|wiersze|wiersze} {lines}). Jest odczytana jako kolumna bez nazwy; nadaj jej nazwę w pliku albo powiedz w /convert, co zawiera.`,
+      en: `Column {column} has values in {count} {+count:row|rows} but no name in the header ({+lines:line|lines} {lines}). It is read as a column without a name; give it a name in the file, or say on /convert what it holds.`,
+      de: `Die Spalte {column} hat Werte in {count} {+count:Zeile|Zeilen}, aber keinen Namen in der Kopfzeile ({+lines:Zeile|Zeilen} {lines}). Sie wird als Spalte ohne Namen gelesen; geben Sie ihr in der Datei einen Namen oder sagen Sie in /convert, was sie enthält.`,
+      fr: `La colonne {column} a des valeurs dans {count} {+count:ligne|lignes} mais pas de nom dans l'en-tête ({+lines:ligne|lignes} {lines}). Elle est lue comme une colonne sans nom ; donnez-lui un nom dans le fichier, ou dites sur /convert ce qu'elle contient.`,
+    },
+    technical: `{file} sheet {sheet}: column {column} holds a value in {count} data rows (lines {lines}) but the header row has no name there or to its right; read as an unnamed column ("Column N"), every cell kept where it is.`,
   },
   {
     id: 'IN-DATE1904',
