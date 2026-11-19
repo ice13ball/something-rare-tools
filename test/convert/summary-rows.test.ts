@@ -230,6 +230,7 @@ describe('a pivoted and a turned sheet name the lines of the file, and the ledge
     const list = notWritten(sin, r).filter((x) => x.reason === 'summary-row');
     expect(list.map((x) => x.line)).toEqual([4, 5]);
     expect(list.every((x) => x.status === 'understood')).toBe(true);
+    expect(renderConvertPlain(find(r.findings, 'CONV-SUMMARY-ROW-SKIPPED')[0], 'en')).toMatch(/^As you chose, 1 row \(Total\) in lines 4–5 was left out as a summary row/);
     balanced(r);
     expect(r.measurements.map((m) => String((m as { value?: unknown }).value ?? '')).join(' ')).not.toMatch(/16\.2|66\.4/);
   });
@@ -243,7 +244,8 @@ describe('a pivoted and a turned sheet name the lines of the file, and the ledge
     const q = find(asked.findings, 'CONV-SUMMARY-ROW-UNDECIDED');
     expect(q).toHaveLength(1);
     expect(q[0].value).toBe('Total');
-    expect((q[0].lines ?? []).every((l) => l < 1000)).toBe(true);
+    // the sample names are in the header line of the source (line 1), the line a turned sheet's sample comes from
+    expect(q[0].lines).toEqual([1]);
     balanced(asked);
     const sin = sheetInput(of, { ...base, summaryRows: { answer: 'leave-out', count: Number(q[0].params.count) } });
     const r = convert({ sheets: [sin], options: {} });
@@ -291,12 +293,10 @@ describe('a joined workbook: summary rows of the description sheet', () => {
   it('a sample called Total that only the description has (no counts) is held and asked about too', () => {
     const { out, result } = run(book(counts, [...samples.slice(0, 2), ['Total', 'ST-9', '2021-05-06', 61.9, 4.9, 30]]));
     const q = find(result.findings, 'CONV-SUMMARY-ROW-UNDECIDED');
-    expect(q.length).toBeGreaterThan(0);
-    expect(q.some((x) => x.value === 'Total' || String(x.value).includes('Total'))).toBe(true);
     for (const l of result.ledger) expect(l.rows.unexplained, l.sheet).toBe(0);
     const dbg = [...notWrittenRows(result.ledger, out.sheets)].map((x) => `${x.sheet}:${x.line}:${x.reason}:${x.status}`);
-    // the same question under both sheet names (joinLines splits the lines, the count stays the question's), with the same number to answer for: the rows of the converted sheet
-    expect(q.map((x) => [x.sheet, x.lines, x.params.count, x.params.held])).toEqual([['Counts', [3], 2, 2], ['Samples', [4], 2, 2]]);
+    // the same question under both sheet names (joinLines splits the lines, each half counts its own rows), with the same number to answer for: the rows of the converted sheet
+    expect(q.map((x) => [x.sheet, x.lines, x.params.count, x.params.held])).toEqual([['Counts', [3], 1, 2], ['Samples', [4], 1, 2]]);
     expect(dbg).toContain('Samples:4:summary-undecided:needs-decision');
     expect(result.events.some((e) => e.id === 'Total')).toBe(false);
     const answered = book(counts, [...samples.slice(0, 2), ['Total', 'ST-9', '2021-05-06', 61.9, 4.9, 30]]);
@@ -333,3 +333,31 @@ describe('the sums of other findings are computed after the answer', () => {
     expect(kept.occurrences.length).toBe(named.occurrences.length);
   });
 });
+
+describe('fix round 1', () => {
+  it('keep for the dated rows and the undated-rows leave-out hold together: held is the same in both passes', () => {
+    const rows: Cell[][] = [
+      ['CR', 'Somme', 'a', 50.2, 1.6, '2020-05-01', 4, 5],
+      ['CR', 'Somme', 'b', 50.2, 1.6, null, 6, 7],
+      ['CR', 'Authie', 'c', 50.3, 1.5, '2020-05-03', 1, 2],
+    ];
+    const r = convert({ sheets: [wide(rows, { summaryRows: { answer: 'keep', count: 2 }, leaveOut: [{ reason: 'no-event-date', count: 1 }] })], options: {} });
+    expect(find(r.findings, 'CONV-SUMMARY-ROW-UNDECIDED')).toEqual([]);
+    const s = find(r.findings, 'CONV-SUMMARY-ROW-SKIPPED');
+    expect(s).toHaveLength(1);
+    expect(s[0]).toMatchObject({ lines: [2], params: { answer: 'keep', held: 2 } });
+    expect(notWritten(wide(rows), r).map((x) => [x.line, x.reason])).toEqual([[3, 'no-event-date']]);
+    expect(judge(r.findings).blocking.map((x) => x.ruleId)).not.toContain('CONV-SUMMARY-ROW-UNDECIDED');
+  });
+
+  it('Polish agrees in number for 1, 2, 5 and 12 rows, and the keep note says przekonwertowany for one', () => {
+    const f = (id: string, n: number, extra: Record<string, string | number> = {}) => renderConvertPlain({ ...makeFinding(id, n), params: { count: n, held: n, ...extra } } as never, 'pl');
+    expect(f('CONV-SUMMARY-ROW-UNDECIDED', 5)).toMatch(/^5 wierszy \(v\) w wierszach 3–4 wygląda jak suma/);
+    expect(f('CONV-SUMMARY-ROW-UNDECIDED', 12)).toMatch(/^12 wierszy .* wygląda jak suma/);
+    expect(f('CONV-SUMMARY-ROW-SKIPPED', 1, { answer: 'keep' })).toMatch(/został przekonwertowany\./);
+    expect(f('CONV-SUMMARY-ROW-SKIPPED', 2, { answer: 'keep' })).toMatch(/zostały przekonwertowane\./);
+    expect(f('CONV-SUMMARY-ROW-SKIPPED', 5, { answer: 'keep' })).toMatch(/zostało przekonwertowanych\./);
+  });
+});
+
+const makeFinding = (id: string, n: number): Finding => ({ ruleId: id, severity: 'info', file: 'f.csv', sheet: 'S', value: 'v', lines: [3, 4, 5, 6, 7, 8].slice(0, n === 1 ? 1 : 2), params: {} }) as Finding;

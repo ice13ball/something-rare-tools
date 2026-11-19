@@ -2270,7 +2270,7 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
       const held = new Map<number, string>();
       const scan = metaParser(file, sheet, specs, new Collector(fileName), { whenUtc: isUtcBySource(file, specs.when?.header), ...(sin.dayMonthOrder === undefined ? {} : { dayMonthOrder: sin.dayMonthOrder }), ...(sin.yyOrder === undefined ? {} : { yyOrder: sin.yyOrder }) });
       for (const row of sheet.rows) {
-        if (ragged.has(row.line) || noDateLeftOut?.has(row.line) === true) continue;
+        if (ragged.has(row.line)) continue;
         const m = scan(row);
         const keyRead = readKey?.(row);
         const code = keyRead === undefined ? m.sampleId : keyRead.id;
