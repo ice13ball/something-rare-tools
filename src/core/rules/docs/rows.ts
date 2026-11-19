@@ -14,7 +14,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A latitude lies outside the range of the globe, -90 to 90 degrees. No place has such a latitude, so the value is a typing error, a swapped column or a unit mistake.',
     fires:
-      'For every row of a sheet whose latitude column holds a number below -90 or above 90. One finding per sheet lists the lines and shows the first value as written. Text in the cell is not judged here, that is ROW-NON-NUMERIC.',
+      'For every row of a sheet whose latitude column holds a number below -90 or above 90. One finding per sheet lists the lines and shows the first value as written. Text in the cell is not judged here, that is ROW-NON-NUMERIC; so is a value with a hemisphere letter (95.5 N) or in degrees and minutes. Only a plain number is judged here.',
     example:
       'A latitude column of a plankton table reads 54.31, 54.33, 154.35 on lines 5, 6 and 7. Line 7 is reported with the value 154.35, a digit typed twice.',
     action:
@@ -24,7 +24,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A longitude lies outside -180 to 180 degrees after the tool has tried the 0 to 360 scale. No place has such a longitude, so the value is a typing error, a swapped column or a unit mistake.',
     fires:
-      'For every row whose longitude is a number below -180 or above 360 (values from 180 to 360 are first read on the 0 to 360 scale and only noted as ROW-LON-360). One finding per sheet lists the lines and the first value as written.',
+      'For every row whose longitude is a number below -180 or above 360 (values from 180 to 360 are first read on the 0 to 360 scale and only noted as ROW-LON-360). One finding per sheet lists the lines and the first value as written. Only a plain number is judged: a value with a hemisphere letter (200 W) or in degrees and minutes is ROW-NON-NUMERIC.',
     example:
       'A longitude column holds 18.62, 18.65 and 1865.0 on lines 10, 11 and 12. Line 12 is reported: a decimal point was lost.',
     action:
@@ -74,7 +74,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A row has more or fewer values than the header has columns. Its values are shifted against the header, so no cell of the row can be trusted.',
     fires:
-      'When the file is read: for each line whose field count differs from the header field count. The finding gives the expected count and the count of the first listed line. The rows are kept as found and are not realigned.',
+      'When the file is read: for each line whose field count differs from the header field count. The finding gives the expected count and the count of the first listed line. The rows are kept as found and are not realigned. Not raised when at least 95 percent of the rows (3 rows or more) are wider than the header and the extra cells hold values (IN-HEADER-SHORT extends the header instead), nor when every row only ends with an empty extra field (a trailing delimiter). Never raised for a workbook sheet.',
     example:
       'A header has 8 columns. Line 31 has 9 values because a comment contains an unquoted comma. Line 31 is reported with expected 8 and found 9.',
     action:
@@ -86,7 +86,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     fires:
       'For a cell of a numeric column (a coordinate, a depth, a measurement) that is neither a number nor one of the recognised missing-value marks (empty, NA, N/A, NaN, nd, n.d., -, --, null). One finding per column lists the lines and an example. Thousands separators are not accepted, 1,234.5 is text unless the file uses decimal commas.',
     example:
-      'A depth column holds 10, 20, below detection, 40. The cell below detection on line 3 is reported with that text.',
+      'A depth column holds 10, 20, below detection, 40. The cell below detection on line 4 is reported with that text.',
     action:
       'Replace the text with a number, or empty the cell. In /convert this finding does not block the export, but it needs your acceptance, one tick for the rule; the cell is not written as a number.',
   },
@@ -96,7 +96,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     fires:
       'For a numeric cell whose letters and digits, without separators, are only the letters NA repeated, and which is not one of the standard marks. One finding per column lists the lines and an example.',
     example:
-      'A salinity column holds 33.1, NANA, 33.4. NANA on line 2 is read as missing and reported.',
+      'A salinity column holds 33.1, NANA, 33.4. NANA on line 3 is read as missing and reported.',
     action:
       'Use one consistent mark, or an empty cell. In /convert this finding is only shown, and the cell is treated as missing.',
   },
@@ -104,7 +104,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'One station name appears at positions that differ by a typed digit, swapped axes or a sign. A station is one place, so one of the positions is probably wrong.',
     fires:
-      'For rows of one station name, compared within one cruise or, without a cruise column, within one calendar year, when two positions differ in one of three ways. A typed digit: one coordinate differs by a whole number of degrees and the other keeps its whole degree; the shifted coordinate needs two written decimals (one inside a cruise, not .0 or .5) and there is no distance limit. Exchanged axes: each position is the other with latitude and longitude swapped. A sign: as written the positions are at least 100 km apart, and with one sign flipped they are within 50 km and at least ten times closer. Placeholder names such as unknown do not count.',
+      'For rows of one station name, compared within one cruise or, without a cruise column, within one calendar year, when two positions differ in one of three ways. A typed digit: one coordinate differs by a whole number of degrees and the other keeps its whole degree; the shifted coordinate needs two written decimals (one inside a cruise, not .0 or .5) and there is no distance limit. Exchanged axes: each position is the other with latitude and longitude swapped. A sign: as written the positions are at least 100 km apart, and with one sign flipped they are within 50 km and at least ten times closer. Placeholder names such as unknown do not count. Among rows with neither a cruise nor a date a typed digit is not looked for; such a station gets ROW-STATION-SPREAD instead.',
     example:
       'Station A3 is at 76.9 N 15.5 E on 9 rows and at 76.9 N -15.5 E on 14 rows. The finding lists both positions and says that the longitude differs only by its sign.',
     action:
@@ -114,7 +114,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'One station name has positions more than 10 km apart. A station is usually one place, but a name that stands for an area, a transect or a cruise can legitimately span more.',
     fires:
-      'When the largest distance between the positions of one station name, within one cruise or one calendar year, is above 10 km, and either it is not above 1000 km or the name is an expedition or cruise label, or a generic label such as Sta. 1 with no cruise or date to anchor it; those stay a note even above 1000 km. The finding gives the distance rounded to km and the positions. It is an information note.',
+      'When the largest distance between the positions of one station name, within one cruise or one calendar year, is above 10 km, and either it is not above 1000 km or the name is an expedition or cruise label, or a generic label such as Sta. 1 with no cruise or date to anchor it; those stay a note even above 1000 km. Not raised when a pair of positions matches ROW-STATION-MOVED (only that is raised); placeholder names such as unknown and positions with latitude equal to longitude are skipped. The finding gives the distance rounded to km and the positions. It is an information note.',
     example:
       'Station T1 has positions 38 km apart, because the name was used for every point of a transect. The note gives 38 km.',
     action:
@@ -174,9 +174,9 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'Two consecutive events are so far apart in space compared to time that a ship would need more than 40 knots. It is not clear which of the two is wrong.',
     fires:
-      'For a single pair of consecutive events of one cruise, for example the first or the last event or two wrong events in a row, when the speed exceeds 40 knots and neither event is already in a ship-speed finding (ROW-SHIP-SPEED or ROW-SHIP-SPEED-UNUSUAL).',
+      'For a single pair of consecutive events of one cruise, for example the first or the last event or two wrong events in a row, when the speed exceeds 40 knots and neither event is already in a ship-speed finding (ROW-SHIP-SPEED or ROW-SHIP-SPEED-UNUSUAL). A cruise (or declared single cruise) with fewer than three events is not judged at all, so a pair alone never fires.',
     example:
-      'The first station of a cruise is at 60.1 N 5.2 E on 3 May at 10:00 and the second at 54.0 N 8.0 E at 12:00. The pair is reported, because the speed is about 190 knots.',
+      'A cruise has three stations: the first at 60.1 N 5.2 E on 3 May at 10:00, the second at 54.0 N 8.0 E at 12:00 and the third at 54.1 N 8.1 E at 14:00. The first pair is reported, because the speed is about 190 knots.',
     action:
       'Decide which of the two events has the wrong position or time and correct it. /check only: /convert passes no cruise to this check, so this finding never appears there.',
   },
@@ -184,9 +184,9 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A date cell cannot be read as a date. Without a date the event cannot be placed in time, so it is lost from the output.',
     fires:
-      'For a cell of the date column that is none of the accepted forms: ISO 8601, YYYY/MM/DD, DD.MM.YYYY, an unambiguous DD/MM/YYYY, YY-MM-DD, a four-digit year, YYYYMMDD in a column that is the date, or an Excel serial number. One finding per sheet lists the lines and an example.',
+      'For a cell of the date column that is none of the accepted forms: ISO 8601, YYYY/MM/DD, DD.MM.YYYY, an unambiguous DD/MM/YYYY, YY-MM-DD, a four-digit year, YYYYMMDD in a column that is the date, or an Excel serial number. Also raised for a time cell that cannot be read as a time of day, and for Year, Month and Day columns that do not make a date. One finding per sheet lists the lines and an example.',
     example:
-      'A date column holds 2021-06-14, summer 2021 and 14 Jun 2021. The text summer 2021 on line 3 is reported.',
+      'A date column holds 2021-06-14, summer 2021 and 2021-06-16. The text summer 2021 on line 3 is reported.',
     action:
       'Write the date in ISO form, YYYY-MM-DD. In /convert this finding blocks the export, except for the cells you have declared by the date order question, which it removes.',
   },
@@ -214,9 +214,9 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'The dates include a year that the dataset itself does not claim. The label, the file name, the title or the temporal extent name other years, so either the claim or the row is wrong.',
     fires:
-      'For rows whose year is not among the years found in the label, the file name, the record title or the temporal extent. A range such as 1994-2019 names every year in it; a number followed by a unit such as m is not read as a year. Only years between 1900 and 2100 count. It does nothing when the dataset names no year.',
+      'For rows whose year is not among the years found in the label, the file name, the record title or the temporal extent. A range such as 1994-2019 names every year in it; a number followed by a unit such as m is not read as a year. Only years between 1900 and 2100 count. It does nothing when the dataset names no year. A date later than today is ROW-DATE-FUTURE only, not here.',
     example:
-      'The title says Winter cruise 2018. Two rows are dated 2081-02-11, a swapped digit pair. The two lines are reported.',
+      'The title says Winter cruise 2018. Two rows are dated 2008-02-11, a mistyped digit. The two lines are reported.',
     action:
       'Correct the date, or correct the title or the temporal extent if the data really span other years. In /convert this finding is only shown.',
   },
@@ -266,7 +266,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     fires:
       'When rows with the same key and parameter differ and one or more other columns can tell them apart; the finding names the columns used. It is an information note.',
     example:
-      'Station S3 has two nitrate rows, 4.1 and 4.6, and a Depth column of 5 and 20. Depth is added to the key, and the note says so.',
+      'Station S3 has two nitrate rows, 4.1 and 4.6, and a Pressure [dbar] column of 5 and 20. Pressure is added to the key, and the note says so.',
     action:
       'Check that the added columns really separate different samples and not replicates. /convert does not raise this rule; its own CONV-LONG-DUPLICATE covers duplicate values of a long sheet.',
   },
@@ -294,9 +294,9 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'Columns you set to ignore differ between rows that are equal in every column that identifies them. Ignoring them may merge rows that are really different.',
     fires:
-      'When rows equal in every written identifying column differ in an ignored column. Nothing is removed. A column that is ignored by default is still written.',
+      'When rows equal in every written identifying column differ in an ignored column. Nothing is removed. Only a column the tool would have written and you changed to ignore counts; a column it already proposes to ignore (for example Replicate) never raises this rule.',
     example:
-      'Two rows have the same station, date and depth but different values in a Replicate column that is set to ignore. The rows are reported.',
+      'Two rows have the same station, date and depth but different values in a Bottle column that you set to ignore. The rows are reported.',
     action:
       'Stop ignoring the column if it separates real samples. /convert does not raise this rule.',
   },
@@ -304,7 +304,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A date written with two-digit parts, NN-NN-NN, was read with the century inferred. The century is a guess and can be wrong for old data.',
     fires:
-      'Once per column, when the order of the cells is fixed, because some cell rules the other readings out or the order was declared. The century rule: a two-digit year up to the current year plus one is 20xx, any other is 19xx. The finding gives the interpreted date and the order read (ymd, dmy or mdy). One acceptance of the rule covers the century in every column it names.',
+      'Once per column, when the order of the cells is fixed, because some cell rules the other readings out or the order was declared. The century rule: a two-digit year up to the current year plus one is 20xx, any other is 19xx. The finding gives the interpreted date and the order read (ymd, dmy or mdy). Also raised when several orders fit but every cell gives the same date in each (12-12-12); the order then lists all of them. One acceptance of the rule covers the century in every column it names.',
     example:
       'The column holds 98-07-25. 98 cannot be a day or a month, so it is read as year-month-day, 1998-07-25, with the century 19xx. If the cruise was in 2098 the century is wrong.',
     action:
@@ -354,9 +354,9 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'The direction of the depth, positive down or positive up, is not stated by the header or by your declaration. The same number can then mean opposite things.',
     fires:
-      'When the depth column is known but its direction is unknown after the header and the declaration are read. It is not raised for a sheet already reported by ROW-DEPTH-MIXED-SIGN.',
+      'When the depth column is known but its direction is unknown after the header and the declaration are read. It is not raised for a sheet already reported by ROW-DEPTH-MIXED-SIGN. A column with a depth word in its header (Depth, Depth [m]) and no negative value is read as positive down, and one with only negative values as positive up; neither raises this rule.',
     example:
-      'A column called Depth holds 5, 20 and 50 with no unit or sign note. It is not known whether 50 is 50 m below or above the surface.',
+      'A column called z, which you map as the depth in the mapping editor and leave at the direction not stated, holds 5, 20 and 50. It is not known whether 50 is 50 m below or above the surface.',
     action:
       'State the direction in the header, for example Depth (m, positive down), or declare it. /convert does not raise this rule: the depth it checks is its own Event table, in metres and positive down.',
   },
@@ -376,7 +376,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     fires:
       'Once per sheet and column, for a cell exactly equal to one of the three numbers, in the depth column (or the two Darwin Core depth bounds) and in every variable. The cell is kept as written and is left out of the depth direction, ROW-DEPTH-RANGE and CHEM-RANGE.',
     example:
-      'A salinity column holds 33.1, -999 and 33.4. The -999 on line 2 is kept as written, left out of the range checks, and reported.',
+      'A salinity column holds 33.1, -999 and 33.4 on lines 2 to 4, under a header on line 1. The -999 on line 3 is kept as written, left out of the range checks, and reported.',
     action:
       'Empty such cells in the source if they mean missing. In /convert this finding blocks the export until you answer, per column, whether the code is missing or a real value; on missing the cells are left empty and listed.',
   },
@@ -384,7 +384,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A coordinate was written in degrees and minutes, or degrees, minutes and seconds, as text. The tool converted it to decimal degrees.',
     fires:
-      'For each coordinate cell of that form; the finding lists the lines and the conversion. It is a note that a conversion took place.',
+      'Once for each coordinate column that holds a cell of that form; the finding names the column and one example cell and lists no lines. It is a note that a conversion took place.',
     example:
       'The cell 54 30.5 N becomes 54.508333. The note shows both.',
     action:
@@ -484,7 +484,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'Text shows the damage of a double encoding: letters such as accented names appear as two odd characters. The file was decoded with the wrong encoding at some stage.',
     fires:
-      'When a cell contains the pair U+00C3 or U+00C2 followed by a character from U+0080 to U+00BF, as in the damaged form of an accented letter. A lone U+00C3 or U+00C2 is not matched, nor are other double-encoded forms. The finding gives the count of the pairs.',
+      'When a cell contains the pair U+00C3 or U+00C2 followed by a character from U+0080 to U+00BF, as in the damaged form of an accented letter. A lone U+00C3 or U+00C2 is not matched, nor are other double-encoded forms. The finding is one per sheet, reads the header row as well, names the columns and gives the count of cells, not pairs. Not raised for a file already reported as IN-ENCODING-FALLBACK or IN-ENCODING-AMBIGUOUS, because there the pair comes from the fallback decoding.',
     example:
       'A station called Sao Joao appears as the damaged form of Sao Joao with accents, two odd characters in place of each accented letter. The cell is reported.',
     action:
