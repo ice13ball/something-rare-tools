@@ -9,21 +9,53 @@ The list is the rules the tool can raise, found by a static scan of its code, so
 
 13 rules.
 
-## IN-RECORD-INACCESSIBLE
+## IN-RECORD-INACCESSIBLE — The record behind a link could not be opened, so its metadata and files were not read
 
 Severity: error
 
-## IN-HOST-NOT-ALLOWED
+**What it checks.** The record behind a link could not be opened, so its metadata and files were not read. The reason is a failed request to the host, and the finding names the host and the HTTP status code.
+
+**When it fires.** When the server answers a request for the record with an error status such as 403, 404 or 500, or when a file of the record cannot be downloaded. The wording differs for a server fault (status 500 and above, usually temporary) and for other statuses (the record may be private or unpublished). Whatever the other sources of the same run gave is still used.
+
+**Example.** A link to a repository record returns status 404; the finding reads that the record on that host could not be opened (error 404).
+
+**What you can do.** Check the link. For a server fault try again later. For a private or unpublished record download its files or metadata and add them to the tool yourself. In /convert this finding blocks the export.
+
+## IN-HOST-NOT-ALLOWED — A link points to a host the tool is not allowed to open, so nothing was fetched from it
 
 Severity: warning
 
-## IN-FETCH-BLOCKED
+**What it checks.** A link points to a host the tool is not allowed to open, so nothing was fetched from it.
+
+**When it fires.** When a link in a record, or one the person pasted, names a host that is not on the tool's list of data hosts. Only the host name is reported, never the whole address.
+
+**Example.** A record links its data to a personal file-sharing site that is not on the list; the finding names that site and nothing is downloaded.
+
+**What you can do.** Download the file from that site yourself and add it to the tool. The tool does not widen its list of hosts for one run. In /convert this finding is only shown and never stops the export.
+
+## IN-FETCH-BLOCKED — The browser could not download from a host, so the file was not read
 
 Severity: warning
 
-## IN-FETCH-TIMEOUT
+**What it checks.** The browser could not download from a host, so the file was not read. This is a limit of the browser mode, not a fault in the data.
+
+**When it fires.** In browser mode, when a download fails before any answer arrives because the host does not allow the request (a cross-origin or content-security rule) or the network failed. The finding names the host.
+
+**Example.** A link to a data file on a repository that sends no cross-origin permission; the browser refuses and the finding names the repository.
+
+**What you can do.** Download the file yourself and add it to the tool, or try server mode. In /convert this finding is only shown and never stops the export.
+
+## IN-FETCH-TIMEOUT — A host did not start to answer in time, so the browser stopped waiting and the file was not read
 
 Severity: warning
+
+**What it checks.** A host did not start to answer in time, so the browser stopped waiting and the file was not read.
+
+**When it fires.** In browser mode, when a download receives no response within 30 seconds. A slow body that has already started is not a timeout: a download cut off after it began is IN-FETCH-INTERRUPTED. The finding names the host.
+
+**Example.** A repository server is overloaded and sends nothing for 30 seconds; the request is abandoned and the host is named.
+
+**What you can do.** Try again later, or switch to server mode, or download the file yourself and add it to the tool. In /convert this finding is only shown and never stops the export.
 
 ## LIC-TEXT-URI-CONFLICT — A licence statement has both a text and a link, and they do not agree
 

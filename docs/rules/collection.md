@@ -9,65 +9,185 @@ The list is the rules the tool can raise, found by a static scan of its code, so
 
 29 rules.
 
-## IN-NO-DATA-FILE
+## IN-NO-DATA-FILE — A record that was opened holds no file the tool can read as a data table, only other files such as PDFs, images or text documents
 
 Severity: error
 
-## IN-RECORD-INACCESSIBLE
+**What it checks.** A record that was opened holds no file the tool can read as a data table, only other files such as PDFs, images or text documents. Nothing in it can be checked.
+
+**When it fires.** When a linked record (a Dataverse, Zenodo or similar deposit) was read and none of its files is a table in a format the tool reads: csv, tsv, txt, tab, xlsx, xls or ods. The finding lists the names of the files that were found. Held-back files are mentioned by their own findings.
+
+**Example.** A record lists report.pdf, map.png and notes.docx and no table; the finding names all three.
+
+**What you can do.** Add the table itself as CSV or Excel to the tool, or open the record and download the data file first. If the deposit has no table at all, there is nothing for this tool to check. In /convert this finding blocks the export.
+
+## IN-RECORD-INACCESSIBLE — The record behind a link could not be opened, so its metadata and files were not read
 
 Severity: error
 
-## IN-HOST-NOT-ALLOWED
+**What it checks.** The record behind a link could not be opened, so its metadata and files were not read. The reason is a failed request to the host, and the finding names the host and the HTTP status code.
+
+**When it fires.** When the server answers a request for the record with an error status such as 403, 404 or 500, or when a file of the record cannot be downloaded. The wording differs for a server fault (status 500 and above, usually temporary) and for other statuses (the record may be private or unpublished). Whatever the other sources of the same run gave is still used.
+
+**Example.** A link to a repository record returns status 404; the finding reads that the record on that host could not be opened (error 404).
+
+**What you can do.** Check the link. For a server fault try again later. For a private or unpublished record download its files or metadata and add them to the tool yourself. In /convert this finding blocks the export.
+
+## IN-HOST-NOT-ALLOWED — A link points to a host the tool is not allowed to open, so nothing was fetched from it
 
 Severity: warning
 
-## IN-FETCH-BLOCKED
+**What it checks.** A link points to a host the tool is not allowed to open, so nothing was fetched from it.
+
+**When it fires.** When a link in a record, or one the person pasted, names a host that is not on the tool's list of data hosts. Only the host name is reported, never the whole address.
+
+**Example.** A record links its data to a personal file-sharing site that is not on the list; the finding names that site and nothing is downloaded.
+
+**What you can do.** Download the file from that site yourself and add it to the tool. The tool does not widen its list of hosts for one run. In /convert this finding is only shown and never stops the export.
+
+## IN-FETCH-BLOCKED — The browser could not download from a host, so the file was not read
 
 Severity: warning
 
-## IN-FETCH-TIMEOUT
+**What it checks.** The browser could not download from a host, so the file was not read. This is a limit of the browser mode, not a fault in the data.
+
+**When it fires.** In browser mode, when a download fails before any answer arrives because the host does not allow the request (a cross-origin or content-security rule) or the network failed. The finding names the host.
+
+**Example.** A link to a data file on a repository that sends no cross-origin permission; the browser refuses and the finding names the repository.
+
+**What you can do.** Download the file yourself and add it to the tool, or try server mode. In /convert this finding is only shown and never stops the export.
+
+## IN-FETCH-TIMEOUT — A host did not start to answer in time, so the browser stopped waiting and the file was not read
 
 Severity: warning
 
-## IN-FETCH-INTERRUPTED
+**What it checks.** A host did not start to answer in time, so the browser stopped waiting and the file was not read.
+
+**When it fires.** In browser mode, when a download receives no response within 30 seconds. A slow body that has already started is not a timeout: a download cut off after it began is IN-FETCH-INTERRUPTED. The finding names the host.
+
+**Example.** A repository server is overloaded and sends nothing for 30 seconds; the request is abandoned and the host is named.
+
+**What you can do.** Try again later, or switch to server mode, or download the file yourself and add it to the tool. In /convert this finding is only shown and never stops the export.
+
+## IN-FETCH-INTERRUPTED — The download of an archive from an archive server was cut off or ran out of time before it was complete, so the archive was not checked at all
 
 Severity: error
 
-## IN-ARCHIVE-TOO-LARGE
+**What it checks.** The download of an archive from an archive server was cut off or ran out of time before it was complete, so the archive was not checked at all.
+
+**When it fires.** When the download of a Darwin Core Archive from a listed IPT server times out (the limit of server mode is the proxy's) or the connection closes before the whole body arrived. The finding names the host. A partly received archive is never read.
+
+**Example.** A large archive from a slow IPT server stops after a few megabytes; nothing of it is read.
+
+**What you can do.** Try again in a few minutes, or download the archive (.zip) yourself and add it to the tool. In /convert this finding blocks the export.
+
+## IN-ARCHIVE-TOO-LARGE — A Darwin Core Archive is larger than the size the tool's server will pass on for checking, so it was not downloaded or checked
 
 Severity: error
 
-## IN-ARCHIVE-DAILY-BUDGET
+**What it checks.** A Darwin Core Archive is larger than the size the tool's server will pass on for checking, so it was not downloaded or checked.
+
+**When it fires.** When the proxy refuses an archive with HTTP status 413 because it is above its size limit. The finding names the host and the limit in megabytes. An archive added by hand has the same limit.
+
+**Example.** An archive of 600 MB is refused by a proxy whose limit is 250 MB; the finding gives the host and 250.
+
+**What you can do.** Download the archive yourself, unpack it and add the core file (for example occurrence.txt) to the tool. The unpacked file is read as an ordinary table. In /convert this finding blocks the export.
+
+## IN-ARCHIVE-DAILY-BUDGET — This client has used the daily allowance for archive downloads through the tool's server, so the archive was not fetched and not checked
 
 Severity: error
 
-## IN-ARCHIVE-BUSY
+**What it checks.** This client has used the daily allowance for archive downloads through the tool's server, so the archive was not fetched and not checked.
+
+**When it fires.** When the proxy answers HTTP status 429 with the reason archive_daily_budget: the daily number of archive requests or bytes for this IP address is used up. The finding names the host of the archive. The allowance starts again within 24 hours.
+
+**Example.** After many large archives in one day the next request is refused; the host of that archive is named.
+
+**What you can do.** Wait until the allowance renews (within 24 hours), or download the archive (.zip) yourself and add it to the tool. In /convert this finding blocks the export.
+
+## IN-ARCHIVE-BUSY — Too many archive downloads are already running from this IP address, so this one was not started and the archive was not checked
 
 Severity: error
 
-## IN-IPT-HOST-NOT-LISTED
+**What it checks.** Too many archive downloads are already running from this IP address, so this one was not started and the archive was not checked.
+
+**When it fires.** When the proxy answers HTTP status 429 with the reason archive_busy: this client already has the maximum of 2 archive downloads in flight. The finding names the host.
+
+**Example.** Two archives are being downloaded and a third is requested; the third is refused until one finishes.
+
+**What you can do.** Wait until the running downloads finish and check again, one archive at a time. In /convert this finding blocks the export.
+
+## IN-IPT-HOST-NOT-LISTED — The Darwin Core Archive of a dataset lives on a server that is not on the tool's fixed list of IPT servers, so it was not downloaded
 
 Severity: warning
 
-## IN-NO-DWC-ARCHIVE
+**What it checks.** The Darwin Core Archive of a dataset lives on a server that is not on the tool's fixed list of IPT servers, so it was not downloaded.
+
+**When it fires.** When a GBIF or OBIS dataset points to an archive whose host, address scheme, port or credentials do not match the static list of IPT servers the tool reads. The finding names the host.
+
+**Example.** A GBIF dataset has its archive on a small institute server that is not on the list; the host is named and nothing is fetched.
+
+**What you can do.** Download the archive (.zip) yourself and add it to the tool. In /convert this finding is only shown and never stops the export.
+
+## IN-NO-DWC-ARCHIVE — GBIF or OBIS knows the dataset but lists no downloadable Darwin Core Archive for it, so there is nothing to check
 
 Severity: error
 
-## IN-FILE-HELD-BACK
+**What it checks.** GBIF or OBIS knows the dataset but lists no downloadable Darwin Core Archive for it, so there is nothing to check.
+
+**When it fires.** When the registry record of a GBIF dataset has no archive endpoint of the Darwin Core Archive type, or the OBIS record has no archive address. The finding names the registry.
+
+**Example.** A GBIF dataset page shows the dataset only as metadata; its record lists no archive.
+
+**What you can do.** Get the data from the publisher and add the table or the archive to the tool. In /convert this finding blocks the export.
+
+## IN-FILE-HELD-BACK — A file of a linked record is held back by its source (restricted access or an embargo), so it was not downloaded and not checked
 
 Severity: warning
 
-## IN-FILE-TOO-LARGE
+**What it checks.** A file of a linked record is held back by its source (restricted access or an embargo), so it was not downloaded and not checked. This is not an error in the data, but the lack of remarks says nothing about the file.
+
+**When it fires.** When the source marks a file of a Dataverse dataset as restricted or embargoed. The finding names the file and the host. The other files of the record are still read.
+
+**Example.** A dataset has an open file samples.csv and a restricted file raw.csv; raw.csv gets this finding.
+
+**What you can do.** Ask the data owner for access, then add the file to the tool. In /convert this finding is only shown and never stops the export.
+
+## IN-FILE-TOO-LARGE — A data file of a linked record is larger than the most the tool reads from a link, so it was not downloaded and not checked
 
 Severity: warning
 
-## IN-FILES-NOT-READ
+**What it checks.** A data file of a linked record is larger than the most the tool reads from a link, so it was not downloaded and not checked.
+
+**When it fires.** When a file listed in a Dataverse dataset is a readable table type, is not held back, and its size is above the limit for linked files. The finding names the file and gives the limit in megabytes. The rule uses the size the source states.
+
+**Example.** A deposit holds survey.csv of 400 MB and the limit is 100 MB; the file gets this finding and the rest of the record is read.
+
+**What you can do.** Download the file and add it to the tool yourself, or split it into smaller tables. A clean result for the other files says nothing about this one. In /convert this finding is only shown and never stops the export.
+
+## IN-FILES-NOT-READ — Some files of a linked record may hold data but are in a format the tool does not read, such as zip or NetCDF, so they were not checked
 
 Severity: warning
 
-## IN-DATAVERSE-FILES
+**What it checks.** Some files of a linked record may hold data but are in a format the tool does not read, such as zip or NetCDF, so they were not checked. The report names them so that it never reads as if the whole dataset was checked.
+
+**When it fires.** When a Dataverse record has at least one table the tool reads and, besides, files that are not tables and are not documents, images or a README. The finding names those files. Documents, pictures and READMEs describe the deposit and are left out of the list. If the record has no table at all, IN-NO-DATA-FILE is raised instead.
+
+**Example.** A record holds counts.csv and also model.nc and images.zip; the finding names model.nc and images.zip.
+
+**What you can do.** If they hold data, unpack them or save them as CSV or Excel and add them to the tool. In /convert this finding is only shown and never stops the export.
+
+## IN-DATAVERSE-FILES — A note about what was read from a Dataverse dataset: which version, and in which form its tables were read
 
 Severity: info
+
+**What it checks.** A note about what was read from a Dataverse dataset: which version, and in which form its tables were read.
+
+**When it fires.** Every time a Dataverse dataset is read. It states the version (the latest published one) and the host. It also says whether the tables were read as the author uploaded them, as the .tab copy Dataverse made when the original cannot be read, or that no data file was read at all.
+
+**Example.** Version 2.1 of a dataset is read from a Dataverse host; one table in its original form and one as the .tab copy.
+
+**What you can do.** Nothing to fix. If the dataset has been updated since, run the check again to read the newer version. In /convert this finding is only shown and never stops the export.
 
 ## LIC-MISSING — No licence is stated anywhere in the record
 

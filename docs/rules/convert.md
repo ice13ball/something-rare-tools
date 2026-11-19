@@ -9,81 +9,225 @@ The list is the rules the tool can raise, found by a static scan of its code, so
 
 245 rules.
 
-## IN-RECORD-INACCESSIBLE
+## IN-RECORD-INACCESSIBLE — The record behind a link could not be opened, so its metadata and files were not read
 
 Severity: error · Export policy: block
 
-## IN-HOST-NOT-ALLOWED
+**What it checks.** The record behind a link could not be opened, so its metadata and files were not read. The reason is a failed request to the host, and the finding names the host and the HTTP status code.
+
+**When it fires.** When the server answers a request for the record with an error status such as 403, 404 or 500, or when a file of the record cannot be downloaded. The wording differs for a server fault (status 500 and above, usually temporary) and for other statuses (the record may be private or unpublished). Whatever the other sources of the same run gave is still used.
+
+**Example.** A link to a repository record returns status 404; the finding reads that the record on that host could not be opened (error 404).
+
+**What you can do.** Check the link. For a server fault try again later. For a private or unpublished record download its files or metadata and add them to the tool yourself. In /convert this finding blocks the export.
+
+## IN-HOST-NOT-ALLOWED — A link points to a host the tool is not allowed to open, so nothing was fetched from it
 
 Severity: warning · Export policy: show
 
-## IN-FETCH-BLOCKED
+**What it checks.** A link points to a host the tool is not allowed to open, so nothing was fetched from it.
+
+**When it fires.** When a link in a record, or one the person pasted, names a host that is not on the tool's list of data hosts. Only the host name is reported, never the whole address.
+
+**Example.** A record links its data to a personal file-sharing site that is not on the list; the finding names that site and nothing is downloaded.
+
+**What you can do.** Download the file from that site yourself and add it to the tool. The tool does not widen its list of hosts for one run. In /convert this finding is only shown and never stops the export.
+
+## IN-FETCH-BLOCKED — The browser could not download from a host, so the file was not read
 
 Severity: warning · Export policy: show
 
-## IN-FETCH-TIMEOUT
+**What it checks.** The browser could not download from a host, so the file was not read. This is a limit of the browser mode, not a fault in the data.
+
+**When it fires.** In browser mode, when a download fails before any answer arrives because the host does not allow the request (a cross-origin or content-security rule) or the network failed. The finding names the host.
+
+**Example.** A link to a data file on a repository that sends no cross-origin permission; the browser refuses and the finding names the repository.
+
+**What you can do.** Download the file yourself and add it to the tool, or try server mode. In /convert this finding is only shown and never stops the export.
+
+## IN-FETCH-TIMEOUT — A host did not start to answer in time, so the browser stopped waiting and the file was not read
 
 Severity: warning · Export policy: show
 
-## IN-LAYOUT-UNSUPPORTED
+**What it checks.** A host did not start to answer in time, so the browser stopped waiting and the file was not read.
+
+**When it fires.** In browser mode, when a download receives no response within 30 seconds. A slow body that has already started is not a timeout: a download cut off after it began is IN-FETCH-INTERRUPTED. The finding names the host.
+
+**Example.** A repository server is overloaded and sends nothing for 30 seconds; the request is abandoned and the host is named.
+
+**What you can do.** Try again later, or switch to server mode, or download the file yourself and add it to the tool. In /convert this finding is only shown and never stops the export.
+
+## IN-LAYOUT-UNSUPPORTED — The table is laid out in a way the tool cannot read as one header row and one row per sample, so it was not read
 
 Severity: error · Export policy: block
 
-## IN-ENCODING-FALLBACK
+**What it checks.** The table is laid out in a way the tool cannot read as one header row and one row per sample, so it was not read.
+
+**When it fires.** When the layout reader finds data that is transposed (variables or species in rows, samples in columns), a header that spans several rows, a row above the names that holds footnote markers, a table with no rows, a workbook with no sheet of coordinates or measurements, or no table at all. The finding gives the reason and, for a workbook, the sheet.
+
+**Example.** A sheet lists the variables down the first column and the samples across the top; the finding says the data is transposed.
+
+**What you can do.** Reshape the table into one header row with one row per sample and add it again. In /convert this finding blocks the export.
+
+## IN-ENCODING-FALLBACK — The file is not saved as UTF-8, so the tool read it as an 8-bit Central European or Western code page
 
 Severity: info · Export policy: accept
 
-## IN-ENCODING-AMBIGUOUS
+**What it checks.** The file is not saved as UTF-8, so the tool read it as an 8-bit Central European or Western code page. The letters with accents may be wrong if that guess is wrong.
+
+**When it fires.** When the bytes are not valid UTF-8 and the three 8-bit readings the tool tries (windows-1250, ISO-8859-2 and windows-1252) give the same text. The finding names the reading that was used. If the readings differ, IN-ENCODING-AMBIGUOUS is raised instead. A UTF-16 file or a UTF-8 file with a BOM is read without a finding.
+
+**Example.** A CSV saved by an old program holds only plain letters in the bytes that differ between code pages; it is read as windows-1250.
+
+**What you can do.** Check that accented letters look right, and save the file as UTF-8 when you publish. In /convert the reading is accepted once and does not stop the export.
+
+## IN-ENCODING-AMBIGUOUS — The file is not UTF-8 and its accented letters read in two or three different ways, depending on which 8-bit code page is assumed
 
 Severity: warning · Export policy: block
 
-## IN-DECIMAL-COMMA
+**What it checks.** The file is not UTF-8 and its accented letters read in two or three different ways, depending on which 8-bit code page is assumed. Only the person who saved the file knows which reading is right.
+
+**When it fires.** When the bytes are not valid UTF-8 and at least two of windows-1250, ISO-8859-2 and windows-1252 decode them to different text. The finding shows each reading with up to three differing words and the one that was used (windows-1250 or ISO-8859-2). Code pages that decode alike count as one reading. UTF-16 is recognised by its BOM or its alternate zero bytes and is not ambiguous.
+
+**Example.** The same bytes read as Krřyer in windows-1250 and ISO-8859-2 and as Krøyer in windows-1252; the finding shows both words.
+
+**What you can do.** Decide which reading is right and save the file as UTF-8, or in /convert declare the encoding so the question is answered. /check keeps its pick and only reports. In /convert this finding blocks the export until the encoding is declared.
+
+## IN-DECIMAL-COMMA — The file writes numbers with a decimal comma (3,14) instead of a point
 
 Severity: info · Export policy: accept
 
-## IN-DECIMAL-AMBIGUOUS
+**What it checks.** The file writes numbers with a decimal comma (3,14) instead of a point. The tool read them that way, so values are numbers and not text.
+
+**When it fires.** When the delimiter is a semicolon or a tab and at least 80 percent of the cells with a decimal separator in the first 50 rows are written with a comma, as n,n. Whole numbers say nothing about the separator and are ignored. A column whose commas could also be thousands separators is also reported by IN-DECIMAL-AMBIGUOUS.
+
+**Example.** A semicolon-separated file holds 12,5; 3,14 and 0,07 in a column.
+
+**What you can do.** Use a decimal point when you publish. If the commas were meant as something else, change the file. In /convert the reading is accepted once and does not stop the export.
+
+## IN-DECIMAL-AMBIGUOUS — In one column of a file that uses a decimal comma, every number with a comma has exactly three digits after it, so the comma may be a decimal comma (1,250 is one and a quarter) or a thousands separator (1,250 is one thousand two hundred fifty)
 
 Severity: warning · Export policy: block
 
-## IN-HEADER-SHORT
+**What it checks.** In one column of a file that uses a decimal comma, every number with a comma has exactly three digits after it, so the comma may be a decimal comma (1,250 is one and a quarter) or a thousands separator (1,250 is one thousand two hundred fifty). The file does not say which.
+
+**When it fires.** Per column of a decimal-comma file, when every cell with a comma has exactly three digits after it. One value with one, two, or four or more decimals settles the column as decimal and then no finding is raised. The finding gives the column, the number of cells, the first such value and both readings. The cells were read as decimals. When the column also holds a value with comma thousands groups, such as 1,250,000, the finding names it, because the commas may mean thousands.
+
+**Example.** A column of depths in metres holds 1,250 and 2,500; read as decimals they are 1.25 and 2.5, read as thousands 1250 and 2500.
+
+**What you can do.** Decide what the comma means in this column. In /convert declare it as decimal or as thousands; under thousands the cells written 1,250 or 1,250,000 are read as 1250 and 1250000. In /check the finding only reports. In /convert this finding blocks the export until the column is declared.
+
+## IN-HEADER-SHORT — The header row has fewer names than the data rows have values
 
 Severity: warning · Export policy: accept
 
-## IN-HEADER-UNITS-READ
+**What it checks.** The header row has fewer names than the data rows have values. The tool cannot tell where the names are missing, so values may sit under the name of a neighbour column.
+
+**When it fires.** When at least 95 percent of the data rows (at least three rows are needed) have the same number of fields, that number is larger than the header's, and the extra fields are not all empty. The extra values are given the internal names Column N at the end. A trailing delimiter that adds only empty fields is not reported, and a first data row that reads as a header is treated as the real header instead.
+
+**Example.** A header of 10 names over rows of 12 values: the last two are shown as Column 11 and Column 12.
+
+**What you can do.** Give every column a name in the file, and check the first values of the last named columns in case a name is missing earlier. In /convert this finding is accepted and does not stop the export, so the person maps the extra columns as they are.
+
+## IN-HEADER-UNITS-READ — A second header row of units was read: the line under the column names holds only units, so it is not data
 
 Severity: info · Export policy: show
 
-## IN-HEADER-UNITS-NAMED
+**What it checks.** A second header row of units was read: the line under the column names holds only units, so it is not data. The units were added to the column names.
+
+**When it fires.** When the row directly under the header (or under a row of statistic labels) has only unit cells, at least two of which go into a header, every cell has a name above it, and the numbers below fit the units. A unit that disagrees with the one the name already gives means the row is not folded. The finding gives the line and the first changed name, for example a column now named a \[h\]. The line numbers in the report stay the file's own.
+
+**Example.** A header latitude, longitude over a row degrees_north, degrees_east: the names become latitude \[degrees_north\] and longitude \[degrees_east\].
+
+**What you can do.** Nothing to fix. If you prefer a single header row, put the unit into the column name. In /convert this finding is only shown and never stops the export.
+
+## IN-HEADER-UNITS-NAMED — A row of units under the header was recognised and skipped
 
 Severity: info · Export policy: show
 
-## IN-PERCENT-READ
+**What it checks.** A row of units under the header was recognised and skipped. The column names already carried the same units, so no name was changed.
+
+**When it fires.** When the row under the header holds only units and every column it names has the same unit in its own header too, for instance depth \[m\] over m. The row is not a data row and the report keeps the file's own line numbers. The finding gives the line.
+
+**Example.** The header holds temperature \[C\] and depth \[m\] and the next line holds C and m.
+
+**What you can do.** Nothing to fix. Remove the second row if you want a plain single header. In /convert this finding is only shown and never stops the export.
+
+## IN-PERCENT-READ — Cells of an Excel column are formatted as percentages and were read as shown: a stored 0.95 formatted as 95% is read as 95, not 0.95
 
 Severity: info · Export policy: show
 
-## IN-COLUMN-NO-HEADER
+**What it checks.** Cells of an Excel column are formatted as percentages and were read as shown: a stored 0.95 formatted as 95% is read as 95, not 0.95.
+
+**When it fires.** Per column of an Excel sheet with at least one numeric cell whose number format shows a percent sign and whose stored value differs from the shown one. The decimal point of the stored number is moved two places right (never the cell's rounded display text). The finding gives the column, the number of cells and the first stored and shown values.
+
+**Example.** A column of 0.07 formatted as 0.0% is read as 7; the finding says 0.07 is read as 7.
+
+**What you can do.** If you meant fractions, reformat the cells as numbers. If you meant percent values, leave them. Check the unit in the column name. In /convert this finding is only shown and never stops the export.
+
+## IN-COLUMN-NO-HEADER — A column of an Excel sheet holds values to the right of the last named header cell but has no name itself
 
 Severity: warning · Export policy: show
 
-## IN-DATE1904
+**What it checks.** A column of an Excel sheet holds values to the right of the last named header cell but has no name itself. It is read as a column without a name, and every cell stays where it is.
+
+**When it fires.** When a data row has a value in a column to the right of the last named header cell, or under an empty header cell. The finding gives the column letter, the number of rows with a value and their lines.
+
+**Example.** The header names columns A to F, and column G holds numbers in 40 rows; column G is reported with those rows.
+
+**What you can do.** Give the column a name in the file, or say in /convert what it holds. In /convert this finding is only shown and never stops the export.
+
+## IN-DATE1904 — An Excel workbook uses the older 1904 date system
 
 Severity: info · Export policy: show
+
+**What it checks.** An Excel workbook uses the older 1904 date system. Dates were converted with its epoch; they differ by 1462 days from the same number in the usual 1900 system.
+
+**When it fires.** When the workbook has its 1904 date flag set. Serial dates are converted from 1 January 1904. Dates written as text are not affected.
+
+**Example.** The same stored serial number is a date four years and a day later in the 1904 system than in the 1900 system, so reading a 1904 file as 1900 would move every date.
+
+**What you can do.** Check a few of the dates. If the dates are off by about four years, the file was created on an older Mac; consider resaving it in the 1900 system. In /convert this finding is only shown and never stops the export.
 
 **Citations.**
 
 - [Microsoft Support, Date systems in Excel](https://support.microsoft.com/en-us/office/date-systems-in-excel-e7fe7167-48a9-4b96-bb53-5612a800b487), 1900 and 1904 date systems; "The difference between the two date systems is 1,462 days."
 
-## IN-PANGAEA-EVENT-USED
+## IN-PANGAEA-EVENT-USED — A PANGAEA table without position or date columns got Latitude, Longitude and/or Date/Time from the Event(s) block of its file header
 
 Severity: info · Export policy: show
 
-## IN-PANGAEA-EVENT-NOT-USED
+**What it checks.** A PANGAEA table without position or date columns got Latitude, Longitude and/or Date/Time from the Event(s) block of its file header.
+
+**When it fires.** When a PANGAEA text file has an Event(s) block with points or dates and the table lacks those columns. With one event it applies to every row; with several, each row takes the event named in its Event column. A column the table already has is never touched, and a value a row has is never overwritten. The finding names the columns added, the number of events and the rows filled.
+
+**Example.** A table of samples without coordinates and an Event(s) block that lists station ST-01 with its position and time; each row gets that position and time.
+
+**What you can do.** Check the values the finding names. Add your own position and date columns if the sample position differs from the event's. In /convert this finding is only shown and never stops the export.
+
+## IN-PANGAEA-EVENT-NOT-USED — The Event(s) block of a PANGAEA file gives a position or date, but nothing was copied into the table, and the table has none of its own
 
 Severity: warning · Export policy: show
 
-## IN-PANGAEA-EVENT-UNMATCHED
+**What it checks.** The Event(s) block of a PANGAEA file gives a position or date, but nothing was copied into the table, and the table has none of its own.
+
+**When it fires.** When the table lacks the columns and the block cannot be used: several events are listed but the table has no Event column to say which row belongs to which, or the event's position is a track (start and end differ) and not a point. The finding gives the number of events and which of the two reasons applies.
+
+**Example.** A block lists three stations and the table has no Event column; nothing is borrowed.
+
+**What you can do.** Add an Event column, or position and date columns, to the table. For a track add the position of each sample. In /convert this finding is only shown and never stops the export.
+
+## IN-PANGAEA-EVENT-UNMATCHED — Some rows of a PANGAEA table have no matching event in the Event(s) block of the file header, so nothing was taken for them
 
 Severity: warning · Export policy: show
+
+**What it checks.** Some rows of a PANGAEA table have no matching event in the Event(s) block of the file header, so nothing was taken for them.
+
+**When it fires.** When the block lists several events and the table has an Event column, for each row whose Event cell is empty, names an event that is not listed, or names an event with no position or date. The finding gives the number of rows and their lines.
+
+**Example.** Rows 12 and 13 say station 7, and the block lists stations 1 to 6.
+
+**What you can do.** Fill the position and date for those rows in the table. In /convert this finding is only shown and never stops the export.
 
 ## LIC-MISSING — No licence is stated anywhere in the record
 
@@ -814,38 +958,94 @@ Severity: warning · Export policy: show
 
 **What you can do.** Write the dates in ISO 8601, for example 2011-06-14 or 2011-06-14/2011-06-20. Nothing is changed in your file. In /convert the rule is applied to the tables the converter writes. In /convert the finding is only shown and never stops the export.
 
-## XF-DUPLICATE-SAMPLES
+## XF-DUPLICATE-SAMPLES — Two files hold the same samples
 
 Severity: info · Export policy: show
 
-## XF-DATE-CONFLICT
+**What it checks.** Two files hold the same samples. If both are used for one analysis, the samples count twice and any statistic is biased towards them.
+
+**When it fires.** For every pair of tables that share at least one recognised variable. A sample of one table matches a sample of the other when it has the same station (names compared after normalisation, as for XF-STATION-ALIAS) or, for rows without a station, the same position within the rounding of the coordinates; the same calendar day (a date with no day is never matched); and the same depth in the same unit, within rounding (a depth in one unit is never matched to a depth in another, and two missing depths match each other). Each row matches at most one row of the other table. A match counts only when at least one shared variable has a value in both rows, so the same place and time measured for different variables is one sample, not a duplicate. One finding per pair of tables, with the number of matched rows.
+
+**Example.** The sheets "Cruise A bottles" and "Cruise A CTD" both have a row for station S12 on 2019-05-03 at 10 m with a temperature value; the pair is reported with the number of such rows.
+
+**What you can do.** Decide which table is the source of record and drop the other rows, or keep both and make sure the analysis counts each sample once. Two tables that really are the same measurement published twice are a common case in a data release. In /convert this finding is only shown and never stops the export.
+
+## XF-DATE-CONFLICT — The same station and depth appear in two files with the same values but different dates
 
 Severity: warning · Export policy: show
 
-## XF-STATION-ALIAS
+**What it checks.** The same station and depth appear in two files with the same values but different dates. One of the dates is probably wrong, for example a day and month swapped, or a year typed over.
+
+**When it fires.** For every pair of tables that share at least two recognised variables. Rows of the two tables are paired by normalised station name and the same depth (same unit, within rounding; two missing depths agree). Both rows must have a date known to the day, and the dates must differ. For every shared variable that has a value in both rows the values are compared: the rule fires when at least two variables are equal and none differs. One finding per station and pair of tables, giving the station, the two dates and one example line of each file. When one of the two dates is a two-digit-year date from a column whose order is open (see ROW-DATE-YY-AMBIGUOUS) and it was read in the default order, a sentence says that the conflict may come from the reading rather than from a wrong date.
+
+**Example.** Station S12 has temperature 11.4 and salinity 35.1 at 10 m in two files, dated 2019-05-03 in one and 2019-03-05 in the other; the pair of dates is reported.
+
+**What you can do.** Find which date is right from the logbook or the other file and correct the wrong one. When the finding says that a two-digit-year date may have been misread, write the year with four digits, or in /convert state the order of that column (see ROW-DATE-YY-AMBIGUOUS); the conflict is then judged on the settled reading. In /convert this finding is only shown and never stops the export.
+
+## XF-STATION-ALIAS — Two station names that differ only in spelling occur in the loaded tables, so they are probably the same station written in two ways
 
 Severity: info · Export policy: show
 
-## XF-UNIT-CONFLICT
+**What it checks.** Two station names that differ only in spelling occur in the loaded tables, so they are probably the same station written in two ways. Left as they are, the station is split into two in any grouping by name and the other cross-file rules cannot match it.
+
+**When it fires.** Across all loaded tables, when two different station names become equal after normalisation: only the part after the last slash is kept, letters are made upper case and spaces are removed. A name that is the same in every table is not reported. One finding per pair of spellings; the first spelling is the one that is used by the most tables, then by the most rows. The finding names both spellings.
+
+**Example.** One file calls a station "ST 7" and another calls it "st7"; "ST 7" and "st7" are reported as the same station.
+
+**What you can do.** Choose one name for the station and use it in every file. The tool does not rename anything. In /convert this finding is only shown and never stops the export.
+
+## XF-UNIT-CONFLICT — The same variable has the same numbers in two files, but one file labels them per volume and the other per mass
 
 Severity: warning · Export policy: show
+
+**What it checks.** The same variable has the same numbers in two files, but one file labels them per volume and the other per mass. If the numbers are equal, at least one label is wrong; a per-litre and a per-kilogram value of a nutrient differ by about the density of the water, a few per cent, and an amount of substance per volume and per mass are not the same unit.
+
+**When it fires.** For every pair of tables that share a recognised variable, when one table gives it in a unit of amount per volume (for example µmol/L) and the other in a unit of amount per mass (for example µmol/kg), and more than half of the samples that match in both tables (the matching of XF-DUPLICATE-SAMPLES) and have a value in both are equal within rounding. One finding per variable and pair of columns, giving the number of matched samples and how many of them are equal. Units that are in the same dimension, such as mg/L and µmol/L, are not compared here (CHEM-UNIT-PAIR looks at those within one table). Sources: the GLODAPv2 conversion of per-litre to per-kilogram values with seawater density, and the UNESCO seawater density tables.
+
+**Example.** Nitrate is 5.2, 8.9 and 12.4 in a file labelled µmol/L and the same three numbers in a matching file labelled µmol/kg; all three matched samples are equal, so the units are reported.
+
+**What you can do.** Find which label is correct from the methods of the data and correct the wrong one; if a conversion was meant, convert the numbers with the density of the water instead of copying them. In /convert this finding is only shown and never stops the export.
 
 **Citations.**
 
 - [Lauvset et al. (2024), GLODAPv2.2023, Earth System Science Data 16, 2047](https://essd.copernicus.org/articles/16/2047/2024/), section 3.1 (per-litre to per-kilogram conversion with seawater density)
 - [Fofonoff & Millard (1983), UNESCO Technical Papers in Marine Science 44 (GitHub-hosted copy)](https://raw.github.com/ocefpaf/python-seawater/master/docs/UNESCO-TechPaper44_eo.pdf), PDF p.23, check values of seawater density
 
-## XF-POSITION-SWAP
+## XF-POSITION-SWAP — Two stations have exchanged positions between files: the position of station A in one file belongs to station B in the other, and the other way round
 
 Severity: warning · Export policy: show
 
-## XF-POSITION-CONFLICT
+**What it checks.** Two stations have exchanged positions between files: the position of station A in one file belongs to station B in the other, and the other way round. Names were probably mixed up in one of the files, which puts every value of both stations in the wrong place.
+
+**When it fires.** For every pair of tables that both give positions for the same station names. Each station gets a representative position in each table (the most frequent rounded position of its rows; rows whose latitude equals their longitude are ignored, as ROW-LAT-EQ-LON reports them). A swap is found when two stations both moved between the tables (their positions do not agree within rounding), are distinct places in each table, and the exchanged assignment is strictly closer than the same-name assignment in both directions, with each being the other's best partner. A table swapped against several others is named once, with its partners listed together. Stations that are part of a swap are not also reported by XF-POSITION-CONFLICT.
+
+**Example.** Station S1 is at 54.10 N, 18.60 E and S2 at 54.40 N, 19.10 E in one file; in the other S1 is at 54.40 N, 19.10 E and S2 at 54.10 N, 18.60 E.
+
+**What you can do.** Check the station names against the logbook and correct the file with the names mixed up. In /convert this finding is only shown and never stops the export.
+
+## XF-POSITION-CONFLICT — The same station is at clearly different positions in different files
 
 Severity: warning · Export policy: show
 
-## CHEM-UNIT-PAIR
+**What it checks.** The same station is at clearly different positions in different files. One of the positions is wrong or the name is used for two places, and every value of the station is mapped to the wrong location.
+
+**When it fires.** For every station name that occurs in at least two tables and is not part of a swap. Each table gets a representative position (the most frequent rounded position of the station's rows, with the range of all its rows). Two tables disagree when neither one's representative position lies inside the range the other one spans, with rounding of both included, so a station sampled along a short track is not flagged for a point on it. With two tables both are named. With three or more, only an outlier is reported: one that disagrees with every other table and lies farther from each of them than any two of the others lie from each other; when the others are sheets of one workbook they count as one source and both sides are named. The finding lists the position in each table and the largest offset in kilometres. No distance tolerance is applied, because no citable one exists.
+
+**Example.** Station S5 is at 54.20 N, 18.70 E in one file and at 54.20 N, 81.70 E in another; the two positions and the offset are reported.
+
+**What you can do.** Check the station position against the logbook and correct the wrong file; if the name has been used for two different places, give them different names. In /convert this finding is only shown and never stops the export.
+
+## CHEM-UNIT-PAIR — The same chemical quantity is given twice, once as mass per volume and once as amount per volume, and the two columns do not agree after conversion
 
 Severity: warning · Export policy: show
+
+**What it checks.** The same chemical quantity is given twice, once as mass per volume and once as amount per volume, and the two columns do not agree after conversion. One of the columns, or one of its unit labels, is wrong, and a reader who trusts the wrong one is off by a factor of the molar mass.
+
+**When it fires.** When one table has two columns of the same recognised variable, one with a unit of mass per litre (g/L with an SI prefix, for example mg/L) and one with a unit of amount per litre (mol/L with a prefix, for example µmol/L). The mass column is converted with the molar mass of the element the variable is reported as, and the rule fires when a row differs from the other column by more than the rounding of the two reported values can explain. One finding per pair of columns, listing every disagreeing row. The elements and molar masses are carbon 12.011, nitrogen 14.007, phosphorus 30.974 and silicon 28.085 g/mol (CIAAW atomic weights). Covered: DOC, POC, DIC (carbon); nitrate, nitrite, ammonium, DIN, DON, PON, TN, TDN (nitrogen); phosphate, DOP, TDP (phosphorus); silicate (silicon). Any other variable is not converted and not judged. Rows with a missing or non-numeric value are skipped.
+
+**Example.** A nitrate column in mg/L reads 0.62 and a nitrate column in µmol/L on the same row reads 8.1; 0.62 mg/L of nitrogen is about 44.3 µmol/L, so the row disagrees.
+
+**What you can do.** Decide which column is right, correct the wrong values or the wrong unit label, or delete the duplicate column. Nothing in your file is changed by the tool. In /convert this finding is only shown and never stops the export.
 
 **Thresholds.**
 
@@ -854,9 +1054,17 @@ Severity: warning · Export policy: show
 - molarMass.P = 30.974 g/mol. Source: [CIAAW, Abridged Standard Atomic Weights (2024)](https://ciaaw.org/abridged-atomic-weights.htm), table, "15 P phosphorus 30.974 ± 0.001"
 - molarMass.Si = 28.085 g/mol. Source: [CIAAW, Abridged Standard Atomic Weights (2024)](https://ciaaw.org/abridged-atomic-weights.htm), table, "14 Si silicon 28.085 ± 0.001"
 
-## CHEM-DIC-GT-TA
+## CHEM-DIC-GT-TA — Dissolved inorganic carbon is larger than total alkalinity
 
 Severity: warning · Export policy: show
+
+**What it checks.** Dissolved inorganic carbon is larger than total alkalinity. In sea water alkalinity is normally the larger of the two, so a reversed pair usually means swapped columns, a wrong unit on one of them, or a mislabelled variable.
+
+**When it fires.** When one table has a DIC column and a TA column with the same unit, and in at least one row DIC is larger than TA by more than the rounding of the two reported values can explain. Rows are grouped by cruise when the table has a cruise column, otherwise the whole table is one group; there is one finding per DIC and TA column pair and group that has at least one such row. The finding gives how many of the rows with both values are affected and the median of TA minus DIC over the group, rounded to a whole number. Rows with a missing or non-numeric value are skipped. Columns with different units are not compared. Sources: Dickson, Sabine and Christian (2007) guide to best practices for ocean CO2 measurements, and TEOS-10 for the seawater background.
+
+**Example.** A group of 60 rows has DIC 2310 and TA 2285 in µmol/kg on 5 of the rows, and TA above DIC on the other 55; the group is reported with 5 of 60 rows.
+
+**What you can do.** Check that the DIC and TA columns are not swapped, that both carry the same unit, and that the flagged rows are not typing errors. If the sample is not from sea water, the pattern can be genuine; the finding then stays as a note. In /convert this finding is only shown and never stops the export.
 
 **Citations.**
 
@@ -864,9 +1072,17 @@ Severity: warning · Export policy: show
 - [Dickson, Sabine & Christian (2007), Guide to Best Practices for Ocean CO2 Measurements, PICES Special Publication 3](https://www.ncei.noaa.gov/access/ocean-carbon-acidification-data-system/oceans/Handbook_2007/Guide_all_in_one.pdf), SOP 2 section 1, PDF p.39 (oceanic DIC 1800–2300 µmol/kg)
 - [Dickson, Sabine & Christian (2007), Guide to Best Practices for Ocean CO2 Measurements, PICES Special Publication 3](https://www.ncei.noaa.gov/access/ocean-carbon-acidification-data-system/oceans/Handbook_2007/Guide_all_in_one.pdf), SOP 3a section 1, PDF p.53 (oceanic TA 2000–2500 µmol/kg)
 
-## CHEM-RANGE
+## CHEM-RANGE — Values of temperature, salinity, pressure, oxygen or pH lie outside the range used by the quality control of open-ocean profiling programmes
 
 Severity: warning · Export policy: show
+
+**What it checks.** Values of temperature, salinity, pressure, oxygen or pH lie outside the range used by the quality control of open-ocean profiling programmes. Such values are often unit mistakes, swapped columns or leftover codes, and they would distort any analysis that uses the file.
+
+**When it fires.** When a column that is recognised as one of the five quantities, with a unit the range was written for, holds at least one value outside the range. One finding per column, with the count and the first offending value. Ranges: temperature -2.5 to 40 °C and salinity 2 to 41 (Argo CTD range test); pressure of at least -5 dbar, with no upper bound (Argo); oxygen -5 to 600 µmol/kg (Argo dissolved oxygen); pH 6.5 to 9 (GTSPP). The unit must match: temperature in °C, pressure in dbar, oxygen in µmol/kg, salinity in PSU or with no unit, pH in pH units or with no unit. Oxygen given per volume (mL/L, mg/L, µmol/L) is not compared, since converting to per kilogram needs the density of the water, and the report says that oxygen was not checked. The values -99, -999 and -9999 are left to ROW-MISSING-CODE, unless the converter has already treated them as values.
+
+**Example.** A salinity column holds 35.1, 34.9 and 350.0; the last value is reported as outside 2 to 41.
+
+**What you can do.** Check the flagged values and the unit of the column; a value that is 10 or 100 times too large is often a decimal slip. If the sample is from fresh or brackish water (salinity) or a closed system, the value can be genuine: keep it and say so in the description of the data. In /convert this finding is only shown and never stops the export.
 
 **Thresholds.**
 
