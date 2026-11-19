@@ -277,12 +277,16 @@ These are upper bounds: they assume the worker, page and companion lines vanish 
 was 141 page lines in 4e415a0 and needs a generic answer component that does not exist yet (its first use pays its own cost); the rule
 registry, ledger reasons and tests stay.
 
-**Cost and break-even of what is recommended (steps 0-4).** Round 4 cost about 838M tokens for 16 tasks, about 52M per task with its fix
-rounds; 9 tasks of the same kind are about 470M, if they behave like round-4 tasks (a pure move with a replay gate should need fewer fix
-rounds, but this is not measured). The split itself does not reduce production lines; it pays back only through cheaper later tasks.
-Break-even: if the next round of ~16 tasks needs about 30% fewer tokens than round 4 (fewer turns reading a 1953-line function, fewer fix
-rounds), it saves about 250M, so steps 0-4 pay back in about two rounds. If the next round shows no drop, they do not, and steps 5-8
-should not follow.
+**Cost and break-even of what is recommended (steps 0-4) — uncertain.** The measured 838M tokens and 164 subagents cover ALL tools work
+from 12.11 to 19.11 (rounds 2-4, reviews, real-data runs, release work), not round 4 alone; the round-4 ledger no longer exists, so a
+per-task cost of round 4 cannot be computed from it. As an order of magnitude only: if a round-4-style task with its review and fix rounds
+cost 20-50M tokens, steps 0-4 cost about 180-450M. The split itself does not reduce production lines; it pays back only through cheaper
+later tasks. Break-even condition: the first round after step 4 must cost clearly less per task than the rounds before it (fewer turns
+reading a 1953-line function, fewer fix rounds); this is measurable with `pomiar-subagentow.py` on that round. If it shows no drop,
+steps 5-8 should not follow.
+
+**Decision of 19.11 (Michal):** only step 0 now; steps 1-4 wait for a real need of the next round; steps 5-8 undecided. Stop criterion
+for /convert: a new round only when a real user's file fails because of the tool.
 
 The last three rules without an answer (median 149 production lines, 15 files, no worker/page/companion) gain nothing from the registry;
 they gain only from the split (an agent reads a 300-line stage instead of a 1953-line function). That gain is in agent turns and review
