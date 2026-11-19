@@ -319,19 +319,18 @@ export function candidatesOf(parsed: ConvertParseResult, mappings: Record<string
   return out;
 }
 
-/** The NN-NN-NN orders of a sheet's choice as the request carries them. */
-function yyOrderRequest(c: SheetChoice): Pick<ConvertRequestBody['sheets'][number], 'yyOrder' | 'yyOrderFromFile'> {
-  if (c.yyOrder === undefined || Object.keys(c.yyOrder).length === 0) return {};
-  const fromFile = (c.yyOrderFile ?? []).filter((i) => c.yyOrder?.[i] !== undefined);
-  return { yyOrder: c.yyOrder, ...(fromFile.length > 0 ? { yyOrderFromFile: fromFile } : {}) };
-}
+/** The two answers of a column's dates, each its own slot: the day/month order of its slash dates (`dayMonthOrder`: dmy | mdy) and the order of its NN-NN-NN dates (`yyOrder`: ymd | dmy | mdy). Both travel and are kept alike. */
+type OrderSlot = 'dayMonthOrder' | 'yyOrder';
+const SLOTS: readonly OrderSlot[] = ['dayMonthOrder', 'yyOrder'];
 
-/** The day/month orders of a sheet's choice as the request carries them (a profile sheet is asked about its dates too, so it sends them as well). */
-function orderRequest(c: SheetChoice): Pick<ConvertRequestBody['sheets'][number], 'dayMonthOrder' | 'dayMonthOrderFromFile'> {
-  if (c.dayMonthOrder === undefined || Object.keys(c.dayMonthOrder).length === 0) return {};
-  const fromFile = (c.dayMonthOrderFile ?? []).filter((i) => c.dayMonthOrder?.[i] !== undefined);
-  return { dayMonthOrder: c.dayMonthOrder, ...(fromFile.length > 0 ? { dayMonthOrderFromFile: fromFile } : {}) };
+/** One slot of a sheet's choice as the request carries it: the answers by column, and the columns read from a companion file (a profile sheet is asked about its dates too, so it sends them as well). */
+function slotRequest(c: SheetChoice, slot: OrderSlot): Pick<ConvertRequestBody['sheets'][number], 'dayMonthOrder' | 'dayMonthOrderFromFile' | 'yyOrder' | 'yyOrderFromFile'> {
+  const answers = c[slot];
+  if (answers === undefined || Object.keys(answers).length === 0) return {};
+  const fromFile = (c[`${slot}File`] ?? []).filter((i) => answers[i] !== undefined);
+  return { [slot]: answers, ...(fromFile.length > 0 ? { [`${slot}FromFile`]: fromFile } : {}) } as never;
 }
+const orderRequest = (c: SheetChoice): Pick<ConvertRequestBody['sheets'][number], 'dayMonthOrder' | 'dayMonthOrderFromFile' | 'yyOrder' | 'yyOrderFromFile'> => ({ ...slotRequest(c, 'dayMonthOrder'), ...slotRequest(c, 'yyOrder') });
 
 /** A column of this sheet has a latitude or longitude role (even one blank in every row): a declared position never applies to it. */
 const hasPositionRole = (m: Pick<SheetMapping, 'columns'>): boolean => m.columns.some((c) => c.role.kind === 'latitude' || c.role.kind === 'longitude');
@@ -415,12 +414,12 @@ export function requestOf(s: ConvertState): ConvertRequestBody {
       const nerc = s.nerc ? nercDecisionsOf(nercColumnsOf(s.parsed, s.mappings, s.choices), s.nerc, f.fileId, m.sheet) : undefined;
       if (c.profile) {
         // a profile sheet has no quantity, device or mesh size: only its roles, its cruise code and the user's approval of depth-based level IDs are sent
-        sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(handSet.length > 0 ? { handSet } : {}), profile: { ...(c.profileDepthIds ? { depthIds: true } : {}), ...(c.profileIgnoreCast ? { ignoreCast: true } : {}), ...(c.profilePosition ? { positionStation: true } : {}) }, ...orderRequest(c), ...yyOrderRequest(c), ...declaredRequest(c, m, positionJoinedFrom(s, f.fileId, m.sheet)), ...declaredDateRequest(c), ...(nerc ? { nerc } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }) });
+        sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(handSet.length > 0 ? { handSet } : {}), profile: { ...(c.profileDepthIds ? { depthIds: true } : {}), ...(c.profileIgnoreCast ? { ignoreCast: true } : {}), ...(c.profilePosition ? { positionStation: true } : {}) }, ...orderRequest(c), ...declaredRequest(c, m, positionJoinedFrom(s, f.fileId, m.sheet)), ...declaredDateRequest(c), ...(nerc ? { nerc } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }) });
         continue;
       }
       const q = declarationOf(c.quantity);
       const dev = deviceOf(c);
-      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(handSet.length > 0 ? { handSet } : {}), ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(c.presenceOnly && !m.columns.some((col) => col.role.kind === 'quantity') ? { presenceOnly: true } : {}), ...(c.totalOnce ? { totalOnce: true } : {}), ...(c.realCounts ? { realCounts: true } : {}), ...(c.dropCopies ? { dropCopies: true } : {}), ...(!c.dropCopies && (c.dropCopiesAnswer ?? c.dropCopiesFile) !== undefined ? { dropCopiesCount: (c.dropCopiesAnswer ?? c.dropCopiesFile) as number, ...(c.dropCopiesAnswer === undefined ? { dropCopiesFromFile: true } : {}) } : {}), ...(!c.totalOnce && (c.totalOnceAnswer ?? c.totalOnceFile) !== undefined ? { totalOnceCount: (c.totalOnceAnswer ?? c.totalOnceFile) as number, ...(c.totalOnceAnswer === undefined ? { totalOnceFromFile: true } : {}) } : {}), ...(c.realCountsAnswer !== undefined && !c.realCounts ? { realCountsRows: c.realCountsAnswer } : {}), ...(c.realCountsFile !== undefined && !c.realCounts ? { realCountsRowsFile: c.realCountsFile } : {}), ...ownRequest(c, ownRecordsAllowed(f, m, c)), ...(c.leaveOut !== undefined && c.leaveOut.length > 0 ? { leaveOut: c.leaveOut } : {}), ...(c.leaveOutFile !== undefined && c.leaveOutFile.length > 0 ? { leaveOutFile: c.leaveOutFile } : {}), ...orderRequest(c), ...yyOrderRequest(c), ...declaredRequest(c, m, positionJoinedFrom(s, f.fileId, m.sheet)), ...declaredDateRequest(c), ...(c.sampleKey !== undefined && c.sampleKey.length > 0 ? { sampleKey: { columns: c.sampleKey, ...(c.sampleKeyPrefix === undefined ? {} : { prefix: c.sampleKeyPrefix }) }, ...(c.sampleKeyFromFile === true ? { sampleKeyFromFile: true } : {}) } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
+      sheets.push({ fileId: f.fileId, sheet: m.sheet, mapping: m, shape: c.shape, ...(handSet.length > 0 ? { handSet } : {}), ...(unconfirmedTaxa.length > 0 ? { unconfirmedTaxa } : {}), ...(c.readAsTable ? { readAsTable: true } : {}), ...(c.presenceOnly && !m.columns.some((col) => col.role.kind === 'quantity') ? { presenceOnly: true } : {}), ...(c.totalOnce ? { totalOnce: true } : {}), ...(c.realCounts ? { realCounts: true } : {}), ...(c.dropCopies ? { dropCopies: true } : {}), ...(!c.dropCopies && (c.dropCopiesAnswer ?? c.dropCopiesFile) !== undefined ? { dropCopiesCount: (c.dropCopiesAnswer ?? c.dropCopiesFile) as number, ...(c.dropCopiesAnswer === undefined ? { dropCopiesFromFile: true } : {}) } : {}), ...(!c.totalOnce && (c.totalOnceAnswer ?? c.totalOnceFile) !== undefined ? { totalOnceCount: (c.totalOnceAnswer ?? c.totalOnceFile) as number, ...(c.totalOnceAnswer === undefined ? { totalOnceFromFile: true } : {}) } : {}), ...(c.realCountsAnswer !== undefined && !c.realCounts ? { realCountsRows: c.realCountsAnswer } : {}), ...(c.realCountsFile !== undefined && !c.realCounts ? { realCountsRowsFile: c.realCountsFile } : {}), ...ownRequest(c, ownRecordsAllowed(f, m, c)), ...(c.leaveOut !== undefined && c.leaveOut.length > 0 ? { leaveOut: c.leaveOut } : {}), ...(c.leaveOutFile !== undefined && c.leaveOutFile.length > 0 ? { leaveOutFile: c.leaveOutFile } : {}), ...orderRequest(c), ...declaredRequest(c, m, positionJoinedFrom(s, f.fileId, m.sheet)), ...declaredDateRequest(c), ...(c.sampleKey !== undefined && c.sampleKey.length > 0 ? { sampleKey: { columns: c.sampleKey, ...(c.sampleKeyPrefix === undefined ? {} : { prefix: c.sampleKeyPrefix }) }, ...(c.sampleKeyFromFile === true ? { sampleKeyFromFile: true } : {}) } : {}), ...(nerc ? { nerc } : {}), ...(q ? { quantity: q } : {}), ...(c.cruise.trim() === '' ? {} : { cruise: c.cruise.trim() }), ...(dev ? { device: dev } : {}), ...(c.mesh.trim() === '' ? {} : { meshUm: c.mesh.trim() }) });
     }
   }
   const confirmed = (s.joins ?? []).filter((j) => j.state === 'confirmed');
@@ -474,29 +473,18 @@ function savedKeyFor(parsed: ConvertParseResult, file: ConvertParseResult['files
   return rivals.length === 0 ? { kind: 'found', entry: mine[0] } : { kind: 'ambiguous' };
 }
 
-/** The day/month orders a companion file recorded for a sheet, as a pre-pick: only for a column found again by its header hash, in a sheet with the same number of rows (declare-first: nothing else is picked). */
-function savedOrders(settings: ConvertParseResult['settings'], sheet: { name: string; header: string[]; rowCount: number }): Pick<SheetChoice, 'dayMonthOrder' | 'dayMonthOrderFile'> {
-  const order: Record<number, 'dmy' | 'mdy'> = {};
-  for (const d of settings.dayMonthOrder ?? []) {
-    if (d.sheet !== sheet.name || d.rows !== sheet.rowCount) continue;
-    const at = resolveKeyHashes(sheet.header, d.hash);
-    if (at?.length === 1 && order[at[0]] === undefined) order[at[0]] = d.order;
-  }
-  const columns = Object.keys(order).map(Number);
-  return columns.length === 0 ? {} : { dayMonthOrder: order, dayMonthOrderFile: columns };
-}
-
-/** The NN-NN-NN orders a companion file recorded for a sheet: same rule as savedOrders (column found again by its hash, same number of rows), a separate answer. */
-function savedYYOrders(settings: ConvertParseResult['settings'], sheet: { name: string; header: string[]; rowCount: number }): Pick<SheetChoice, 'yyOrder' | 'yyOrderFile'> {
+/** The orders a companion file recorded for a sheet, one slot: a pre-pick only for a column found again by its header hash, in a sheet with the same number of rows (declare-first: nothing else is picked). */
+function savedSlot(settings: ConvertParseResult['settings'], sheet: { name: string; header: string[]; rowCount: number }, slot: OrderSlot): Pick<SheetChoice, OrderSlot | 'dayMonthOrderFile' | 'yyOrderFile'> {
   const order: Record<number, 'ymd' | 'dmy' | 'mdy'> = {};
-  for (const d of settings.yyOrder ?? []) {
+  for (const d of settings[slot] ?? []) {
     if (d.sheet !== sheet.name || d.rows !== sheet.rowCount) continue;
     const at = resolveKeyHashes(sheet.header, d.hash);
     if (at?.length === 1 && order[at[0]] === undefined) order[at[0]] = d.order;
   }
   const columns = Object.keys(order).map(Number);
-  return columns.length === 0 ? {} : { yyOrder: order, yyOrderFile: columns };
+  return columns.length === 0 ? {} : { [slot]: order, [`${slot}File`]: columns };
 }
+const savedOrders = (settings: ConvertParseResult['settings'], sheet: { name: string; header: string[]; rowCount: number }): Pick<SheetChoice, OrderSlot | 'dayMonthOrderFile' | 'yyOrderFile'> => ({ ...savedSlot(settings, sheet, 'dayMonthOrder'), ...savedSlot(settings, sheet, 'yyOrder') });
 
 /** The answers a companion file recorded for a sheet, with the own-records pair kept together: the copies answer is "under each row is its own record", so it is kept only while that choice holds for this sheet today (the same name and number of rows). */
 function ownAnswers(settings: ConvertParseResult['settings'], sheet: { name: string; rowCount: number }): ReturnType<typeof fileAnswers> & ReturnType<typeof savedOwnRecords> {
@@ -548,43 +536,37 @@ export function initialChoices(parsed: ConvertParseResult): Record<string, Sheet
       const match = profile ? { kind: 'none' as const } : savedKeyFor(parsed, f, sh);
       const saved = match.kind === 'found' ? match.entry : undefined;
       const savedColumns = saved === undefined ? undefined : resolveKeyHashes(sh.header, saved.hashes);
-      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: false, realCounts: false, dropCopies: false, ...ownAnswers(parsed.settings, sh), ...savedOrders(parsed.settings, sh), ...savedYYOrders(parsed.settings, sh), ...savedPosition(parsed.settings, sh), ...savedDate(parsed.settings, sh), ...(savedColumns === undefined ? {} : { sampleKey: savedColumns, sampleKeyFromFile: true, ...(saved?.prefix === undefined ? {} : { sampleKeyPrefix: saved.prefix }) }), ...(match.kind === 'ambiguous' ? { sampleKeyAmbiguous: true as const } : {}) };
+      out[sheetKey(f.fileId, sh.name)] = { use: f.dictionarySheets?.[sh.name] === undefined, shape: f.suggestedShapes[sh.name] ?? 'wide', quantity: EMPTY_QUANTITY, cruise: '', device: '', deviceText: '', mesh: '', profile, profileDepthIds: profile && approved.has(sh.name), profileIgnoreCast: profile && castTicked.has(sh.name), profilePosition: false, readAsTable: asTable.has(sh.name), presenceOnly: presence.has(sh.name), totalOnce: false, realCounts: false, dropCopies: false, ...ownAnswers(parsed.settings, sh), ...savedOrders(parsed.settings, sh), ...savedPosition(parsed.settings, sh), ...savedDate(parsed.settings, sh), ...(savedColumns === undefined ? {} : { sampleKey: savedColumns, sampleKeyFromFile: true, ...(saved?.prefix === undefined ? {} : { sampleKeyPrefix: saved.prefix }) }), ...(match.kind === 'ambiguous' ? { sampleKeyAmbiguous: true as const } : {}) };
     }
   }
   return out;
 }
 
-/** The day/month orders in use (the person's or a companion file's that still holds), for the companion file: the sheet, the column's header hash and the number of rows (no header text, no date). */
-export function dayMonthOrderSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>): NonNullable<ConvertSettings['dayMonthOrder']> {
-  const out: NonNullable<ConvertSettings['dayMonthOrder']> = [];
+/**
+ * The orders of one slot in use (the person's or a companion file's that still holds), for the companion file: the sheet, the column's header hash and the number of rows (no header text, no date).
+ * With `declared` (the findings core reported), only an answer core reported as used, for the same file, sheet and column, is written: an answer for a column that no longer has such dates, or that was
+ * contradicted, is not kept.
+ */
+function slotSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>, slot: OrderSlot, declared?: readonly Finding[]): NonNullable<ConvertSettings[OrderSlot]> {
+  const out: NonNullable<ConvertSettings[OrderSlot]> = [];
+  const said = (file: string, sheet: string, index: number): boolean =>
+    declared === undefined ||
+    declared.some((f) => f.ruleId === 'CONV-DATE-ORDER-DECLARED' && f.file === file && f.sheet === sheet && Number(f.params.index) === index && (f.params.variant === 'two-digit-year') === (slot === 'yyOrder'));
   for (const f of parsed.files) {
     for (const sh of f.sheets) {
       const c = choices[sheetKey(f.fileId, sh.name)];
-      if (!c || !c.use || c.dayMonthOrder === undefined) continue;
-      for (const [k, order] of Object.entries(c.dayMonthOrder)) {
+      const answers = c?.[slot];
+      if (!c || !c.use || answers === undefined) continue;
+      for (const [k, order] of Object.entries(answers)) {
         const hash = keyHashes(sh.header, [Number(k)]);
-        if (hash !== undefined && !out.some((o) => o.sheet === sh.name && o.hash === hash)) out.push({ sheet: sh.name, order, hash, rows: sh.rowCount });
+        if (hash !== undefined && said(f.fileName, sh.name, Number(k)) && !out.some((o) => o.sheet === sh.name && o.hash === hash)) out.push({ sheet: sh.name, order, hash, rows: sh.rowCount } as never);
       }
     }
   }
   return out;
 }
-
-/** The NN-NN-NN orders in use, for the companion file: sheet, the column's header hash, rows (no header text, no date). */
-export function yyOrderSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>): NonNullable<ConvertSettings['yyOrder']> {
-  const out: NonNullable<ConvertSettings['yyOrder']> = [];
-  for (const f of parsed.files) {
-    for (const sh of f.sheets) {
-      const c = choices[sheetKey(f.fileId, sh.name)];
-      if (!c || !c.use || c.yyOrder === undefined) continue;
-      for (const [k, order] of Object.entries(c.yyOrder)) {
-        const hash = keyHashes(sh.header, [Number(k)]);
-        if (hash !== undefined && !out.some((o) => o.sheet === sh.name && o.hash === hash)) out.push({ sheet: sh.name, order, hash, rows: sh.rowCount });
-      }
-    }
-  }
-  return out;
-}
+export const dayMonthOrderSettingsOf = (parsed: ConvertParseResult, choices: Record<string, SheetChoice>, declared?: readonly Finding[]): NonNullable<ConvertSettings['dayMonthOrder']> => slotSettingsOf(parsed, choices, 'dayMonthOrder', declared) as NonNullable<ConvertSettings['dayMonthOrder']>;
+export const yyOrderSettingsOf = (parsed: ConvertParseResult, choices: Record<string, SheetChoice>, declared?: readonly Finding[]): NonNullable<ConvertSettings['yyOrder']> => slotSettingsOf(parsed, choices, 'yyOrder', declared);
 
 /** The readings of a comma the person gave (or a companion file gave and still holds) for the columns in use: the sheet, the column's header hash and the number of rows of the sheet AS DROPPED (no header text, no number). */
 export function decimalReadingSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>): NonNullable<ConvertSettings['decimalReading']> {

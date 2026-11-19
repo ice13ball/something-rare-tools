@@ -64,8 +64,8 @@ import type { RuleSpec } from './spec';
  *   CONV-TIME-HOLDS-DATES      count            field = the time column, count = its cells that hold a full date, while no column is the date: blocks (the events would have no eventDate)
  *   CONV-TIME-SOME-DATES       count            field = the time column, lines = its cells that hold a full date, fewer than half of the filled ones: those dates would be lost (warning, accept)
  *   CONV-DATE-ORDER-UNDECLARED count, examples, index, first, second, isoFirst, isoSecond (+ variant 'two-digit-year': readings = the orders that fit, machine list 'ymd,dmy'; answers = the same for the text, 'ymd, dmy'; shown = the dates of the first example in each, 'date (code)' joined with '; '; the cells are NN-NN-NN and the ROW-DATE-YY-AMBIGUOUS of the column is not said)   field = a date / datetime / time column (or a picked date key part), value = the first example, index = its column: it has dates such as 5/4/2023 that can be read either way, no date in it decides, and no order is declared (blocks; the ROW-DATE-UNPARSEABLE of those cells is not said)
- *   CONV-DATE-ORDER-CONTRADICTED declared, detected, index   the declared day/month order disagrees with the column's own dates (blocks; the declaration is not used)
- *   CONV-DATE-ORDER-DECLARED   order, index   info: the declared order was used for the ambiguous dates of the column (optional fromFile = yes: the answer came from the companion file)
+ *   CONV-DATE-ORDER-CONTRADICTED declared, detected, index (+ variant 'two-digit-year': the answer for the NN-NN-NN dates, its own text)   the declared day/month order disagrees with the column's own dates (blocks; the declaration is not used)
+ *   CONV-DATE-ORDER-DECLARED   order, index (+ variant 'two-digit-year': the answer for the NN-NN-NN dates, its own text)   info: the declared order was used for the ambiguous dates of the column (optional fromFile = yes: the answer came from the companion file)
  *   CONV-DECIMAL-DECLARED      column, index, reading   info: the person declared what the comma is in a column that IN-DECIMAL-AMBIGUOUS asked about (reading = decimal | thousands); under thousands the column's cells written 1,250 or 1,250,000 are read as 1250 and 1250000 (optional fromFile = yes: the answer came from the companion file)
  *   CONV-ENCODING-DECLARED     encoding         info: the person picked how the 8-bit letters of the file are read (IN-ENCODING-AMBIGUOUS asked); encoding = windows-1250 | iso-8859-2 | windows-1252 (optional fromFile = yes: the answer came from the companion file)
  *   CONV-QUANTITY-BLANK-KEPT   count            field = the quantity column, lines = rows of a long sheet with a taxon, an empty / NA quantity and a biomass value above zero: written as present with no count (warning, accept)
@@ -2609,6 +2609,25 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
     },
     technical: `{file}, {sheet} field {field} (column {index}): {count} cell(s) written NN-NN-NN, e.g. '{value}' ({examples}), read as {shown}. Every NN-NN-NN cell of the column fits more than one order ({readings}; a part above 31, or above 12 in a month place, would have ruled one out), no other NN-NN-NN date decides it and no order is declared for it. An order is never guessed, so the export is blocked until it is declared; the century of the two-digit year is accepted separately (ROW-DATE-YYMMDD).`,
   },
+  // CONV-DATE-ORDER-DECLARED / -CONTRADICTED for NN-NN-NN dates (a two-digit year): the answer given for those dates only, apart from the one for the slash dates of the same column
+  'CONV-DATE-ORDER-DECLARED:two-digit-year': {
+    plain: {
+      pl: `Jak podano, daty z dwucyfrowym rokiem (NN-NN-NN) w kolumnie „{field}” są odczytywane w kolejności {order} (ymd: najpierw rok, dmy: najpierw dzień, mdy: najpierw miesiąc): w zapisanej dacie, w identyfikatorze i przy porównaniu w połączeniu arkuszy.`,
+      en: `As you declared, the dates with a two-digit year (NN-NN-NN) in column "{field}" are read in the order {order} (ymd: year first, dmy: day first, mdy: month first): in the date written, in an identifier and when compared in a join.`,
+      de: `Wie angegeben, werden die Daten mit zweistelligem Jahr (NN-NN-NN) der Spalte „{field}“ in der Reihenfolge {order} gelesen (ymd: Jahr zuerst, dmy: Tag zuerst, mdy: Monat zuerst): im geschriebenen Datum, in einer Kennung und beim Vergleich in einer Verknüpfung.`,
+      fr: `Comme indiqué, les dates à année sur deux chiffres (NN-NN-NN) de la colonne « {field} » sont lues dans l'ordre {order} (ymd : année d'abord, dmy : jour d'abord, mdy : mois d'abord) : dans la date écrite, dans un identifiant et à la comparaison dans une jointure.`,
+    },
+    technical: `{file}, {sheet} field {field} (column {index}): the order {order} declared for the dates with a two-digit year (NN-NN-NN) of the column was used for those cells. It applies to the date written, the date inside an ID and the date compared in a join alike. The slash dates of the column have their own answer.`,
+  },
+  'CONV-DATE-ORDER-CONTRADICTED:two-digit-year': {
+    plain: {
+      pl: `Dla dat z dwucyfrowym rokiem (NN-NN-NN) w kolumnie „{field}” podano kolejność „{declared}”, ale ich własne daty dopuszczają tylko „{detected}” (dmy: najpierw dzień, mdy: najpierw miesiąc, ymd: najpierw rok). Podana kolejność nie jest używana. Popraw odpowiedź albo daty.`,
+      en: `For the dates with a two-digit year (NN-NN-NN) in column "{field}" you declared the order "{declared}", but their own dates allow only "{detected}" (dmy: day first, mdy: month first, ymd: year first). The declared order is not used. Correct the answer or the dates.`,
+      de: `Für die Daten mit zweistelligem Jahr (NN-NN-NN) der Spalte „{field}“ wurde die Reihenfolge „{declared}“ angegeben, ihre eigenen Daten lassen aber nur „{detected}“ zu (dmy: Tag zuerst, mdy: Monat zuerst, ymd: Jahr zuerst). Die Angabe wird nicht verwendet. Korrigieren Sie die Antwort oder die Daten.`,
+      fr: `Pour les dates à année sur deux chiffres (NN-NN-NN) de la colonne « {field} », l'ordre « {declared} » a été indiqué, mais leurs propres dates n'admettent que « {detected} » (dmy : jour d'abord, mdy : mois d'abord, ymd : année d'abord). L'ordre indiqué n'est pas utilisé. Corrigez la réponse ou les dates.`,
+    },
+    technical: `{file}, {sheet} field {field} (column {index}): the order declared for the dates with a two-digit year (NN-NN-NN) of the column is {declared}, but the cells of the column allow only {detected}. A declaration only decides cells that no date decides, so it is not applied; the export is blocked until the answer or the dates are corrected. The slash dates of the column have their own answer.`,
+  },
   'CONV-SAMPLE-CODE-MISSING': {
     plain: {
       pl: `{count} {+count:wiersz profilu nie ma|wiersze profilu nie mają|wierszy profilu nie ma} kodu poziomu ({+lineCount:wiersz|wiersze|wierszy} {lines}). Identyfikator poziomu pochodzi od Ciebie: wskaż jako kod próbki kolumnę z kodem unikalnym w obrębie stacji (numer butelki, skanu lub Niskina) albo zaznacz zgodę na stację i głębokość zapisaną w arkuszu (w każdym wierszu potrzebna głębokość albo ciśnienie w decybarach).`,
@@ -3078,6 +3097,7 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
 };
 
 const profileVariant = (f: Finding): { plain: Record<Lang, string>; technical: string } | undefined => {
+  if ((f.ruleId === 'CONV-DATE-ORDER-DECLARED' || f.ruleId === 'CONV-DATE-ORDER-CONTRADICTED') && f.params.variant === 'two-digit-year') return PROFILE_VARIANTS[`${f.ruleId}:two-digit-year`];
   if (f.ruleId === 'CONV-DATE-ORDER-UNDECLARED' && f.params.variant === 'two-digit-year') return PROFILE_VARIANTS['CONV-DATE-ORDER-UNDECLARED:two-digit-year'];
   if (f.ruleId === 'CONV-ROW-COPIES' && f.params.own === 'yes') return PROFILE_VARIANTS['CONV-ROW-COPIES:own'];
   if ((f.ruleId === 'CONV-ROW-COPIES' || f.ruleId === 'CONV-ROW-COPIES-DROPPED') && f.params.nosum === 'yes') return PROFILE_VARIANTS[`${f.ruleId}:nosum`];

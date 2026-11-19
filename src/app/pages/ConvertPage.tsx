@@ -1119,8 +1119,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const leaveOut = said.filter((f) => f.ruleId === 'CONV-ROW-LEFT-OUT').map((f) => ({ sheet: f.sheet as string, reason: String(f.params.reason), count: Number(f.params.count), rows: Number(f.params.rows) }));
     const sampleKey = parsed ? sampleKeySettingsOf(parsed, choices) : [];
     const turned = parsed ? turnedSettingsOf(parsed, choices) : [];
-    const dayMonthOrder = parsed ? dayMonthOrderSettingsOf(parsed, choices) : [];
-    const yyOrder = parsed ? yyOrderSettingsOf(parsed, choices) : [];
+    const dayMonthOrder = parsed ? dayMonthOrderSettingsOf(parsed, choices, said) : [];
+    const yyOrder = parsed ? yyOrderSettingsOf(parsed, choices, said) : [];
     const decimalReading = parsed ? decimalReadingSettingsOf(parsed, choices) : [];
     const encoding = parsed ? encodingSettingsOf(parsed, choices) : [];
     // the position the person declared for a sheet without one: their own typed values, the one thing besides names and counts the file holds

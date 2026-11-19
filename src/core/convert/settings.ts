@@ -243,8 +243,11 @@ function names(text: string, n: number): string[] | undefined {
 }
 const ONE_HASH = '[0-9a-f]{8}(?:\\.\\d{1,4}of\\d{1,4})?';
 const TURNED = new RegExp(`^(.+):(${ONE_HASH}):(\\d{1,9}):(${HASHES})?(?::(dates))?$`, 's');
-const YY_ORDER = /^(ymd|dmy|mdy):(.+):([0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?):(\d{1,9})$/s;
-const DAY_MONTH_ORDER = /^(dmy|mdy):(.+):([0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?):(\d{1,9})$/s;
+/** The two order answers of a date column, each a line `<prefix><order>:<sheet>:<hash>:<rows>`: the slash dates (dayMonthOrder) and the NN-NN-NN dates (yyOrder, which alone may be `ymd`). */
+const ORDER_LINES = [
+  { slot: 'dayMonthOrder', prefix: DAY_MONTH_ORDER_SETTING, pattern: /^(dmy|mdy):(.+):([0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?):(\d{1,9})$/s },
+  { slot: 'yyOrder', prefix: YY_ORDER_SETTING, pattern: /^(ymd|dmy|mdy):(.+):([0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?):(\d{1,9})$/s },
+] as const;
 const DECIMAL_READING = /^(decimal|thousands):(.+):([0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?):(\d{1,9})$/s;
 const ENCODING_PICK = /^(windows-1250|iso-8859-2|windows-1252):([0-9a-f]{8})$/;
 const DATE_PART = '\\d{4}(?:-\\d{2}(?:-\\d{2})?)?';
@@ -295,14 +298,11 @@ export function readConvertSettings(parsed: ParsedFile): ConvertSettings | undef
       const m = SAMPLE_KEY.exec(v.slice(SAMPLE_KEY_SETTING.length));
       const list = (settings.sampleKey ??= []);
       if (m !== null && m[1].length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS && !list.some((x) => x.sheet === m[1])) list.push({ sheet: m[1], hashes: m[2], rows: Number(m[3]) });
-    } else if (v.startsWith(DAY_MONTH_ORDER_SETTING)) {
-      const m = DAY_MONTH_ORDER.exec(v.slice(DAY_MONTH_ORDER_SETTING.length));
-      const list = (settings.dayMonthOrder ??= []);
-      if (m !== null && m[2].length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS * 8 && !list.some((x) => x.sheet === m[2] && x.hash === m[3])) list.push({ order: m[1] as 'dmy' | 'mdy', sheet: m[2], hash: m[3], rows: Number(m[4]) });
-    } else if (v.startsWith(YY_ORDER_SETTING)) {
-      const m = YY_ORDER.exec(v.slice(YY_ORDER_SETTING.length));
-      const list = (settings.yyOrder ??= []);
-      if (m !== null && m[2].length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS * 8 && !list.some((x) => x.sheet === m[2] && x.hash === m[3])) list.push({ order: m[1] as 'ymd' | 'dmy' | 'mdy', sheet: m[2], hash: m[3], rows: Number(m[4]) });
+    } else if (ORDER_LINES.some((l) => v.startsWith(l.prefix))) {
+      const l = ORDER_LINES.find((x) => v.startsWith(x.prefix))!;
+      const m = l.pattern.exec(v.slice(l.prefix.length));
+      const list = (settings[l.slot] ??= []);
+      if (m !== null && m[2].length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS * 8 && !list.some((x) => x.sheet === m[2] && x.hash === m[3])) list.push({ order: m[1] as 'ymd' | 'dmy' | 'mdy', sheet: m[2], hash: m[3], rows: Number(m[4]) } as never);
     } else if (v.startsWith(DECIMAL_READING_SETTING)) {
       const m = DECIMAL_READING.exec(v.slice(DECIMAL_READING_SETTING.length));
       const list = (settings.decimalReading ??= []);
@@ -402,8 +402,7 @@ export function writeConvertSidecar(settings: Partial<ConvertSettings>): string 
         ...(k.prefix !== undefined && k.prefix.trim() !== '' && k.prefix.trim().length <= MAX_KEY_PREFIX ? [line([SETTING_ROW, `${SAMPLE_KEY_PREFIX_SETTING}${k.sheet}:${k.hashes}:${k.rows}:${k.prefix.trim()}`, '', '', ''])] : []),
       ]),
       ...(settings.turned ?? []).filter((t) => t.sheet !== '' && t.sheet.length <= MAX_SETTING_NAME && new RegExp(`^${ONE_HASH}$`).test(t.nameHash) && (t.notSampleHashes === '' || new RegExp(`^${HASHES}$`).test(t.notSampleHashes)) && Number.isInteger(t.rows) && t.rows >= 0).slice(0, MAX_SETTING_SHEETS).map((t) => line([SETTING_ROW, `${TURNED_SETTING}${t.sheet}:${t.nameHash}:${t.rows}:${t.notSampleHashes}${t.headerDates === true ? ':dates' : ''}`, '', '', ''])),
-      ...(settings.dayMonthOrder ?? []).filter((d) => (d.order === 'dmy' || d.order === 'mdy') && d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && /^[0-9a-f]{8}/.test(d.hash) && Number.isInteger(d.rows) && d.rows >= 0).slice(0, MAX_SETTING_SHEETS * 8).map((d) => line([SETTING_ROW, `${DAY_MONTH_ORDER_SETTING}${d.order}:${d.sheet}:${d.hash}:${d.rows}`, '', '', ''])),
-      ...(settings.yyOrder ?? []).filter((d) => (d.order === 'ymd' || d.order === 'dmy' || d.order === 'mdy') && d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && /^[0-9a-f]{8}/.test(d.hash) && Number.isInteger(d.rows) && d.rows >= 0).slice(0, MAX_SETTING_SHEETS * 8).map((d) => line([SETTING_ROW, `${YY_ORDER_SETTING}${d.order}:${d.sheet}:${d.hash}:${d.rows}`, '', '', ''])),
+      ...ORDER_LINES.flatMap((l) => (settings[l.slot] ?? []).filter((d) => l.pattern.test(`${d.order}:x:${'0'.repeat(8)}:0`) && d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && /^[0-9a-f]{8}/.test(d.hash) && Number.isInteger(d.rows) && d.rows >= 0).slice(0, MAX_SETTING_SHEETS * 8).map((d) => line([SETTING_ROW, `${l.prefix}${d.order}:${d.sheet}:${d.hash}:${d.rows}`, '', '', '']))),
       ...(settings.decimalReading ?? []).filter((d) => (d.reading === 'decimal' || d.reading === 'thousands') && d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && /^[0-9a-f]{8}/.test(d.hash) && Number.isInteger(d.rows) && d.rows >= 0).slice(0, MAX_SETTING_SHEETS * 8).map((d) => line([SETTING_ROW, `${DECIMAL_READING_SETTING}${d.reading}:${d.sheet}:${d.hash}:${d.rows}`, '', '', ''])),
       ...(settings.encoding ?? []).filter((e) => (e.encoding === 'windows-1250' || e.encoding === 'iso-8859-2' || e.encoding === 'windows-1252') && /^[0-9a-f]{8}$/.test(e.hash)).slice(0, MAX_SETTING_SHEETS).map((e) => line([SETTING_ROW, `${ENCODING_SETTING}${e.encoding}:${e.hash}`, '', '', ''])),
       ...(settings.declaredPosition ?? []).filter((d) => d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && [d.lat, d.lon, d.uncertaintyM].every((x) => /^[^:\r\n]{1,40}$/.test(x.trim()) && x.trim() !== '')).slice(0, MAX_SETTING_SHEETS).map((d) => line([SETTING_ROW, `${DECLARED_POSITION_SETTING}${d.lat.trim()}:${d.lon.trim()}:${d.uncertaintyM.trim()}:${Math.max(0, Math.floor(d.rows))}:${d.sheet}`, '', '', ''])),

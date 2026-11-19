@@ -11,6 +11,8 @@ import { initialChoices, yyOrderSettingsOf, dayMonthOrderSettingsOf } from '../.
 import { ConvertPage } from '../../src/app/pages/ConvertPage';
 import { keyHashes } from '../../src/core/convert/keySetting';
 import { writeConvertSidecar } from '../../src/core/convert/settings';
+import { makeConvertFinding, renderConvertPlain, renderConvertTechnical } from '../../src/core/rules/convert';
+import type { Lang } from '../../src/core/types';
 import { UI } from '../../src/core/i18n/ui';
 import { createDirectConvertEngine } from '../../src/worker/convert.handler';
 import type { ConvertEngine, ConvertParseResult, ConvertRequestBody } from '../../src/worker/convert.protocol';
@@ -173,5 +175,139 @@ describe('the companion file', () => {
     fireEvent.click(within(item('CONV-DATE-ORDER-UNDECLARED')!).getByRole('button', { name: T['convert.finding.yyDmy'] }));
     await settled(run, (b) => b.sheets[0].yyOrder?.[DATE] === 'dmy');
     expect(last(run).yyOrderFromFile).toBeUndefined();
+  });
+});
+
+const declaredLines = (): { yy: HTMLElement; slash: HTMLElement } => {
+  const all = items('CONV-DATE-ORDER-DECLARED');
+  expect(all).toHaveLength(2);
+  const yy = all.filter((li) => /two-digit year \(NN-NN-NN\)/.test(li.textContent ?? ''));
+  expect(yy).toHaveLength(1);
+  return { yy: yy[0], slash: all.find((li) => li !== yy[0])! };
+};
+
+describe('a mixed column with both answers dmy (round 4, Task 8 fix round 1)', () => {
+  it('shows two distinguishable lines, and each "Ask again" clears its own slot', async () => {
+    const run = await load([{ name: 'hauls.csv', text: csvOf(HEADER, MIXED) }]);
+    const slashQ = items('CONV-DATE-ORDER-UNDECLARED').find((li) => li.querySelector('[data-testid="day-first"]') !== null)!;
+    fireEvent.click(within(slashQ).getByRole('button', { name: T['convert.finding.dayFirst'] }));
+    await settled(run, (b) => b.sheets[0].dayMonthOrder?.[DATE] === 'dmy');
+    const yyQ = items('CONV-DATE-ORDER-UNDECLARED').find((li) => li.querySelector('[data-testid="yy-dmy"]') !== null)!;
+    fireEvent.click(within(yyQ).getByRole('button', { name: T['convert.finding.yyDmy'] }));
+    await settled(run, (b) => b.sheets[0].yyOrder?.[DATE] === 'dmy');
+    await waitFor(() => expect(items('CONV-DATE-ORDER-DECLARED')).toHaveLength(2));
+    expect(declaredLines().slash.textContent).not.toMatch(/two-digit/);
+    fireEvent.click(within(declaredLines().yy).getByRole('button', { name: T['convert.finding.askAgain'] }));
+    await settled(run, (b) => b.sheets[0].yyOrder === undefined);
+    expect(last(run).dayMonthOrder).toEqual({ [DATE]: 'dmy' });
+    const yyQ2 = items('CONV-DATE-ORDER-UNDECLARED').find((li) => li.querySelector('[data-testid="yy-dmy"]') !== null)!;
+    fireEvent.click(within(yyQ2).getByRole('button', { name: T['convert.finding.yyDmy'] }));
+    await settled(run, (b) => b.sheets[0].yyOrder?.[DATE] === 'dmy');
+    await waitFor(() => expect(items('CONV-DATE-ORDER-DECLARED')).toHaveLength(2));
+    fireEvent.click(within(declaredLines().slash).getByRole('button', { name: T['convert.finding.askAgain'] }));
+    await settled(run, (b) => b.sheets[0].dayMonthOrder === undefined);
+    expect(last(run).yyOrder).toEqual({ [DATE]: 'dmy' });
+  });
+
+  it('the two-digit CONTRADICTED and DECLARED texts name the dates and keep the companion-file sentence, in every language', () => {
+    for (const lang of ['en', 'pl', 'de', 'fr'] as Lang[]) {
+      const base = { file: 'a.csv', sheet: 's', field: 'Date' };
+      const d = makeConvertFinding('CONV-DATE-ORDER-DECLARED', { ...base, params: { variant: 'two-digit-year', order: 'ymd', fromFile: 'yes', index: 2 } });
+      const plain = renderConvertPlain(d, lang);
+      expect(plain).toContain('NN-NN-NN');
+      const without = renderConvertPlain({ ...d, params: { variant: 'two-digit-year', order: 'ymd', index: 2 } }, lang);
+      expect(plain.startsWith(without)).toBe(true);
+      expect(plain.length).toBeGreaterThan(without.length);
+      expect(renderConvertTechnical(d)).toContain('NN-NN-NN');
+      const c = makeConvertFinding('CONV-DATE-ORDER-CONTRADICTED', { ...base, params: { variant: 'two-digit-year', declared: 'mdy', detected: 'ymd', index: 2 } });
+      expect(renderConvertPlain(c, lang)).toContain('NN-NN-NN');
+      expect(renderConvertTechnical(c)).toContain('NN-NN-NN');
+    }
+  });
+});
+
+const SEMI = (rows: string[][]): string => [HEADER.concat('Chlorophyll').join(';'), ...rows.map((r) => r.join(';'))].join('\n') + '\n';
+const DECIMAL_ROWS = [['S1', 'k1', '05-06-21', '55,5', '3,5', 'Calanus finmarchicus', '4', '1,250'], ['S2', 'k2', '25-06-21', '56,5', '3,5', 'Calanus finmarchicus', '5', '2,000']];
+
+describe('the answer survives the other re-reads, a profile sheet and a joined description column (fix round 1)', () => {
+  it('a decimal answer after the two-digit answer keeps yyOrder', async () => {
+    const run = await load([{ name: 'hauls.csv', text: SEMI(DECIMAL_ROWS) }]);
+    fireEvent.click(within(item('CONV-DATE-ORDER-UNDECLARED')!).getByRole('button', { name: T['convert.finding.yyYmd'] }));
+    await settled(run, (b) => b.sheets[0].yyOrder?.[DATE] === 'ymd');
+    fireEvent.click(within(item('IN-DECIMAL-AMBIGUOUS')!).getByRole('button', { name: T['convert.finding.thousandsSeparator'] }));
+    await waitFor(() => expect(item('CONV-DECIMAL-DECLARED')).not.toBeNull());
+    await idle();
+    expect(last(run).yyOrder).toEqual({ [DATE]: 'ymd' });
+    expect(item('CONV-DATE-ORDER-DECLARED')).not.toBeNull();
+  });
+
+  it('an encoding pick after the two-digit answer keeps yyOrder', async () => {
+    const bytes = Uint8Array.from('Station;Sample;Date;Latitude;Longitude;Species;Count;Kr\xf8yer\nS1;k1;05-06-21;55,5;3,5;Calanus finmarchicus;4;S\xe8vre\nS2;k2;25-06-21;56,5;3,5;Calanus finmarchicus;5;S\xe8vre\n', (c) => c.charCodeAt(0));
+    const base = createDirectConvertEngine();
+    const bodies: ConvertRequestBody[] = [];
+    const engine: ConvertEngine = { ...base, convert: (b) => (bodies.push(b), base.convert(b)) };
+    const view = render(<ConvertPage engine={engine} download={vi.fn()} downloadFile={vi.fn()} />);
+    fireEvent.change(view.container.querySelector('input[type="file"]') as HTMLInputElement, { target: { files: [new File([bytes as BlobPart], 'hauls.csv', { type: 'text/csv' })] } });
+    fireEvent.click(screen.getByRole('button', { name: T['convert.read'] }));
+    await screen.findByRole('heading', { name: T['convert.columns.title'] });
+    const confirm = screen.queryByRole('button', { name: /Confirm all shown/ });
+    if (confirm !== null) fireEvent.click(confirm);
+    for (const kind of screen.queryAllByLabelText(T['convert.quantity.kind'])) fireEvent.change(kind, { target: { value: 'count' } });
+    await idle();
+    const run: Run = { bodies, download: vi.fn() };
+    fireEvent.click(within(item('CONV-DATE-ORDER-UNDECLARED')!).getByRole('button', { name: T['convert.finding.yyYmd'] }));
+    await settled(run, (b) => b.sheets[0].yyOrder?.[DATE] === 'ymd');
+    fireEvent.click(within(item('IN-ENCODING-AMBIGUOUS')!).getAllByTestId('encoding-reading')[1]);
+    await waitFor(() => expect(item('CONV-ENCODING-DECLARED')).not.toBeNull());
+    await idle();
+    expect(last(run).yyOrder).toEqual({ [DATE]: 'ymd' });
+    expect(item('CONV-DATE-ORDER-DECLARED')).not.toBeNull();
+  });
+
+  it('a profile sheet carries yyOrder', async () => {
+    const run = await load([{ name: 'hauls.csv', text: HAULS }]);
+    fireEvent.click(screen.getByLabelText(T['convert.sheet.profile']));
+    await waitFor(() => expect(last(run).profile).toBeDefined());
+    await idle();
+    fireEvent.click(within(item('CONV-DATE-ORDER-UNDECLARED')!).getByRole('button', { name: T['convert.finding.yyYmd'] }));
+    await settled(run, (b) => b.sheets[0].yyOrder !== undefined);
+    expect(last(run).yyOrder).toEqual({ [DATE]: 'ymd' });
+    expect(last(run).profile).toBeDefined();
+  });
+
+  it('a joined description column carries yyOrder on the description sheet only', async () => {
+    const results = csvOf(['Sample', 'Taxon', 'Count'], [['X01', 'Calanus finmarchicus', 12], ['X02', 'Calanus finmarchicus', 7]]);
+    const samples = csvOf(['Sample', 'Station', 'Date', 'Latitude', 'Longitude', 'Depth'], [['X01', 'ST-1', '05-06-21', 61.1, 4.2, 10], ['X02', 'ST-2', '25-06-21', 61.3, 4.6, 20]]);
+    const run = await load([{ name: 'results.csv', text: results }, { name: 'samples.csv', text: samples }]);
+    fireEvent.click(screen.getByRole('button', { name: T['convert.join.confirm'] }));
+    await settled(run, (b) => b.sampleJoin !== undefined);
+    await waitFor(() => expect(item('CONV-DATE-ORDER-UNDECLARED')).not.toBeNull());
+    fireEvent.click(within(item('CONV-DATE-ORDER-UNDECLARED')!).getByRole('button', { name: T['convert.finding.yyYmd'] }));
+    await settled(run, (b) => b.sheets.find((x) => x.sheet === 'samples.csv')?.yyOrder !== undefined);
+    const body = run.bodies[run.bodies.length - 1];
+    expect(body.sheets.find((x) => x.sheet === 'samples.csv')!.yyOrder).toEqual({ 2: 'ymd' });
+    expect(body.sheets.find((x) => x.sheet === 'results.csv')!.yyOrder).toBeUndefined();
+  });
+});
+
+describe('the companion file keeps only what core reported as declared (fix round 1)', () => {
+  it('a pre-picked yyOrder for a column that no longer has NN-NN-NN cells is not written back', async () => {
+    const plain = csvOf(HEADER, [['S1', 'k1', '2023-06-14', 55, 3, 'Calanus finmarchicus', 4], ['S2', 'k2', '2023-06-15', 56, 3, 'Calanus finmarchicus', 5]]);
+    const companion = writeConvertSidecar({ yyOrder: [{ sheet: 'hauls.csv', order: 'ymd', hash: keyHashes(HEADER, [DATE])!, rows: 2 }] });
+    const run = await load([{ name: 'hauls.csv', text: plain }, { name: 'c.csv', text: companion }]);
+    expect(item('CONV-DATE-ORDER-DECLARED')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: T['convert.companion.button'] }));
+    expect(run.download.mock.calls[0][0] as string).not.toContain('yyOrder=');
+  });
+
+  it('yyOrderSettingsOf with the reported findings writes only the declared column', async () => {
+    const p = await createDirectConvertEngine().parse([{ name: 'hauls.csv', bytes: new TextEncoder().encode(HAULS), source: 'dropped' }]);
+    const key = `${p.files[0].fileId}\u0000hauls.csv`;
+    const choices = { ...initialChoices(p), [key]: { ...initialChoices(p)[key], yyOrder: { [DATE]: 'ymd' as const } } };
+    const said = makeConvertFinding('CONV-DATE-ORDER-DECLARED', { file: 'hauls.csv', sheet: 'hauls.csv', field: 'Date', params: { variant: 'two-digit-year', order: 'ymd', index: DATE } });
+    expect(yyOrderSettingsOf(p, choices, [said])).toHaveLength(1);
+    expect(yyOrderSettingsOf(p, choices, [])).toEqual([]);
+    const slashLine = makeConvertFinding('CONV-DATE-ORDER-DECLARED', { file: 'hauls.csv', sheet: 'hauls.csv', field: 'Date', params: { order: 'dmy', index: DATE } });
+    expect(yyOrderSettingsOf(p, choices, [slashLine])).toEqual([]);
   });
 });
