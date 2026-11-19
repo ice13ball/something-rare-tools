@@ -41,6 +41,14 @@ describe('docs/rules/<tool>.md', () => {
     expect(namedIn(onDisk(tool)).sort()).toEqual([...membership()[tool].ids].sort());
   });
 
+  it('the release notes give the per-tool rule counts the generator lists', () => {
+    const notes = readFileSync(join(ROOT, 'docs', 'releases', 'v1.1.0.md'), 'utf8');
+    const m = notes.match(/list (\d+) rules for \/check, (\d+) for \/licence, (\d+) for \/collection and (\d+) for \/convert/);
+    expect(m, 'per-tool count sentence in docs/releases/v1.1.0.md').not.toBeNull();
+    const counts = membership();
+    expect(m!.slice(1, 5).map(Number)).toEqual(TOOLS.map((t) => counts[t].ids.length));
+  });
+
   it('ids built at run time exist in the registry', () => {
     for (const list of Object.values(RUNTIME_BUILT)) for (const id of list) expect(ids.has(id), id).toBe(true);
   });
