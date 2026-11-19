@@ -77,6 +77,7 @@ export const CHECK_REASONS = {
   // a lead or a note joined to the main reason with "; "
   'lead-empty': 'column is empty',
   'note-negative-up': 'negative values: depth is positive up',
+  'note-depth-mixed-signs': 'the depth values have both signs, so the direction is left open',
   'note-depth-not-stated': 'the header does not say whether depth is counted down or up',
   'note-depth-range-unread': 'this one is the other end of a depth range and is not read (one depth column per sheet)',
 } as const;

@@ -4,6 +4,16 @@ import type { RawCell } from '../types';
 
 export const NA_TOKENS: readonly string[] = ['', 'NA', 'N/A', 'NaN', 'nan', 'nd', 'n.d.', 'ND', '-', '--', 'null', 'NULL'];
 
+/**
+ * The exact values a data logger or a database export writes for "no measurement" (-99, -999, -9999). They are only ever REPORTED
+ * ("possible missing-value code") and left out of a depth direction and of range checks; no cell is rewritten or dropped because of one.
+ * Numeric equality: -999.0 and -999,0 count; -998 or -99.5 do not.
+ */
+export const MISSING_VALUE_CODES: readonly number[] = [-99, -999, -9999];
+export function isMissingValueCode(v: number): boolean {
+  return MISSING_VALUE_CODES.includes(v);
+}
+
 export type NumberResult =
   | { status: 'ok'; value: number; decimals: number }
   | { status: 'missing' }

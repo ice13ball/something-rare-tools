@@ -2,6 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 
 import { unitDimension } from '../recognize/vocab';
+import { isMissingValueCode } from '../values/numbers';
 import { getRule, makeFinding, threshold } from '../rules/registryCheck';
 import type { DataRow, Dataset, Finding, NumericCell, Variable } from '../types';
 import { cellDecimals, equalWithin } from './crossfile';
@@ -200,6 +201,8 @@ function checkRange(ds: Dataset): Finding[] {
       for (const row of ds.rows) {
         const c = okCell(row, v.key);
         if (!c) continue;
+        // -99, -999 and -9999 are reported by ROW-MISSING-CODE; they are not a measurement outside the cited range
+        if (isMissingValueCode(c.value!)) continue;
         if ((min !== undefined && c.value! < min) || (max !== undefined && c.value! > max)) {
           count += 1;
           lines.push(c.line);

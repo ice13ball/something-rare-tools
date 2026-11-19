@@ -96,6 +96,8 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | ROW-UNIT-MISSING | warning | show | B | — | —<a id="ROW-UNIT-MISSING"></a> |
 | ROW-HEADER-CODE-SHAPE | warning | show | B | — | [NERC Vocabulary Server (NVS), collections P01 (BODC Parameter Usage Vocabulary) and P06 (BODC data storage units); read 2026-10-29](https://vocab.nerc.ac.uk/collection/P06/current/), Every concept of P06 has a four-character code (411 of 411 codes read, e.g. UPAA) and every concept of P01 an eight-character one (50 613 of 50 613 codes read, e.g. TEMPPR01; 66 begin with a digit); a code of another length has no concept page: https://vocab.nerc.ac.uk/collection/P01/current/D13CMOP11/ answers 404, https://vocab.nerc.ac.uk/collection/P01/current/D13CMOP1/ is a concept.<a id="ROW-HEADER-CODE-SHAPE"></a> |
 | ROW-DEPTH-SIGN | info | show | B | — | —<a id="ROW-DEPTH-SIGN"></a> |
+| ROW-DEPTH-MIXED-SIGN | warning | accept | B | — | —<a id="ROW-DEPTH-MIXED-SIGN"></a> |
+| ROW-MISSING-CODE | warning | accept | B | — | —<a id="ROW-MISSING-CODE"></a> |
 | ROW-DM-COORDS | info | show | B | — | —<a id="ROW-DM-COORDS"></a> |
 | ROW-HEMISPHERE-CONFLICT | warning | accept | B | — | —<a id="ROW-HEMISPHERE-CONFLICT"></a> |
 | ROW-HEMISPHERE-UNPAIRED | warning | accept | B | — | —<a id="ROW-HEMISPHERE-UNPAIRED"></a> |

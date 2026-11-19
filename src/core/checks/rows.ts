@@ -9,6 +9,7 @@ import { statisticOfName } from '../recognize/headerWords';
 import { canonicalFromKey, headerKey } from '../recognize/vocab';
 import { makeFinding, threshold } from '../rules/registryCheck';
 import { earliestUtcDayOf, utcDayOf } from '../values/dates';
+import { isMissingValueCode } from '../values/numbers';
 import type { ColumnRole, DataRow, Dataset, Finding, RawCell, Variable } from '../types';
 import { minOf, pushAll } from '../util/arrays';
 
@@ -669,11 +670,65 @@ function headerCodeShape(ds: Dataset, out: Finding[]): void {
   }
 }
 
-function depthSign(ds: Dataset, out: Finding[]): void {
-  if (ds.depthPositive !== 'unknown' || !ds.rows.some((r) => r.depth !== undefined)) return;
-  const firstSheet = ds.rows.find((r) => r.depth !== undefined)!.sheet;
-  const header = headerOf(ds, firstSheet, 'depth') ?? 'depth';
+/** Non-zero depths of a sheet by sign; a missing-value code (-99, -999, -9999) and 0 say nothing about the direction. */
+function depthSignCounts(rows: readonly DataRow[]): { negative: number; positive: number } {
+  let negative = 0;
+  let positive = 0;
+  for (const r of rows) {
+    if (r.depth === undefined || r.depth === 0 || isMissingValueCode(r.depth)) continue;
+    if (r.depth < 0) negative += 1;
+    else positive += 1;
+  }
+  return { negative, positive };
+}
+
+/** Both signs among the depths of a sheet: the direction is not decided (one finding per sheet) and the range is judged on absolute values. */
+function depthMixedSign(ds: Dataset, sheet: string, rows: readonly DataRow[], out: Finding[]): boolean {
+  const { negative, positive } = depthSignCounts(rows);
+  if (negative === 0 || positive === 0) return false;
+  out.push(makeFinding('ROW-DEPTH-MIXED-SIGN', { file: ds.file, sheet, field: headerOf(ds, sheet, 'depth') ?? 'depth', params: { header: headerOf(ds, sheet, 'depth') ?? 'depth', negative, positive } }));
+  return true;
+}
+
+function depthSign(ds: Dataset, mixed: ReadonlySet<string>, out: Finding[]): void {
+  if (ds.depthPositive !== 'unknown') return;
+  // a sheet whose depths have both signs has its own finding; the "not stated" note is for a sheet that has no sign evidence either way
+  const first = ds.rows.find((r) => r.depth !== undefined && !mixed.has(r.sheet));
+  if (first === undefined) return;
+  const header = headerOf(ds, first.sheet, 'depth') ?? 'depth';
   out.push(makeFinding('ROW-DEPTH-SIGN', { file: ds.file, params: { header } }));
+}
+
+/* ---------- ROW-MISSING-CODE ---------- */
+
+/**
+ * The exact values -99, -999 and -9999 in a depth column or in a measurement column: they are often written for "no measurement". Only reported
+ * (one finding per sheet and column, lines = the cells); the cell is kept as written and left out of the direction and range decisions.
+ * Scope: the depth column (the two bounds of a Darwin Core range instead, when the sheet has them) and EVERY variable of the sheet,
+ * whatever its name or unit; no other column (a latitude, a date, a count of individuals, a text) is looked at.
+ */
+function missingCodes(ds: Dataset, sheet: string, rows: readonly DataRow[], out: Finding[]): void {
+  const report = (column: string, hits: { line: number; value: number }[]): void => {
+    if (hits.length === 0) return;
+    out.push(makeFinding('ROW-MISSING-CODE', { file: ds.file, sheet, lines: hits.map((h) => h.line), field: column, value: String(hits[0].value), params: { column, count: hits.length } }));
+  };
+  const hasDwc = rows.some((r) => r.depthMin !== undefined || r.depthMax !== undefined);
+  const depthOf = (pick: (r: DataRow) => number | undefined): { line: number; value: number }[] =>
+    rows.flatMap((r) => { const v = pick(r); return v !== undefined && isMissingValueCode(v) ? [{ line: r.line, value: v }] : []; });
+  if (hasDwc) {
+    report('minimumDepthInMeters', depthOf((r) => r.depthMin));
+    report('maximumDepthInMeters', depthOf((r) => r.depthMax));
+  } else {
+    report(headerOf(ds, sheet, 'depth') ?? 'depth', depthOf((r) => r.depth));
+  }
+  for (const v of ds.variables) {
+    const hits: { line: number; value: number }[] = [];
+    for (const r of rows) {
+      const c = r.values[v.key];
+      if (c !== undefined && c.status === 'ok' && c.value !== undefined && isMissingValueCode(c.value)) hits.push({ line: c.line, value: c.value });
+    }
+    report(v.header, hits);
+  }
 }
 
 /* ---------- ROW-NO-COORD ---------- */
@@ -741,10 +796,11 @@ function depthRole(ds: Dataset, sheet: string): { positive: 'down' | 'up' | 'unk
   return { positive: ds.depthPositive };
 }
 
-function depthRules(ds: Dataset, sheet: string, rows: DataRow[], out: Finding[]): void {
+function depthRules(ds: Dataset, sheet: string, rows: DataRow[], mixedSign: boolean, out: Finding[]): void {
   const lo = threshold('ROW-DEPTH-RANGE', 'depth.min');
   const hi = threshold('ROW-DEPTH-RANGE', 'depth.max');
-  const outside = (v: number): boolean => v < lo || v > hi;
+  // a missing-value code (-99, -999, -9999) is reported by ROW-MISSING-CODE and is never a depth outside the range
+  const outside = (v: number): boolean => !isMissingValueCode(v) && (v < lo || v > hi);
 
   // minimum greater than maximum: only where the row has both Darwin Core depth columns
   const swapped = rows.filter((r) => r.depthMin !== undefined && r.depthMax !== undefined && r.depthMin > r.depthMax);
@@ -773,8 +829,9 @@ function depthRules(ds: Dataset, sheet: string, rows: DataRow[], out: Finding[])
   // a depth in feet, fathoms, cm, mm or km written in the header only ("Depth (ft)", "depth_ft") is not metres: the bounds do not apply
   const stated = depthSuffixUnit(headerOf(ds, sheet, 'depth') ?? '');
   if (stated !== undefined && !isMetreUnit(stated)) return;
-  const sign = role.positive === 'up' ? -1 : 1;
-  const bad = rows.filter((r) => r.depth !== undefined && outside(sign * r.depth));
+  // both signs among the depths: the direction is not decided, so the size of the value is judged, not its sign
+  const judged = (d: number): number => (mixedSign ? Math.abs(d) : (role.positive === 'up' ? -1 : 1) * d);
+  const bad = rows.filter((r) => r.depth !== undefined && !isMissingValueCode(r.depth) && outside(judged(r.depth)));
   if (bad.length > 0) out.push(makeFinding('ROW-DEPTH-RANGE', { file: ds.file, sheet, lines: bad.map((r) => r.line), field: headerOf(ds, sheet, 'depth') ?? 'depth', value: String(bad[0].depth) }));
 }
 
@@ -822,12 +879,16 @@ export interface RowContext {
 export function checkRows(ds: Dataset, ctx: RowContext = {}): Finding[] {
   const out: Finding[] = [];
   const declared = declaredYears(ds);
+  const mixed = new Set<string>();
   for (const [sheet, rows] of bySheet(ds.rows)) {
     positionRules(ds, sheet, rows, out);
     noCoord(ds, sheet, rows, out);
     stationMoved(ds, sheet, rows, out);
     if (ctx.land) onLand(ds, sheet, rows, ctx.land, out);
-    depthRules(ds, sheet, rows, out);
+    const mixedSign = depthMixedSign(ds, sheet, rows, out);
+    if (mixedSign) mixed.add(sheet);
+    depthRules(ds, sheet, rows, mixedSign, out);
+    missingCodes(ds, sheet, rows, out);
     dateMissing(ds, sheet, rows, out);
     yearDateMismatch(ds, sheet, rows, ctx.today, out);
     // a date in the future is also outside the declared years; one finding for it, the more specific one
@@ -838,6 +899,6 @@ export function checkRows(ds: Dataset, ctx: RowContext = {}): Finding[] {
   }
   unitMissing(ds, out);
   headerCodeShape(ds, out);
-  depthSign(ds, out);
+  depthSign(ds, mixed, out);
   return out;
 }

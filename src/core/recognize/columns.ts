@@ -3,7 +3,7 @@
 import type { ColumnProposal, ColumnRole, RawCell, RawRow, RawSheet, SheetMapping, TablePlan } from '../types';
 import { hemisphereLetter, parseCoordinate } from '../values/coords';
 import { cellsAreYearRanges, detectDayMonthOrder, isEpochPlaceholder, isPlausibleSerial, parseDate, parseTimeCell } from '../values/dates';
-import { NA_TOKENS, parseNumber } from '../values/numbers';
+import { NA_TOKENS, isMissingValueCode, parseNumber } from '../values/numbers';
 import { depthUnitOfHeader } from './depthUnit';
 import { geocodeOfKey, isDepthBoundKey, isSedimentDepthKey } from './geocodes';
 import { findDateParts } from './dateParts';
@@ -566,17 +566,33 @@ const DEPTH_WORD = /\bdepth\b/i;
 /** The same word in Polish, German and French, tested on headerKey (ASCII): głębokość, Tiefe (also Wassertiefe), profondeur. */
 const DEPTH_WORD_OTHER = /(?:^|\s)(?:glebokosc|profondeur|(?:wasser|mess|proben|entnahme)?tiefe)(?:\s|$)/;
 
-/** A negative value means "up" (as before). Values of both signs are NOT left undecided: crossfile matches depths across files with this sign (golden: porewater3m has 296 negative and 15 positive values). */
-function depthPositive(rows: readonly RawRow[], col: number, decimalComma: boolean, elevation: boolean): 'down' | 'up' | 'unknown' {
-  if (elevation) return 'up';
-  let seen = false;
+/**
+ * How many non-zero depth values are negative and how many positive, over EVERY row of the sheet (not the sample). Zero, blanks, text and the
+ * missing-value codes (-99, -999, -9999) say nothing about the direction and are left out.
+ */
+export function depthSigns(rows: readonly RawRow[], col: number, decimalComma: boolean): { negatives: number; positives: number } {
+  let negatives = 0;
+  let positives = 0;
   for (const r of rows) {
     const p = parseNumber(r.cells[col] ?? null, decimalComma);
-    if (p.status !== 'ok') continue;
-    seen = true;
-    if (p.value < 0) return 'up';
+    if (p.status !== 'ok' || p.value === 0 || isMissingValueCode(p.value)) continue;
+    if (p.value < 0) negatives += 1;
+    else positives += 1;
   }
-  return seen ? 'down' : 'unknown';
+  return { negatives, positives };
+}
+
+/**
+ * The direction is decided only when all non-zero values share a sign: only negatives mean "up", only positives "down" (then the rule on a
+ * depth word applies). Values of both signs, or none, leave it open ('unknown', and `mixed` says which); the person decides, never the majority.
+ */
+function depthPositive(rows: readonly RawRow[], col: number, decimalComma: boolean, elevation: boolean): { positive: 'down' | 'up' | 'unknown'; mixed: boolean } {
+  if (elevation) return { positive: 'up', mixed: false };
+  const { negatives, positives } = depthSigns(rows, col, decimalComma);
+  if (negatives > 0 && positives > 0) return { positive: 'unknown', mixed: true };
+  if (negatives > 0) return { positive: 'up', mixed: false };
+  if (positives > 0) return { positive: 'down', mixed: false };
+  return { positive: 'unknown', mixed: false };
 }
 
 function hasTimeOfDay(rows: readonly RawRow[], col: number, ctx: ProposeContext, dateFormatted: boolean): boolean {
@@ -1086,12 +1102,16 @@ export function proposeColumns(sheet: RawSheet, ctx: ProposeContext): ColumnProp
             e.proposal.role = { kind: 'depth', positive: 'down', unit: 'm' };
             break;
           }
-          const sign = depthPositive(rows, e.proposal.index, ctx.decimalComma, c.elevation === true);
+          const { positive: sign, mixed } = depthPositive(sheet.rows, e.proposal.index, ctx.decimalComma, c.elevation === true);
           let positive: 'down' | 'up' | 'unknown';
           const header = e.proposal.header.replace(/_/g, ' ');
           {
             positive = sign;
             if (positive === 'up' && !c.elevation) applyReason(e.proposal, undefined, [why('note-negative-up')]);
+            if (mixed) {
+              e.proposal.confidence = 'low';
+              applyReason(e.proposal, undefined, [why('note-depth-mixed-signs')]);
+            }
             // A depth word with non-negative values IS the downward convention (the definition of depth). A header that is not a depth
             // word, states no direction and is not a P01 depth code (a column that only values or the user made depth) is a default.
             if (positive === 'down' && !DEPTH_WORD.test(header) && !DEPTH_WORD_OTHER.test(headerKey(header)) && !DEPTH_DOWN_WORDS.test(header) && c.why.code !== 'p01') {

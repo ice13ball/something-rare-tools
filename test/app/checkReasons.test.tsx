@@ -123,6 +123,8 @@ function battery(): { sheet: RawSheet; place?: true; long?: { parameterCol: numb
     S(['Begin Latitude', 'End Latitude', 'Begin Longitude', 'Lon Dir', 'Catalog ID', 'Count'], [[54.5, 54.6, 18.5, 'E', 101, 1], [54.6, 54.7, 18.6, 'E', 102, 12]]),
     // a hemisphere letter that names no mapped coordinate stays ignored; one of two positions with nothing to tell which is ambiguous
     S(['Lon Dir', 'Depth'], [['E', 10], ['W', 15]]),
+    // a depth with values of both signs: the direction is left open (K2)
+    S(['Depth'], [[5], [-2], [10]]),
     S(['Begin Latitude', 'End Latitude', 'Lat Dir'], [[54.5, 54.6, 'N'], [54.6, 54.7, 'N']]),
     // a coordinate that carries its own signs: its letter column is not applied
     S(['Latitude', 'Lat NS'], [[-32.7, 'S'], [-33, 'S']]),

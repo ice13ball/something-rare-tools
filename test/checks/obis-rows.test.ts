@@ -42,9 +42,19 @@ describe('ROW-DEPTH-RANGE: the bounds of obis-qc, positive down, in metres', () 
   const depths = (vs: number[], extra: Partial<Dataset> = {}): Dataset => dataset(vs.map((depth, i) => row({ line: i + 2, depth })), extra);
 
   it('-100000 and 11000 are inside, the next step out is not', () => {
+    const f = only(checkRows(depths([0, 5000, 11000, 11000.1])), 'ROW-DEPTH-RANGE');
+    expect(f).toHaveLength(1);
+    expect(f[0]).toMatchObject({ severity: 'warning', lines: [5], value: '11000.1' });
+    // all values of one sign (negative only): the lower bound is inclusive too
+    const neg = only(checkRows(depths([-100000, 0, -100000.1])), 'ROW-DEPTH-RANGE');
+    expect(neg).toHaveLength(1);
+    expect(neg[0]).toMatchObject({ lines: [4], value: '-100000.1' });
+  });
+
+  it('a column with both signs is judged on absolute values (K2): -100000 is out beside 5000, as is 11000.1', () => {
     const f = only(checkRows(depths([-100000, 0, 5000, 11000, 11000.1, -100000.1])), 'ROW-DEPTH-RANGE');
     expect(f).toHaveLength(1);
-    expect(f[0]).toMatchObject({ severity: 'warning', lines: [6, 7], value: '11000.1' });
+    expect(f[0]).toMatchObject({ lines: [2, 6, 7], value: '-100000' });
   });
 
   it('a declared upward convention is judged after its sign is turned', () => {

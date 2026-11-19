@@ -29,8 +29,10 @@ describe('depth direction: a depth word is evidence of "down"; only an undecided
     }
   });
 
-  it('values of both signs keep "up" as before (crossfile matches depths with this sign), no note', () => {
-    expect(depthProposal('Depth [m]', ['5', '-2', '10']).role).toMatchObject({ positive: 'up' });
+  it('values of both signs leave the direction open (K2: never the majority, never the first negative), with its own finding instead of the "not stated" note', () => {
+    const p = depthProposal('Depth [m]', ['5', '-2', '10']);
+    expect(p.role).toMatchObject({ positive: 'unknown' });
+    expect(p.reasonNotes).toContain('note-depth-mixed-signs');
     expect(noteFires('Depth [m]', ['5', '-2', '10'])).toBe(false);
   });
 
