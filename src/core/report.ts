@@ -137,5 +137,10 @@ export function renderPlain(f: Finding, lang: Lang): string {
 /** The English technical detail line (file, lines, field, value, parameters). */
 export function renderTechnical(f: Finding): string {
   const rule = getRule(f.ruleId);
-  return fill(rule.technicalTime !== undefined && (f.params.role === 'time' || valuesAreTimes(f.value)) ? rule.technicalTime : rule.technical, f);
+  let base = fill(rule.technicalTime !== undefined && (f.params.role === 'time' || valuesAreTimes(f.value)) ? rule.technicalTime : rule.technical, f);
+  for (const extra of rule.technicalIf ?? []) {
+    const v = f.params[extra.param];
+    if (v !== undefined && v !== '') base = `${base} ${fill(extra.text, f)}`;
+  }
+  return base;
 }

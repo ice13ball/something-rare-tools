@@ -201,8 +201,8 @@ function noDates(ds: Dataset, all: readonly Dataset[]): Finding[] {
   const metaDate = ds.metadata.some((r) => r.temporalExtent && (r.temporalExtent.start || r.temporalExtent.end));
   // The time span of a Darwin Core Archive's own eml.xml: the whole dataset's span. It is no date of a record, but it is a date in the metadata, which is what this rule asks for.
   const archiveDate = !!(ds.archiveSpan?.start || ds.archiveSpan?.end);
-  // Nothing was given as metadata (a bare table): the sentence must not say what "the metadata" holds.
-  const noMetadata = ds.metadata.length === 0;
+  // Nothing was given as metadata (a bare table; an eml.xml in an archive is metadata, even without a span): the sentence must not say what "the metadata" holds.
+  const noMetadata = ds.metadata.length === 0 && !ds.archiveMetadata;
   return rowDate || metaDate || archiveDate ? [] : [makeFinding('META-NO-DATES', { file: ds.file, ...sheetOf(ds), params: { ...(ds.joinLost === undefined ? {} : { joinSheet: ds.joinLost }), ...(noMetadata ? { noMetadata: 'yes' } : {}) } })];
 }
 

@@ -73,7 +73,7 @@ function FindingItem({ f, hideCitations }: { f: Finding; hideCitations: (ruleId:
   const plain = safe(() => renderPlain(f, lang), f.ruleId);
   // every position of a finding that lists many (ROW-ON-LAND) is a list item of its own, not one long line of the technical text
   const positions = typeof f.params.allPlaces === 'string' ? f.params.allPlaces.split(' | ') : [];
-  const technical = safe(() => renderTechnical(positions.length > 0 ? { ...f, params: { ...f.params, allPlaces: `${positions.length} positions, listed below` } } : f), '');
+  const technical = safe(() => renderTechnical(positions.length > 0 ? { ...f, params: { ...f.params, allPlaces: t('report.positionsListed', { count: positions.length }) } } : f), '');
   const sources = hideCitations(f.ruleId) ? [] : sourcesOf(f.ruleId);
   const lines = formatLines(f.lines);
   const row = (label: string, value: React.ReactNode): React.ReactElement => (

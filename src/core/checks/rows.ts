@@ -413,11 +413,12 @@ function stationGroup(ds: Pick<Dataset, 'file'>, sheet: string, station: string,
   const params: Record<string, string | number> = { station, positions: text };
   if (detail) {
     // the lines of EVERY position, larger group first: the finding's own lines are the smaller group's, which is no verdict that it is the wrong one
-    params.groups = [...ordered].sort((a, b) => b.rows.length - a.rows.length || firstLine(a) - firstLine(b)).map((p) => `${positionText(p)}: ${formatLines(p.rows.map((r) => r.line))}`).join('; ');
+    params.groups = [...ordered].sort((a, b) => b.rows.length - a.rows.length || firstLine(a) - firstLine(b)).map((p) => `${positionText(p)}: ${formatLines(p.rows.map((r) => r.line), LIST_RANGES)}`).join('; ');
     const landed = detail.land ? ordered.filter((p) => { const at = detail.land!.place(p.lat, p.lon); return at.kind === 'land' && at.atLeastKm >= ON_LAND_MIN_KM; }) : [];
     if (landed.length > 0) {
       params.onLand = landed.map((p) => place(p.lat, p.lon, p.latDec, p.lonDec)).join('; ');
       params.onLandCount = landed.length;
+      if (landed.length < ordered.length) params.onLandOthers = 'yes';
     }
   }
   if (flipped.has('lon')) params.signLon = 'yes';
@@ -438,6 +439,8 @@ export function checkStationRows(file: string, sheet: string, rows: DataRow[]): 
 /* ---------- ROW-ON-LAND ---------- */
 
 const MAX_PLACES = 5;
+/** A list of line numbers in a sentence or a technical text: this many ranges, then the number of lines left out (the finding keeps every line). */
+const LIST_RANGES = 10;
 
 const coord = (v: number, dec: number, pos: string, neg: string): string => `${fmt(Math.abs(v), dec)} ${v < 0 ? neg : pos}`;
 // longitude first, as positionText writes positions in the station findings of the same report
@@ -460,7 +463,7 @@ interface LandHit { lat: number; lon: number; latDec: number; lonDec: number; km
 function landPlaces(hits: Map<string, LandHit>, flipOf?: (h: LandHit) => string | undefined): { shown: LandHit[]; params: Record<string, string | number> } {
   const all = [...hits.values()].sort((a, b) => b.n - a.n || a.lines[0] - b.lines[0]);
   const shown = all.slice(0, MAX_PLACES);
-  const text = (h: LandHit): string => `${place(h.lat, h.lon, h.latDec, h.lonDec)} (${h.n} ${h.n === 1 ? 'row' : 'rows'}; ≥${h.km} km; ${h.lines.length === 1 ? 'line' : 'lines'} ${formatLines(h.lines)})`;
+  const text = (h: LandHit): string => `${place(h.lat, h.lon, h.latDec, h.lonDec)} (${h.n} ${h.n === 1 ? 'row' : 'rows'}; ≥${h.km} km; ${h.lines.length === 1 ? 'line' : 'lines'} ${formatLines(h.lines, LIST_RANGES)})`;
   const params: Record<string, string | number> = { places: shown.map((h) => `${place(h.lat, h.lon, h.latDec, h.lonDec)} (${h.n}; ≥${h.km} km)`).join('; ') };
   if (all.length > shown.length) params.rest = all.length - shown.length;
   params.allPlaces = all.map((h) => { const flip = flipOf?.(h); return flip ? `${text(h)} → ${flip}` : text(h); }).join(' | ');

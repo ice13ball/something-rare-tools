@@ -233,6 +233,12 @@ describe('META-NO-DATES', () => {
     expect(renderPlain(some, 'en')).toMatch(/Neither the data nor the metadata/);
   });
 
+  it('a Darwin Core Archive with an eml.xml but no usable span counts as having metadata', () => {
+    const f = only(checkMetadataVsData({ ...makeDataset([{}]), archiveMetadata: true }), 'META-NO-DATES')[0]!;
+    expect(f.params.noMetadata).toBeUndefined();
+    expect(renderPlain(f, 'en')).toMatch(/Neither the data nor the metadata/);
+  });
+
   it('a dataset without rows is not reported', () => {
     expect(only(checkMetadataVsData(makeDataset([])), 'META-NO-DATES')).toEqual([]);
   });

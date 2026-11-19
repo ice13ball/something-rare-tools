@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { runChecks } from '../../src/core/checks/run';
 import { buildDatasets } from '../../src/core/dataset';
 import { parseDwca } from '../../src/core/parse';
+import { renderPlain } from '../../src/core/report';
 import { dwcTableOf } from '../../src/core/checks/dwc';
 import { proposeLayout, proposeMappings } from '../../src/core/recognize/layout';
 import type { Finding, MetadataRecord, ParsedFile } from '../../src/core/types';
@@ -181,6 +182,40 @@ describe('DWC-TERM-MISSING, DWC-TERM-EMPTY, DWC-RECOMMENDED', () => {
     const withExtent = check(empty, '2026-10-24', [meta]);
     expect(only(withExtent, 'META-NO-DATES')).toEqual([]);
     expect(only(withExtent, 'DWC-TERM-EMPTY').map((x) => x.field)).toEqual(['eventDate']);
+  });
+
+  describe('a Darwin Core Archive whose eventDate column is empty', () => {
+    const emlWith = (coverage: string): string =>
+      `<?xml version="1.0"?><eml:eml xmlns:eml="https://eml.ecoinformatics.org/eml-2.2.0" packageId="p/v1"><dataset><title>T</title>${coverage}</dataset></eml:eml>`;
+    const SPAN = '<coverage><temporalCoverage><rangeOfDates><beginDate><calendarDate>1977-01-01</calendarDate></beginDate><endDate><calendarDate>2025-09-15</calendarDate></endDate></rangeOfDates></temporalCoverage></coverage>';
+    const archive = async (eml: string | null) => {
+      const meta = metaXml({ fields: { 1: 'eventDate', 2: 'decimalLatitude', 3: 'decimalLongitude', 4: 'scientificName', 5: 'occurrenceStatus', 6: 'basisOfRecord' } });
+      const rowsText = 'id\tx\n1\t\t60.5\t5.25\tAbra alba\tpresent\tHumanObservation\n2\t\t60.6\t5.26\tAbra alba\tpresent\tHumanObservation\n';
+      const zip = makeZip([{ name: 'meta.xml', data: meta }, ...(eml === null ? [] : [{ name: 'eml.xml', data: eml }]), { name: 'occurrence.txt', data: rowsText }]);
+      return check(await parseDwca('a.zip', zip, nodeInflate));
+    };
+    it('an eml.xml in the archive is metadata: META-NO-DATES without a usable span does not claim that none was given', async () => {
+      for (const eml of [emlWith(''), emlWith('<coverage><temporalCoverage><singleDateTime><calendarDate>soon</calendarDate></singleDateTime></temporalCoverage></coverage>')]) {
+        const f = only(await archive(eml), 'META-NO-DATES');
+        expect(f).toHaveLength(1);
+        expect(f[0].params.noMetadata).toBeUndefined();
+        expect(renderPlain(f[0], 'en')).toMatch(/Neither the data nor the metadata/);
+      }
+      expect(only(await archive(null), 'META-NO-DATES')[0].params.noMetadata).toBe('yes');
+    });
+    it('the empty eventDate finding names the eml time span and says OBIS wants a date per record, at the same severity', async () => {
+      const f = only(await archive(emlWith(SPAN)), 'DWC-TERM-EMPTY').filter((x) => x.field === 'eventDate');
+      expect(f).toHaveLength(1);
+      expect(f[0].severity).toBe('error');
+      expect(f[0].params.archiveSpan).toBe('1977-01-01 – 2025-09-15');
+      expect(renderPlain(f[0], 'en')).toContain('1977-01-01 – 2025-09-15');
+      expect(renderPlain(f[0], 'en')).toMatch(/date for each record/);
+      for (const lang of ['pl', 'de', 'fr'] as const) expect(renderPlain(f[0], lang), lang).toContain('1977-01-01 – 2025-09-15');
+    });
+    it('without a span the empty-column finding is the plain one', async () => {
+      const f = only(await archive(emlWith('')), 'DWC-TERM-EMPTY').filter((x) => x.field === 'eventDate');
+      expect(f.every((x) => x.params.archiveSpan === undefined)).toBe(true);
+    });
   });
 
   it('a Darwin Core Archive core id column stands for the record identifier', async () => {

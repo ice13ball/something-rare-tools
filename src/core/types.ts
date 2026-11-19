@@ -128,7 +128,7 @@ export interface ParsedFile {
   /** PANGAEA: how many columns (Latitude, Longitude, Date/Time) the parser added at the right of the table from the header's Event(s) block (parse/pangaeaEvents.ts); the parameter list stands for the columns before them. */
   eventColumns?: number;
   /** Set by the Darwin Core Archive reader: the file is a DwC-A (the one sure sign of Darwin Core input) and what its core is. */
-  dwca?: { core: 'Occurrence' | 'Event'; /** the time span the archive's eml.xml states (temporalCoverage): a statement about the whole dataset, not a date of any record */ timeSpan?: { start?: string; end?: string }; /** the core was cut at the row limit: references to rows that were not read cannot be judged */ partial: boolean };
+  dwca?: { core: 'Occurrence' | 'Event'; /** the archive has an eml.xml that could be read: metadata was given, whatever it says */ hasEml?: boolean; /** the time span the archive's eml.xml states (temporalCoverage): a statement about the whole dataset, not a date of any record */ timeSpan?: { start?: string; end?: string }; /** the core was cut at the row limit: references to rows that were not read cannot be judged */ partial: boolean };
 }
 
 /* ---------- metadata ---------- */
@@ -330,6 +330,8 @@ export interface Dataset {
   metadata: MetadataRecord[];
   /** The time span the Darwin Core Archive's own eml.xml states; kept apart from `metadata` (it has no licence, no position, and is not a record of a metadata source). */
   archiveSpan?: { start?: string; end?: string };
+  /** The Darwin Core Archive has an eml.xml: metadata was given, even when it states no time span. */
+  archiveMetadata?: boolean;
   depthPositive: 'down' | 'up' | 'unknown';
   /** The source file wrote decimals with a comma. Only then may the clean CSV swap the comma for a dot. */
   decimalComma?: boolean;
@@ -393,6 +395,8 @@ export interface RuleDef {
   plainConvert?: Record<Lang, string>;
   /** Sentences appended, in order, when the finding has the named param (set and non-empty). */
   plainIf?: readonly { param: string; plain: Record<Lang, string> }[];
+  /** English sentences appended to the technical text when the param is present (a long list that must not sit in the plain sentence). */
+  technicalIf?: readonly { param: string; text: string }[];
   technical: string;             // English, template with {param}
   thresholds?: Threshold[];
   citations?: Citation[];

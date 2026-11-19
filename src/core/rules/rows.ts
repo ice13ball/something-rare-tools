@@ -331,19 +331,28 @@ export const ROW_RULES: readonly RuleSpec[] = [
       {
         param: 'groups',
         plain: {
-          pl: `Wiersze każdej pozycji: {groups}. Pozycja z mniejszą liczbą wierszy nie musi być tą błędną.`,
-          en: `Lines of each position: {groups}. The position with fewer rows is not necessarily the wrong one.`,
-          de: `Zeilen jeder Position: {groups}. Die Position mit weniger Zeilen ist nicht unbedingt die falsche.`,
-          fr: `Lignes de chaque position : {groups}. La position qui a le moins de lignes n'est pas forcément la mauvaise.`,
+          pl: `Pozycja z mniejszą liczbą wierszy nie musi być tą błędną. Numery wierszy każdej pozycji są w szczegółach technicznych.`,
+          en: `The position with fewer rows is not necessarily the wrong one. The line numbers of every position are in the technical details.`,
+          de: `Die Position mit weniger Zeilen ist nicht unbedingt die falsche. Die Zeilennummern jeder Position stehen in den technischen Details.`,
+          fr: `La position qui a le moins de lignes n'est pas forcément la mauvaise. Les numéros de ligne de chaque position figurent dans les détails techniques.`,
         },
       },
       {
         param: 'onLand',
         plain: {
-          pl: `{+onLandCount:Pozycja|Pozycje|Pozycje} {onLand}: według mapy {+onLandCount:leży|leżą|leżą} na lądzie (osobna uwaga ROW-ON-LAND); to nie dotyczy pozostałych pozycji stacji.`,
-          en: `By the map, {onLand} {+onLandCount:lies|lie} on land (separate finding ROW-ON-LAND); that does not concern the other positions of this station.`,
-          de: `Laut Karte {+onLandCount:liegt|liegen} {onLand} an Land (eigener Befund ROW-ON-LAND); das betrifft die übrigen Positionen der Station nicht.`,
-          fr: `D'après la carte, {onLand} {+onLandCount:se trouve|se trouvent} sur terre (constat séparé ROW-ON-LAND) ; cela ne concerne pas les autres positions de la station.`,
+          pl: `{+onLandCount:Pozycja|Pozycje|Pozycje} {onLand}: według mapy {+onLandCount:leży|leżą|leżą} na lądzie (osobna uwaga ROW-ON-LAND).`,
+          en: `By the map, {onLand} {+onLandCount:lies|lie} on land (separate finding ROW-ON-LAND).`,
+          de: `Laut Karte {+onLandCount:liegt|liegen} {onLand} an Land (eigener Befund ROW-ON-LAND).`,
+          fr: `D'après la carte, {onLand} {+onLandCount:se trouve|se trouvent} sur terre (constat séparé ROW-ON-LAND).`,
+        },
+      },
+      {
+        param: 'onLandOthers',
+        plain: {
+          pl: `To nie dotyczy pozostałych pozycji stacji.`,
+          en: `That does not concern the other positions of this station.`,
+          de: `Das betrifft die übrigen Positionen der Station nicht.`,
+          fr: `Cela ne concerne pas les autres positions de la station.`,
         },
       },
       {
@@ -366,6 +375,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
       },
     ],
     technical: `{file}:{lines} station {station} at {positions}: positions differ by a typed digit, by exchanged axes, or by a sign (as written at least 100 km apart, within 50 km and at least 10 times closer once flipped).`,
+    technicalIf: [{ param: 'groups', text: 'Lines of each position, larger group first (long lists are cut, with the number of lines left out): {groups}.' }],
   },
   {
     id: 'ROW-STATION-SPREAD',
