@@ -88,8 +88,8 @@ describe('buildDataset: dates and positions', () => {
     expect(byRule(open.findings, 'ROW-DATE-YYMMDD')).toEqual([]);
     const amb = byRule(open.findings, 'ROW-DATE-YY-AMBIGUOUS');
     expect(amb).toHaveLength(1);
-    expect(amb[0]).toMatchObject({ field: 'Date', value: '05-06-21', severity: 'warning', params: { interpreted: '2005-06-21', readings: '2021-06-05 (dmy)' } });
-    expect(renderPlain(amb[0], 'en')).toContain('Dates such as "05-06-21" can be read in more than one order (ymd: year first, dmy: day first, mdy: month first), and no date in column "Date" decides it. Read as 2005-06-21; it could also be 2021-06-05 (dmy).');
+    expect(amb[0]).toMatchObject({ field: 'Date', value: '05-06-21', severity: 'warning', params: { interpreted: '2005-06-21 (ymd)', readings: '2021-06-05 (dmy)' } });
+    expect(renderPlain(amb[0], 'en')).toContain('Dates such as "05-06-21" can be read in more than one order (ymd: year first, dmy: day first, mdy: month first), and no date in column "Date" decides it. Read as 2005-06-21 (ymd); it could also be 2021-06-05 (dmy).');
     const ymd = build(csv(['98-06-21', '99-07-22']));
     expect(ymd.dataset.rows[0].datetime?.iso).toBe('1998-06-21');
     expect(byRule(ymd.findings, 'ROW-DATE-YYMMDD')[0].params).toEqual({ interpreted: '1998-06-21', order: 'ymd' });
@@ -116,7 +116,7 @@ describe('buildDataset: dates and positions', () => {
     const { dataset, findings } = build(f);
     expect(byRule(findings, 'ROW-DATE-UNPARSEABLE')).toEqual([]);
     const [amb] = byRule(findings, 'ROW-DATE-YY-AMBIGUOUS');
-    expect(amb.params).toEqual({ interpreted: '1945-06-05', readings: '1945-05-06 (mdy)' });
+    expect(amb.params).toEqual({ interpreted: '1945-06-05 (dmy)', readings: '1945-05-06 (mdy)' });
     expect(dataset.rows[0].datetime?.iso).toBe('1945-06-05');
   });
 

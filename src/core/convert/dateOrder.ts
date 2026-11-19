@@ -4,7 +4,7 @@ import type { Specs } from '../dataset';
 import { makeConvertFinding } from '../rules/convert';
 import type { Finding, RawSheet } from '../types';
 import type { DeclaredOrder } from '../values/dates';
-import { columnOrder, declaredOrderStatus, detectDayMonthOrder, isAmbiguousDayMonth, isAmbiguousTwoDigit, parseDate, twoDigitReadings } from '../values/dates';
+import { columnOrder, declaredOrderStatus, declaredYYOrderStatus, detectDayMonthOrder, isAmbiguousDayMonth, isAmbiguousTwoDigit, parseDate, twoDigitReadings } from '../values/dates';
 import type { TwoDigitOrder } from '../values/dates';
 import type { ConvertSheetInput } from './build';
 
@@ -80,7 +80,7 @@ export function dateOrderRead(sin: ConvertSheetInput, sheet: RawSheet, specs: Sp
   const named = new Map<string, Set<number>>();
   type Where = { file: string; sheet: string; field: string; index: number };
   // one column: the finding its cells and its declaration call for (UNDECLARED, CONTRADICTED or DECLARED), asked of the sheet the cells are in
-  const judgeColumn = (of: RawSheet, index: number, declared: DeclaredOrder | undefined, fromFile: boolean, where: Where): Ambiguous[] | undefined => {
+  const judgeColumn = (of: RawSheet, index: number, declared: DeclaredOrder | undefined, fromFile: boolean, declaredYY: TwoDigitOrder | undefined, fromYYFile: boolean, where: Where): Ambiguous[] | undefined => {
     const column = of.rows.map((r) => r.cells[index] ?? null);
     // the slash dates and the NN-NN-NN dates of a column are judged each on its own: a slash date rules out no reading of 05-06-21
     const slashCells: Ambiguous[] = [];
@@ -97,37 +97,33 @@ export function dateOrderRead(sin: ConvertSheetInput, sheet: RawSheet, specs: Sp
         if (isAmbiguousTwoDigit(c, yyReadings)) yyCells.push({ line: r.line, text: String(c).trim() });
       }
     }
-    // `ymd` answers a column of NN-NN-NN dates only: for slash dates it decides nothing, and their order is still asked
-    const slashAnswer = declared === 'ymd' ? undefined : declared;
     const asked: Ambiguous[] = [];
+    const said = (rule: 'CONV-DATE-ORDER-DECLARED' | 'CONV-DATE-ORDER-CONTRADICTED', params: Record<string, string | number>): void => {
+      findings.push(makeConvertFinding(rule, { file: where.file, sheet: where.sheet, field: where.field, params: { ...params, index: where.index } }));
+    };
+    // the slash dates are answered by `declared` (dmy | mdy, round 3) and judged by the slash dates only
     if (slashInPlay) {
-      if (slashAnswer === undefined) {
+      if (declared === undefined) {
         if (detectDayMonthOrder(column) === 'unknown' && slashCells.length > 0) {
           const examples = [...new Set(slashCells.map((x) => x.text))].slice(0, 2);
           findings.push(makeConvertFinding('CONV-DATE-ORDER-UNDECLARED', { file: where.file, sheet: where.sheet, field: where.field, value: examples[0], params: { count: slashCells.length, examples: examples.join(', '), index: where.index, ...readings(examples[0]) } }));
           asked.push(...slashCells);
         }
       } else {
-        const status = declaredOrderStatus(of, index, slashAnswer);
-        if (status === 'contradicted') {
-          findings.push(makeConvertFinding('CONV-DATE-ORDER-CONTRADICTED', { file: where.file, sheet: where.sheet, field: where.field, params: { declared: slashAnswer, detected: columnOrder(of, index), index: where.index } }));
-        } else if (status === 'applied') {
-          findings.push(makeConvertFinding('CONV-DATE-ORDER-DECLARED', { file: where.file, sheet: where.sheet, field: where.field, params: { order: slashAnswer, index: where.index, ...(fromFile ? { fromFile: 'yes' } : {}) } }));
-        }
+        const status = declaredOrderStatus(of, index, declared);
+        if (status === 'contradicted') said('CONV-DATE-ORDER-CONTRADICTED', { declared, detected: columnOrder(of, index) });
+        else if (status === 'applied') said('CONV-DATE-ORDER-DECLARED', { order: declared, ...(fromFile ? { fromFile: 'yes' } : {}) });
       }
     }
+    // the NN-NN-NN dates are answered by `declaredYY` (ymd | dmy | mdy) and judged by the NN-NN-NN cells only
     if (yyReadings.length > 0) {
-      const answered = declared !== undefined && yyReadings.includes(declared) && yyReadings.length > 1;
-      if (!slashInPlay && declared !== undefined) {
-        // a column of NN-NN-NN dates alone: the declaration is judged by its readings (applied, redundant or contradicted)
-        const status = declaredOrderStatus(of, index, declared);
-        if (status === 'contradicted') {
-          findings.push(makeConvertFinding('CONV-DATE-ORDER-CONTRADICTED', { file: where.file, sheet: where.sheet, field: where.field, params: { declared, detected: yyReadings.length === 1 ? yyReadings[0] : 'unknown', index: where.index } }));
-        } else if (status === 'applied') {
-          findings.push(makeConvertFinding('CONV-DATE-ORDER-DECLARED', { file: where.file, sheet: where.sheet, field: where.field, params: { order: declared, index: where.index, ...(fromFile ? { fromFile: 'yes' } : {}) } }));
-        }
+      if (declaredYY !== undefined) {
+        const status = declaredYYOrderStatus(of, index, declaredYY);
+        if (status === 'contradicted') said('CONV-DATE-ORDER-CONTRADICTED', { variant: 'two-digit-year', declared: declaredYY, detected: yyReadings.join(', ') });
+        else if (status === 'applied') said('CONV-DATE-ORDER-DECLARED', { variant: 'two-digit-year', order: declaredYY, ...(fromYYFile ? { fromFile: 'yes' } : {}) });
       }
-      if (yyCells.length > 0 && !answered && !(declared !== undefined && !slashInPlay && !yyReadings.includes(declared))) {
+      const answered = declaredYY !== undefined && yyReadings.length > 1 && yyReadings.includes(declaredYY);
+      if (yyCells.length > 0 && !answered && declaredYY === undefined) {
         const examples = [...new Set(yyCells.map((x) => x.text))].slice(0, 2);
         const { shown, isoFirst, isoSecond } = shownReadings(examples[0], yyReadings);
         findings.push(
@@ -151,17 +147,17 @@ export function dateOrderRead(sin: ConvertSheetInput, sheet: RawSheet, specs: Sp
       // (when the description's own cells leave the order open)
       const own = info!.description.sheet;
       const mine = own.rows.map((r) => r.cells[entry.index] ?? null);
-      const given = sin.dayMonthOrder?.[index];
       const yy = twoDigitReadings(mine);
-      const slashOpen = given === undefined && detectDayMonthOrder(mine) === 'unknown';
-      const yyOpen = yy.length > 1 && !(given !== undefined && yy.includes(given));
+      const slashOpen = sin.dayMonthOrder?.[index] === undefined && detectDayMonthOrder(mine) === 'unknown';
+      const givenYY = sin.yyOrder?.[index];
+      const yyOpen = yy.length > 1 && !(givenYY !== undefined && yy.includes(givenYY));
       if (slashOpen || yyOpen) {
         const lines = sheet.rows.filter((r) => (slashOpen && isAmbiguousDayMonth(r.cells[index] ?? null)) || (yyOpen && isAmbiguousTwoDigit(r.cells[index] ?? null, yy))).map((r) => r.line);
         if (lines.length > 0) named.set(header, new Set(lines));
       }
       continue;
     }
-    const cells = judgeColumn(sheet, index, sin.dayMonthOrder?.[index], sin.dayMonthOrderFromFile?.includes(index) === true, { ...base, field: header, index });
+    const cells = judgeColumn(sheet, index, sin.dayMonthOrder?.[index], sin.dayMonthOrderFromFile?.includes(index) === true, sin.yyOrder?.[index], sin.yyOrderFromFile?.includes(index) === true, { ...base, field: header, index });
     if (cells !== undefined) named.set(header, new Set(cells.map((x) => x.line)));
   }
   // the description's own date, datetime and time columns (lent as the date, compared with the results' own, or part of the join key): asked about and said on the description sheet,
@@ -171,7 +167,7 @@ export function dateOrderRead(sin: ConvertSheetInput, sheet: RawSheet, specs: Sp
     const own = info.description.sheet;
     for (const c of [...info.description.mapping.columns].sort((x, y) => x.index - y.index)) {
       if (c.role.kind !== 'date' && c.role.kind !== 'datetime' && c.role.kind !== 'time') continue;
-      judgeColumn(own, c.index, sin.dayMonthOrder?.[rw + c.index], sin.dayMonthOrderFromFile?.includes(rw + c.index) === true, { file: info.description.file.fileName, sheet: own.name, field: own.header[c.index] ?? c.header, index: c.index });
+      judgeColumn(own, c.index, sin.dayMonthOrder?.[rw + c.index], sin.dayMonthOrderFromFile?.includes(rw + c.index) === true, sin.yyOrder?.[rw + c.index], sin.yyOrderFromFile?.includes(rw + c.index) === true, { file: info.description.file.fileName, sheet: own.name, field: own.header[c.index] ?? c.header, index: c.index });
     }
   }
   const trim = (collected: Finding[]): Finding[] => {

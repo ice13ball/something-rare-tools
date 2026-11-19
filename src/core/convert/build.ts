@@ -2,7 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { checkStationRows } from '../checks/rows';
 import { columnOrder, isEpochPlaceholder, looksLikeUnreadDate, parseDate } from '../values/dates';
-import type { DeclaredOrder } from '../values/dates';
+import type { DeclaredOrder, TwoDigitOrder } from '../values/dates';
 import { dateOrderRead, onceDateOrder } from './dateOrder';
 import { Collector, metaParser, specsOf } from '../dataset';
 import type { Meta } from '../dataset';
@@ -451,6 +451,13 @@ export interface ConvertSheetInput {
   dayMonthOrder?: Readonly<Record<number, DeclaredOrder>>;
   /** The columns whose declared order came from the companion file (the message says so). */
   dayMonthOrderFromFile?: readonly number[];
+  /**
+   * The order the person declared for the NN-NN-NN dates (two-digit year) of a column (index): ymd, dmy or mdy. A second answer, independent of dayMonthOrder (the slash order): each is judged
+   * only against its own kind of cell, and a column of both kinds can carry both. Used where the NN-NN-NN cells of the column fit more than one order. Merged inputs shift it like dayMonthOrder.
+   */
+  yyOrder?: Readonly<Record<number, TwoDigitOrder>>;
+  /** The columns whose two-digit order came from the companion file (the message says so). */
+  yyOrderFromFile?: readonly number[];
   /**
    * ONE position the PERSON declared for the whole sheet (typed latitude, longitude and uncertainty in metres; never inferred, never prefilled). Applied only to a sheet that has no latitude / longitude
    * role at all, never to fill gaps; every sample then carries it with its uncertainty and a georeferenceRemarks that says it was declared. Refused otherwise (CONV-POSITION-DECLARED-INVALID).
@@ -1462,7 +1469,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   const cols = demoteOccurrenceVars(colsOf(sin.mapping, sheet.header), sin);
   const collector = new Collector(fileName);
   const specs = specsOf(sin.mapping);
-  const parse = metaParser(file, sheet, specs, collector, { whenUtc: isUtcBySource(file, specs.when?.header), ...(sin.dayMonthOrder === undefined ? {} : { dayMonthOrder: sin.dayMonthOrder }) });
+  const parse = metaParser(file, sheet, specs, collector, { whenUtc: isUtcBySource(file, specs.when?.header), ...(sin.dayMonthOrder === undefined ? {} : { dayMonthOrder: sin.dayMonthOrder }), ...(sin.yyOrder === undefined ? {} : { yyOrder: sin.yyOrder }) });
   const base = { file: fileName, sheet: sheet.name };
   const depthOf = depthReader(cols, dc, collector, sheet.name);
   const seafloorOf = seafloorReader(cols, dc, collector, base);
@@ -1523,7 +1530,7 @@ function readProfileSheet(sin: ConvertSheetInput, ctx: ProfileContext): void {
   // (the same depth of two visits is not one level). The value comes from the data, never from the order of the rows.
   const datesOf = new Map<string, Set<string>>();
   {
-    const scan = metaParser(file, sheet, specs, new Collector(fileName), { whenUtc: isUtcBySource(file, specs.when?.header), ...(sin.dayMonthOrder === undefined ? {} : { dayMonthOrder: sin.dayMonthOrder }) });
+    const scan = metaParser(file, sheet, specs, new Collector(fileName), { whenUtc: isUtcBySource(file, specs.when?.header), ...(sin.dayMonthOrder === undefined ? {} : { dayMonthOrder: sin.dayMonthOrder }), ...(sin.yyOrder === undefined ? {} : { yyOrder: sin.yyOrder }) });
     for (const row of sheet.rows) {
       const m = scan(row);
       const st = stationOf(row, m);
@@ -1948,7 +1955,7 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
   for (const sin of input.sheets) {
     const sh = sin.file.sheets.find((x) => x.name === sin.sheet);
     if (sh === undefined) continue;
-    const listed = unconfirmedRoles(sin.file, sh, sin.mapping, sin.handSet, sin.dayMonthOrder);
+    const listed = unconfirmedRoles(sin.file, sh, sin.mapping, sin.handSet, sin.dayMonthOrder, sin.yyOrder);
     if (listed.length > 0) findings.push(makeConvertFinding('CONV-ROLE-UNCONFIRMED', { file: sin.file.fileName, sheet: sin.sheet, params: roleUnconfirmedParams(listed) }));
     // a year beside the date and a running number were not read as measurements (the overlay's value vetoes): said by name with the reason, once per sheet and reason; the page gives the role back
     const vetoed = vetoedColumns(sin.file, sh, sin.mapping, sin.handSet);
@@ -1987,7 +1994,7 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
     const cols = demoteOccurrenceVars(colsOf(sin.mapping, sheet.header), sin);
     const collector = new Collector(fileName);
     const specs = specsOf(sin.mapping);
-    const parse = metaParser(file, sheet, specs, collector, { whenUtc: isUtcBySource(file, specs.when?.header), ...(sin.dayMonthOrder === undefined ? {} : { dayMonthOrder: sin.dayMonthOrder }) });
+    const parse = metaParser(file, sheet, specs, collector, { whenUtc: isUtcBySource(file, specs.when?.header), ...(sin.dayMonthOrder === undefined ? {} : { dayMonthOrder: sin.dayMonthOrder }), ...(sin.yyOrder === undefined ? {} : { yyOrder: sin.yyOrder }) });
     const base = { file: fileName, sheet: sheet.name };
     // where each row and cell of this sheet went, for the ledger (ledger.ts): written beside the `continue`s below, never read by the conversion itself
     const fate = new FateLog(sheet.rows.length);
@@ -1999,7 +2006,7 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
     const readKey =
       pickedKey === undefined
         ? undefined
-        : keyReader(pickedKey, { prefix: keyPrefixOf(pickedKey, file.kind, fileName, sheet.name), sheet, decimalComma: dc, date1904: file.date1904, roleOf: (i) => sin.mapping.columns.find((c) => c.index === i)?.role.kind ?? 'ignore', ...(sin.dayMonthOrder === undefined ? {} : { dayMonthOrder: sin.dayMonthOrder }) });
+        : keyReader(pickedKey, { prefix: keyPrefixOf(pickedKey, file.kind, fileName, sheet.name), sheet, decimalComma: dc, date1904: file.date1904, roleOf: (i) => sin.mapping.columns.find((c) => c.index === i)?.role.kind ?? 'ignore', ...(sin.dayMonthOrder === undefined ? {} : { dayMonthOrder: sin.dayMonthOrder }), ...(sin.yyOrder === undefined ? {} : { yyOrder: sin.yyOrder }) });
     const keyBlank = new Lines();
     const keyTooLong = new Lines();
     // every ID written for a sheet with a picked key is held to the limit of the archive (sample, replicate and occurrence); the longest is named
@@ -2256,7 +2263,7 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
     const visitParts = new Set<string>();
     const visitGroups: { id: string; lines: number[] }[] = [];
     if (readKey === undefined) {
-      const scan = metaParser(file, sheet, specs, new Collector(fileName), { whenUtc: isUtcBySource(file, specs.when?.header), ...(sin.dayMonthOrder === undefined ? {} : { dayMonthOrder: sin.dayMonthOrder }) });
+      const scan = metaParser(file, sheet, specs, new Collector(fileName), { whenUtc: isUtcBySource(file, specs.when?.header), ...(sin.dayMonthOrder === undefined ? {} : { dayMonthOrder: sin.dayMonthOrder }), ...(sin.yyOrder === undefined ? {} : { yyOrder: sin.yyOrder }) });
       const groups = new Map<string, { station: string | undefined; stationId: string | undefined; code: string; rows: { line: number; key: VisitKey }[]; mixed: boolean }>();
       for (const row of sheet.rows) {
         if (ragged.has(row.line) || statRows.skipped.has(row.line)) continue;

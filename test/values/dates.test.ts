@@ -5,12 +5,12 @@ import type { ParsedDate } from '../../src/core/types';
 import { combineDateTime, detectDayMonthOrder, isAmbiguousTwoDigit, twoDigitReadings, excelSerialToDate, parseDate, cellsAreYearRanges, parseTimeCell, parseTimeOfDay } from '../../src/core/values/dates';
 
 const OPTS = { date1904: false, dateFormatted: false };
-const ok = (raw: string | number | null, opts: { date1904?: boolean; dateFormatted?: boolean; currentYear?: number; order?: 'dmy' | 'mdy' | 'ymd' | 'conflict'; yyOrder?: 'ymd' | 'dmy' | 'mdy' } = {}): ParsedDate => {
+const ok = (raw: string | number | null, opts: { date1904?: boolean; dateFormatted?: boolean; currentYear?: number; order?: 'dmy' | 'mdy' | 'conflict'; yyOrder?: 'ymd' | 'dmy' | 'mdy' } = {}): ParsedDate => {
   const r = parseDate(raw, { ...OPTS, ...opts });
   if ('error' in r) throw new Error(`expected a date for ${String(raw)}`);
   return r;
 };
-const bad = (raw: string | number | null, opts: { date1904?: boolean; dateFormatted?: boolean; order?: 'dmy' | 'mdy' | 'ymd' | 'conflict' } = {}) => {
+const bad = (raw: string | number | null, opts: { date1904?: boolean; dateFormatted?: boolean; order?: 'dmy' | 'mdy' | 'conflict'; yyOrder?: 'ymd' | 'dmy' | 'mdy' } = {}) => {
   const r = parseDate(raw, { ...OPTS, ...opts });
   if (!('error' in r)) throw new Error(`expected error for ${String(raw)}, got ${r.iso}`);
   return r;
@@ -395,7 +395,7 @@ describe('NN-NN-NN dates: the readings the cells allow', () => {
     // the slash order never reads a NN-NN-NN cell: only a yyOrder does
     expect(ok('05-06-21', { ...o, order: 'dmy' }).iso).toBe('2005-06-21');
     expect(ok('98-06-21', { ...o, order: 'dmy' }).iso).toBe('1998-06-21');
-    expect(bad('5/4/2023', { order: 'ymd' }).error).toBeDefined();
-    expect(ok('13/4/2023', { order: 'ymd' }).iso).toBe('2023-04-13');
+    expect(bad('5/4/2023', { yyOrder: 'mdy' }).error).toBeDefined();
+    expect(ok('13/4/2023', { yyOrder: 'mdy' }).iso).toBe('2023-04-13');
   });
 });

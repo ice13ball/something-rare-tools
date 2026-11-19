@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import type { DeclaredOrder } from '../values/dates';
+import type { DeclaredOrder, TwoDigitOrder } from '../values/dates';
 import type { ColumnProposal, ParsedFile, RawSheet, SheetMapping } from '../types';
 import { encodeListedColumns } from '../rules/convert';
 import { keyHashes } from './keySetting';
@@ -39,12 +39,12 @@ const CELL_CUT = 30;
 // the proposals of a sheet (marked) are read from the cells once per sheet object and context: a conversion is asked again after every click
 const marked = new WeakMap<RawSheet, { key: string; proposals: ColumnProposal[] }>();
 
-function markedProposals(file: ParsedFile, sheet: RawSheet, dayMonthOrder?: Readonly<Record<number, DeclaredOrder>>): ColumnProposal[] {
-  const key = `${file.decimalComma}|${file.date1904}|${file.kind}|${JSON.stringify(dayMonthOrder ?? {})}`;
+function markedProposals(file: ParsedFile, sheet: RawSheet, dayMonthOrder?: Readonly<Record<number, DeclaredOrder>>, yyOrder?: Readonly<Record<number, TwoDigitOrder>>): ColumnProposal[] {
+  const key = `${file.decimalComma}|${file.date1904}|${file.kind}|${JSON.stringify(dayMonthOrder ?? {})}|${JSON.stringify(yyOrder ?? {})}`;
   const hit = marked.get(sheet);
   if (hit !== undefined && hit.key === key) return hit.proposals;
   const proposals = proposeConvertColumns(sheet, { decimalComma: file.decimalComma, date1904: file.date1904 });
-  const out = withStated(sheet, proposals, { decimalComma: file.decimalComma, date1904: file.date1904, pangaea: file.kind === 'pangaea', ...(dayMonthOrder === undefined ? {} : { dayMonthOrder }) });
+  const out = withStated(sheet, proposals, { decimalComma: file.decimalComma, date1904: file.date1904, pangaea: file.kind === 'pangaea', ...(dayMonthOrder === undefined ? {} : { dayMonthOrder }), ...(yyOrder === undefined ? {} : { yyOrder }) });
   marked.set(sheet, { key, proposals: out });
   return out;
 }
@@ -63,9 +63,9 @@ function exampleCells(sheet: RawSheet, index: number): string[] {
 }
 
 /** The listed columns of one sheet, in column order. `mapping` is the roles the converter is going to use (the confirmed ones). */
-export function unconfirmedRoles(file: ParsedFile, sheet: RawSheet, mapping: SheetMapping, handSet: readonly number[] = [], dayMonthOrder?: Readonly<Record<number, DeclaredOrder>>): UnconfirmedColumn[] {
+export function unconfirmedRoles(file: ParsedFile, sheet: RawSheet, mapping: SheetMapping, handSet: readonly number[] = [], dayMonthOrder?: Readonly<Record<number, DeclaredOrder>>, yyOrder?: Readonly<Record<number, TwoDigitOrder>>): UnconfirmedColumn[] {
   const out: UnconfirmedColumn[] = [];
-  for (const p of markedProposals(file, sheet, dayMonthOrder)) {
+  for (const p of markedProposals(file, sheet, dayMonthOrder, yyOrder)) {
     const role = LISTED[p.role.kind];
     if (role === undefined || p.stated === true) continue;
     if (p.role.kind === 'taxon' && p.role.header === true) continue;

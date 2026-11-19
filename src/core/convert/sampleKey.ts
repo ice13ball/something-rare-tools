@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import { dateReadOptions, parseDate, parseTimeCell, type DeclaredOrder } from '../values/dates';
+import { dateReadOptions, parseDate, parseTimeCell, type DeclaredOrder, type TwoDigitOrder } from '../values/dates';
 import { parseNumber } from '../values/numbers';
 import type { RawRow, RawSheet } from '../types';
 
@@ -57,6 +57,8 @@ export interface KeyContext {
   roleOf: (index: number) => string;
   /** The day/month order the person declared per column (index), used where a date column's cells decide none (columnOrder). */
   dayMonthOrder?: Readonly<Record<number, DeclaredOrder>>;
+  /** The NN-NN-NN order the person declared per column (index). */
+  yyOrder?: Readonly<Record<number, TwoDigitOrder>>;
 }
 
 export interface KeyRead {
@@ -147,7 +149,7 @@ export function keyPart(ctx: KeyContext, row: RawRow, index: number, dayOrder: M
   const formatted = ctx.sheet.dateFormatted?.[index] === true;
   if (role === 'date' || role === 'datetime' || (formatted && ctx.sheet.timeFormatted?.[index] !== true)) {
     let read = dayOrder.get(index);
-    if (read === undefined) dayOrder.set(index, (read = dateReadOptions(ctx.sheet, index, ctx.dayMonthOrder?.[index])));
+    if (read === undefined) dayOrder.set(index, (read = dateReadOptions(ctx.sheet, index, ctx.dayMonthOrder?.[index], ctx.yyOrder?.[index])));
     const d = parseDate(cell, { date1904: ctx.date1904, dateFormatted: formatted, datumColumn: true, ...read });
     if (!('error' in d)) return (d.end ? `${d.iso}/${d.end.iso}` : d.iso).normalize('NFC');
   } else if (role === 'time') {

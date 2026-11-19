@@ -31,7 +31,7 @@ import { pairHemisphere, parseCoordinate } from './values/coords';
 import type { KeepMillis } from './values/dates';
 import { columnFractions } from './values/fractionEvidence';
 import { isRealFraction, secondOffsetMs } from './values/dates';
-import { columnOrder, columnYYOrder, combineDateTime, cellsAreYearRanges, fullDatetimeOfTimeCell, isAmbiguousTwoDigit, isPlausibleSerial, parseDate, twoDigitReadings, parseTimeColumnCell, parseTimeOfDay, type DeclaredOrder } from './values/dates';
+import { columnOrder, columnYYOrder, combineDateTime, cellsAreYearRanges, fullDatetimeOfTimeCell, isAmbiguousTwoDigit, isPlausibleSerial, parseDate, twoDigitReadings, parseTimeColumnCell, parseTimeOfDay, type DeclaredOrder, type TwoDigitOrder } from './values/dates';
 import type { DateError } from './values/dates';
 import { parseNumber } from './values/numbers';
 import { pushAll } from './util/arrays';
@@ -311,7 +311,7 @@ function otherReadings(text: string, readings: readonly ('ymd' | 'dmy' | 'mdy')[
  * `opts.whenUtc`: the converter says that the date column is UTC by the convention of its source (a PANGAEA file's Date/Time, wiki.pangaea.de/wiki/Data_submission), so a time with no zone is
  * read as UTC and written with its Z, and ROW-TZ-UNKNOWN is not raised. /check never passes it: its output is unchanged.
  */
-export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c: Collector, opts: { whenUtc?: boolean; fields?: boolean; keepMillis?: boolean; dayMonthOrder?: Readonly<Record<number, DeclaredOrder>> } = {}): MetaParser {
+export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c: Collector, opts: { whenUtc?: boolean; fields?: boolean; keepMillis?: boolean; dayMonthOrder?: Readonly<Record<number, DeclaredOrder>>; yyOrder?: Readonly<Record<number, TwoDigitOrder>> } = {}): MetaParser {
   const dc = file.decimalComma;
   // /check keeps a real fraction of a second of an Excel date or time cell (opts.keepMillis); /convert does not pass it and reads the whole second, as its event IDs need. 'shown': the column's number format shows the fraction.
   const millisOf = (spec: Spec | undefined): KeepMillis => (opts.keepMillis !== true ? false : spec !== undefined && columnFractions(sheet, spec.index, sheet.fractionShown?.[spec.index] === true).shown ? 'shown' : true);
@@ -367,7 +367,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
   // NN-NN-NN cells: the readings every cell of the column allows; when the column's order is still open and several fit, a cell whose date differs between them is ROW-DATE-YY-AMBIGUOUS
   // (decided from those cells alone: a slash date in the column rules out no reading of 05-06-21)
   const yyReadings = whenIndex === undefined ? [] : twoDigitReadings(sheet.rows.map((r) => r.cells[whenIndex] ?? null));
-  const whenYY = whenIndex === undefined ? 'unknown' : columnYYOrder(sheet, whenIndex, opts.dayMonthOrder?.[whenIndex]);
+  const whenYY = whenIndex === undefined ? 'unknown' : columnYYOrder(sheet, whenIndex, opts.yyOrder?.[whenIndex]);
   // an open column is read in its first fitting reading so that no cell is called unreadable for want of the order; the warning (and /convert's question) is what names the choice
   const yyRead = whenYY !== 'unknown' ? whenYY : yyReadings[0];
   // such a column is named once, by ROW-DATE-YY-AMBIGUOUS, on its cells that differ; a cell that reads the same in every order (22-08-22) adds no second finding to it
@@ -472,7 +472,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
           if (date.ambiguity === 'yy-mm-dd') {
             const text = String(cell).trim();
             if (!yyColumnOpen) c.add('ROW-DATE-YYMMDD', sheet.name, specs.when.header, row.line, text, false, { interpreted: date.iso.slice(0, 10), order: whenYY !== 'unknown' ? whenYY : yyReadings.join(', ') });
-            else if (isAmbiguousTwoDigit(cell, yyReadings)) c.add('ROW-DATE-YY-AMBIGUOUS', sheet.name, specs.when.header, row.line, text, false, { interpreted: date.iso.slice(0, 10), readings: otherReadings(text, yyReadings, date.iso.slice(0, 10)) });
+            else if (isAmbiguousTwoDigit(cell, yyReadings)) c.add('ROW-DATE-YY-AMBIGUOUS', sheet.name, specs.when.header, row.line, text, false, { interpreted: `${date.iso.slice(0, 10)} (${yyRead})`, readings: otherReadings(text, yyReadings, date.iso.slice(0, 10)) });
           }
           let timeCell = specs.time ? (row.cells[specs.time.index] ?? null) : null;
           const origTime = timeCell;

@@ -9,7 +9,7 @@ import { joinInputs } from '../../src/core/convert/sampleJoin';
 import type { SampleJoinRequestCore } from '../../src/core/convert/sampleJoin';
 import { Collector, metaParser, specsOf } from '../../src/core/dataset';
 import { renderConvertPlain } from '../../src/core/rules/convert';
-import { columnOrder, columnYYOrder, declaredOrderStatus, isAmbiguousDayMonth } from '../../src/core/values/dates';
+import { columnOrder, columnYYOrder, declaredOrderStatus, declaredYYOrderStatus, isAmbiguousDayMonth } from '../../src/core/values/dates';
 import type { ColumnRole } from '../../src/core/types';
 import { xlsxFile } from '../helpers/files';
 import { descriptionInput, resultsInput } from './joinFixtures';
@@ -227,13 +227,15 @@ describe('NN-NN-NN dates (two-digit year)', () => {
     expect(columnOrder(sheet(['25/06/2021', '05-06-21']), 0)).toBe('dmy');
     expect(columnYYOrder(sheet(['25/06/2021', '05-06-21']), 0)).toBe('unknown');
     expect(columnYYOrder(sheet(['25/06/2021', '98-06-21']), 0)).toBe('ymd');
-    expect(columnOrder(sheet(OPEN), 0, 'dmy')).toBe('dmy');
-    expect(declaredOrderStatus(sheet(OPEN), 0, 'dmy')).toBe('applied');
-    expect(declaredOrderStatus(sheet(OPEN), 0, 'ymd')).toBe('applied');
-    expect(declaredOrderStatus(sheet(OPEN), 0, 'mdy')).toBe('contradicted');
-    expect(declaredOrderStatus(sheet(['98-06-21']), 0, 'ymd')).toBe('redundant');
-    expect(declaredOrderStatus(sheet(['98-06-21']), 0, 'dmy')).toBe('contradicted');
-    expect(declaredOrderStatus(sheet(['5/4/2023']), 0, 'ymd')).toBe('redundant');
+    expect(declaredYYOrderStatus(sheet(OPEN), 0, 'dmy')).toBe('applied');
+    expect(declaredYYOrderStatus(sheet(OPEN), 0, 'ymd')).toBe('applied');
+    expect(declaredYYOrderStatus(sheet(OPEN), 0, 'mdy')).toBe('contradicted');
+    expect(declaredYYOrderStatus(sheet(['98-06-21']), 0, 'ymd')).toBe('redundant');
+    expect(declaredYYOrderStatus(sheet(['98-06-21']), 0, 'dmy')).toBe('contradicted');
+    // the two answers never judge each other's cells: the two-digit answer is judged by the NN-NN-NN cells only, the slash answer by the slash dates only
+    expect(declaredYYOrderStatus(sheet(['25/06/2021', '05-06-21', '07-06-21']), 0, 'mdy')).toBe('applied');
+    expect(declaredOrderStatus(sheet(['25/06/2021', '05-06-21']), 0, 'mdy')).toBe('contradicted');
+    expect(declaredOrderStatus(sheet(['5/4/2023', '05-06-21']), 0, 'mdy')).toBe('applied');
   });
 
   it('an undecided column blocks with the two-digit-year question, and the /check warning is not said twice', () => {
@@ -262,42 +264,61 @@ describe('NN-NN-NN dates (two-digit year)', () => {
     expect(rule(convert({ sheets: [input(['05-05-05', '06-06-06'])] }), 'CONV-DATE-ORDER-UNDECLARED')).toEqual([]);
   });
 
-  it('dmy is read as DD-MM-YY and said; ymd keeps the order as today', () => {
-    const dmy = convert({ sheets: [input(OPEN, { dayMonthOrder: { 1: 'dmy' } })] });
+  it('a two-digit answer dmy is read as DD-MM-YY and said; ymd keeps the order as today', () => {
+    const dmy = convert({ sheets: [input(OPEN, { yyOrder: { 1: 'dmy' } })] });
     expect([dateOf(dmy, 'S1'), dateOf(dmy, 'S2'), dateOf(dmy, 'S3')]).toEqual(['2021-06-05', '2021-06-25', '2021-06-30']);
     expect(rule(dmy, 'CONV-DATE-ORDER-DECLARED')).toHaveLength(1);
-    expect(rule(dmy, 'CONV-DATE-ORDER-DECLARED')[0].params).toEqual({ order: 'dmy', index: 1 });
+    expect(rule(dmy, 'CONV-DATE-ORDER-DECLARED')[0].params).toEqual({ order: 'dmy', index: 1, variant: 'two-digit-year' });
     expect(rule(dmy, 'CONV-DATE-ORDER-UNDECLARED')).toEqual([]);
     expect(rule(dmy, 'ROW-DATE-YY-AMBIGUOUS')).toEqual([]);
     expect(rule(dmy, 'ROW-DATE-YYMMDD')[0].params).toMatchObject({ order: 'dmy' });
-    const ymd = convert({ sheets: [input(OPEN, { dayMonthOrder: { 1: 'ymd' } })] });
+    const ymd = convert({ sheets: [input(OPEN, { yyOrder: { 1: 'ymd' }, yyOrderFromFile: [1] })] });
     expect([dateOf(ymd, 'S1'), dateOf(ymd, 'S2')]).toEqual(['2005-06-21', '2025-06-21']);
-    expect(rule(ymd, 'CONV-DATE-ORDER-DECLARED')[0].params).toEqual({ order: 'ymd', index: 1 });
+    expect(rule(ymd, 'CONV-DATE-ORDER-DECLARED')[0].params).toEqual({ order: 'ymd', index: 1, variant: 'two-digit-year', fromFile: 'yes' });
     expect(rule(ymd, 'ROW-DATE-YYMMDD')[0].params).toMatchObject({ order: 'ymd' });
   });
 
-  it('an order the cells do not allow is contradicted and not used', () => {
-    const r = convert({ sheets: [input(OPEN, { dayMonthOrder: { 1: 'mdy' } })] });
-    expect(rule(r, 'CONV-DATE-ORDER-CONTRADICTED')).toHaveLength(1);
+  it('the slash answer does not answer NN-NN-NN dates: dmy / mdy in dayMonthOrder leaves them asked', () => {
+    const r = convert({ sheets: [input(OPEN, { dayMonthOrder: { 1: 'dmy' } })] });
+    expect(rule(r, 'CONV-DATE-ORDER-UNDECLARED').map((f) => f.params.variant)).toEqual(['two-digit-year']);
     expect(rule(r, 'CONV-DATE-ORDER-DECLARED')).toEqual([]);
   });
 
-  it('round 3 slash declarations are unchanged, and ymd on a slash column changes nothing', () => {
-    const r = convert({ sheets: [input(AMBIGUOUS, { dayMonthOrder: { 1: 'dmy' } })] });
-    expect(dateOf(r, 'S1')).toBe('2023-04-05');
-    const y = convert({ sheets: [input(AMBIGUOUS, { dayMonthOrder: { 1: 'ymd' } })] });
-    expect(rule(y, 'CONV-DATE-ORDER-UNDECLARED')).toHaveLength(1);
-    expect(rule(y, 'CONV-DATE-ORDER-DECLARED')).toEqual([]);
+  it('an order the cells do not allow is contradicted and not used, and says which orders fit', () => {
+    const r = convert({ sheets: [input(OPEN, { yyOrder: { 1: 'mdy' } })] });
+    const c = rule(r, 'CONV-DATE-ORDER-CONTRADICTED');
+    expect(c).toHaveLength(1);
+    expect(c[0].params).toMatchObject({ declared: 'mdy', detected: 'ymd, dmy' });
+    expect(rule(r, 'CONV-DATE-ORDER-DECLARED')).toEqual([]);
   });
 
-  it('a mixed column: the slash order is declared on its own and the two-digit cells are asked on their own', () => {
-    const mixed = ['5/4/2023', '05-06-21', '25-06-21'];
-    const r = convert({ sheets: [input(mixed, { dayMonthOrder: { 1: 'mdy' } })] });
-    // mdy answers the slash cell (round 3) and is not an order the two-digit cells fit: they are asked, not called contradicted
+  it('a two-digit answer on a slash column changes nothing: the slash order is still asked', () => {
+    const y = convert({ sheets: [input(AMBIGUOUS, { yyOrder: { 1: 'ymd' } })] });
+    expect(rule(y, 'CONV-DATE-ORDER-UNDECLARED')).toHaveLength(1);
+    expect(rule(y, 'CONV-DATE-ORDER-DECLARED')).toEqual([]);
+    expect(rule(y, 'CONV-DATE-ORDER-CONTRADICTED')).toEqual([]);
+  });
+
+  it('a mixed column has two independent answers: the slash order and the two-digit order', () => {
+    // slash dates decide dmy by themselves; the two-digit cells fit three orders and are answered mdy, never compared with the slash order
+    const decided = ['25/06/2021', '05-06-21', '07-06-21'];
+    const r = convert({ sheets: [input(decided, { yyOrder: { 1: 'mdy' } })] });
     expect(rule(r, 'CONV-DATE-ORDER-CONTRADICTED')).toEqual([]);
+    expect(rule(r, 'CONV-DATE-ORDER-UNDECLARED')).toEqual([]);
     expect(rule(r, 'CONV-DATE-ORDER-DECLARED')).toHaveLength(1);
-    expect(rule(r, 'CONV-DATE-ORDER-UNDECLARED').map((f) => f.params.variant)).toEqual(['two-digit-year']);
-    expect(dateOf(r, 'S1')).toBe('2023-05-04');
+    expect([dateOf(r, 'S1'), dateOf(r, 'S2'), dateOf(r, 'S3')]).toEqual(['2021-06-25', '2021-05-06', '2021-07-06']);
+    // asked until it is answered
+    expect(rule(convert({ sheets: [input(decided)] }), 'CONV-DATE-ORDER-UNDECLARED').map((f) => f.params.variant)).toEqual(['two-digit-year']);
+    // an ambiguous slash date and ambiguous two-digit cells: each answered by its own slot
+    const both = ['5/4/2023', '05-06-21', '25-06-21'];
+    const onlySlash = convert({ sheets: [input(both, { dayMonthOrder: { 1: 'mdy' } })] });
+    expect(rule(onlySlash, 'CONV-DATE-ORDER-CONTRADICTED')).toEqual([]);
+    expect(rule(onlySlash, 'CONV-DATE-ORDER-DECLARED')).toHaveLength(1);
+    expect(rule(onlySlash, 'CONV-DATE-ORDER-UNDECLARED').map((f) => f.params.variant)).toEqual(['two-digit-year']);
+    const answered = convert({ sheets: [input(both, { dayMonthOrder: { 1: 'mdy' }, yyOrder: { 1: 'dmy' } })] });
+    expect(rule(answered, 'CONV-DATE-ORDER-UNDECLARED')).toEqual([]);
+    expect(rule(answered, 'CONV-DATE-ORDER-DECLARED')).toHaveLength(2);
+    expect([dateOf(answered, 'S1'), dateOf(answered, 'S2')]).toEqual(['2023-05-04', '2021-06-05']);
   });
 
   it('a NN-NN-NN date lent by the description is asked about on the description, once, with its own index', () => {
@@ -309,7 +330,7 @@ describe('NN-NN-NN dates (two-digit year)', () => {
     expect(f).toHaveLength(1);
     expect(f[0]).toMatchObject({ sheet: 'Samples', field: 'Date', params: { variant: 'two-digit-year', readings: 'ymd,dmy', count: 3, index: 1 } });
     expect(rule(r, 'ROW-DATE-YY-AMBIGUOUS')).toEqual([]);
-    const d = run2({ dayMonthOrder: { 1: 'dmy' } });
+    const d = run2({ yyOrder: { 1: 'dmy' } });
     expect([dateOf(d, 'X01'), dateOf(d, 'X03')]).toEqual(['2021-06-05', '2021-06-30']);
     expect(rule(d, 'CONV-DATE-ORDER-UNDECLARED')).toEqual([]);
   });
