@@ -36,12 +36,12 @@ export const TOOLS: readonly Tool[] = ['check', 'licence', 'collection', 'conver
 /**
  * Entry modules (relative to the repository) of each tool: its page and the worker that runs its checks.
  * /collection also starts the /check engine for its "Check this record" action (RecordCheck in CollectionPage.tsx receives the engine as a prop, which a
- * static scan cannot follow), so src/worker/handler.ts is an entry of /collection too.
+ * static scan cannot follow). That engine is deliberately NOT an entry of /collection: the record is checked by /check and its rules are in check.md.
  */
 export const TOOL_ENTRIES: Record<Tool, readonly string[]> = {
   check: ['src/worker/handler.ts', 'src/app/pages/CheckPage.tsx'],
   licence: ['src/app/pages/LicencePage.tsx'],
-  collection: ['src/worker/collection.handler.ts', 'src/worker/collection.worker.ts', 'src/app/pages/CollectionPage.tsx', 'src/worker/handler.ts'],
+  collection: ['src/worker/collection.handler.ts', 'src/worker/collection.worker.ts', 'src/app/pages/CollectionPage.tsx'],
   convert: ['src/worker/convert.handler.ts', 'src/app/pages/ConvertPage.tsx'],
 };
 
@@ -68,7 +68,7 @@ const HEAD: Record<Tool, string> = {
     'It lists only the rules it can raise itself. A rule that /check also raises is described here in the same words.',
   collection:
     'Collection review reads the records of a collection and runs the metadata and licence checks on each. ' +
-    'Its "Check this record" action opens one record in the /check engine, so the rules of check.md can appear there as well; they are listed here because the tool can raise them.',
+    'A record opened with "Check this record" is checked by /check; its rules are in check.md.',
   convert:
     '/convert reads a spreadsheet or table, asks the person to declare what the columns mean, and writes a Darwin Core archive. ' +
     'It re-uses the file-reading and row checks of /check, and adds its own questions (rules with the prefix CONV). ' +
@@ -76,6 +76,7 @@ const HEAD: Record<Tool, string> = {
 };
 
 const HOW_TO_READ =
+  'The list is the rules the tool can raise, found by a static scan of its code, so a few may never fire in practice. ' +
   'Severity is error, warning or info. Every number a rule compares against is listed with its source. ' +
   'A text in guillemets, «name», stands for a value the tool fills in from the finding; N stands for a number; a plural form is written in the plural. ' +
   'The texts are the ones the tool shows (English), unchanged.';

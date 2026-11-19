@@ -5,7 +5,7 @@ Regenerate with `UPDATE_RULES_DOC=1 npx vitest run test/rules/rules-docs-per-too
 
 /licence reads the licence statements of one or several records (DOI or link) and compares them: with each other, with the record in DataCite, and with the data files the repository holds back. It lists only the rules it can raise itself. A rule that /check also raises is described here in the same words.
 
-Severity is error, warning or info. Every number a rule compares against is listed with its source. A text in guillemets, «name», stands for a value the tool fills in from the finding; N stands for a number; a plural form is written in the plural. The texts are the ones the tool shows (English), unchanged.
+The list is the rules the tool can raise, found by a static scan of its code, so a few may never fire in practice. Severity is error, warning or info. Every number a rule compares against is listed with its source. A text in guillemets, «name», stands for a value the tool fills in from the finding; N stands for a number; a plural form is written in the plural. The texts are the ones the tool shows (English), unchanged.
 
 13 rules.
 
