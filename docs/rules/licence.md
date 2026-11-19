@@ -15,7 +15,7 @@ Severity: error
 
 **What it checks.** The record behind a link could not be opened, so its metadata and files were not read. The reason is a failed request to the host, and the finding names the host and the HTTP status code.
 
-**When it fires.** When the server answers a request for the record with an error status such as 403, 404 or 500, or when a file of the record cannot be downloaded. The wording differs for a server fault (status 500 and above, usually temporary) and for other statuses (the record may be private or unpublished). Whatever the other sources of the same run gave is still used.
+**When it fires.** When a request for the record or one of its files gets an error status such as 403, 404 or 500, or a proxy error (429, 504, a 413 on a file that is not an archive), or when the answer is not JSON or not Dataverse metadata, or when a Dataverse version is not released. The wording differs for a server fault (status 500 and above, usually temporary) and for other statuses (the record may be private or unpublished). Whatever the other sources of the same run gave is still used.
 
 **Example.** A link to a repository record returns status 404; the finding reads that the record on that host could not be opened (error 404).
 
@@ -39,7 +39,7 @@ Severity: warning
 
 **What it checks.** The browser could not download from a host, so the file was not read. This is a limit of the browser mode, not a fault in the data.
 
-**When it fires.** In browser mode, when a download fails before any answer arrives because the host does not allow the request (a cross-origin or content-security rule) or the network failed. The finding names the host.
+**When it fires.** In browser mode, when a download fails before any answer arrives because the host does not allow the request (a cross-origin or content-security rule) or the network failed. It also appears in server mode when the page's own fetch route could not be reached, or when a body that is not an archive was cut off midway. The finding names the host.
 
 **Example.** A link to a data file on a repository that sends no cross-origin permission; the browser refuses and the finding names the repository.
 

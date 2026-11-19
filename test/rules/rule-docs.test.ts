@@ -15,7 +15,7 @@ import { DOCS as convert } from '../../src/core/rules/docs/convert';
 import type { RuleDoc } from '../../src/core/rules/docs/types';
 
 /** Families whose descriptions are not written yet. Each family task removes its family from this list. */
-export const PENDING_FAMILIES: readonly string[] = ['rows', 'convert'];
+export const PENDING_FAMILIES: readonly string[] = ['convert'];
 
 /** The docs file of each family and the registry ids it must cover (a family is its own docs file; ids are assigned by prefix of the rule file). */
 const FILES: Record<string, Readonly<Record<string, RuleDoc>>> = { input, chemistry, crossfile, rows, dwc, metadata, licence, convert };

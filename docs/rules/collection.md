@@ -15,7 +15,7 @@ Severity: error
 
 **What it checks.** A record that was opened holds no file the tool can read as a data table, only other files such as PDFs, images or text documents. Nothing in it can be checked.
 
-**When it fires.** When a linked record (a Dataverse, Zenodo or similar deposit) was read and none of its files is a table in a format the tool reads: csv, tsv, txt, tab, xlsx, xls or ods. The finding lists the names of the files that were found. Held-back files are mentioned by their own findings.
+**When it fires.** When a record from any source (Dataverse, Zenodo, GeoNetwork or a plain link) was read and none of its files is a table in a format the tool reads: csv, tsv, txt, tab, xlsx, xls or ods. The finding lists the names of the files that were found; at most ten names are listed. Held-back files are mentioned by their own findings.
 
 **Example.** A record lists report.pdf, map.png and notes.docx and no table; the finding names all three.
 
@@ -27,7 +27,7 @@ Severity: error
 
 **What it checks.** The record behind a link could not be opened, so its metadata and files were not read. The reason is a failed request to the host, and the finding names the host and the HTTP status code.
 
-**When it fires.** When the server answers a request for the record with an error status such as 403, 404 or 500, or when a file of the record cannot be downloaded. The wording differs for a server fault (status 500 and above, usually temporary) and for other statuses (the record may be private or unpublished). Whatever the other sources of the same run gave is still used.
+**When it fires.** When a request for the record or one of its files gets an error status such as 403, 404 or 500, or a proxy error (429, 504, a 413 on a file that is not an archive), or when the answer is not JSON or not Dataverse metadata, or when a Dataverse version is not released. The wording differs for a server fault (status 500 and above, usually temporary) and for other statuses (the record may be private or unpublished). Whatever the other sources of the same run gave is still used.
 
 **Example.** A link to a repository record returns status 404; the finding reads that the record on that host could not be opened (error 404).
 
@@ -51,7 +51,7 @@ Severity: warning
 
 **What it checks.** The browser could not download from a host, so the file was not read. This is a limit of the browser mode, not a fault in the data.
 
-**When it fires.** In browser mode, when a download fails before any answer arrives because the host does not allow the request (a cross-origin or content-security rule) or the network failed. The finding names the host.
+**When it fires.** In browser mode, when a download fails before any answer arrives because the host does not allow the request (a cross-origin or content-security rule) or the network failed. It also appears in server mode when the page's own fetch route could not be reached, or when a body that is not an archive was cut off midway. The finding names the host.
 
 **Example.** A link to a data file on a repository that sends no cross-origin permission; the browser refuses and the finding names the repository.
 
@@ -75,21 +75,21 @@ Severity: error
 
 **What it checks.** The download of an archive from an archive server was cut off or ran out of time before it was complete, so the archive was not checked at all.
 
-**When it fires.** When the download of a Darwin Core Archive from a listed IPT server times out (the limit of server mode is the proxy's) or the connection closes before the whole body arrived. The finding names the host. A partly received archive is never read.
+**When it fires.** When the download of a Darwin Core Archive from a listed IPT server times out (the proxy gave up after 90 s on an archive) or the connection closes before the whole body arrived. The finding names the host. A partly received archive is never read.
 
 **Example.** A large archive from a slow IPT server stops after a few megabytes; nothing of it is read.
 
 **What you can do.** Try again in a few minutes, or download the archive (.zip) yourself and add it to the tool. In /convert this finding blocks the export.
 
-## IN-ARCHIVE-TOO-LARGE — A Darwin Core Archive is larger than the size the tool's server will pass on for checking, so it was not downloaded or checked
+## IN-ARCHIVE-TOO-LARGE — An archive from an IPT server is larger than the limit for archives, IPT_MAX_BYTES (100 MB)
 
 Severity: error
 
-**What it checks.** A Darwin Core Archive is larger than the size the tool's server will pass on for checking, so it was not downloaded or checked.
+**What it checks.** An archive from an IPT server is larger than the limit for archives, IPT_MAX_BYTES (100 MB).
 
-**When it fires.** When the proxy refuses an archive with HTTP status 413 because it is above its size limit. The finding names the host and the limit in megabytes. An archive added by hand has the same limit.
+**When it fires.** When the proxy refuses an archive from an IPT server with HTTP status 413 because it is larger than IPT_MAX_BYTES (100 MB, the proxy cuts at the same size), or when, on the client side, a body without a stated length breaks off within 1 MB of that size. The finding names the host and the limit in megabytes. An archive added by hand over 100 MB is not this rule: it is IN-DWCA-UNREADABLE with the reason ZIP-TOO-LARGE.
 
-**Example.** An archive of 600 MB is refused by a proxy whose limit is 250 MB; the finding gives the host and 250.
+**Example.** An archive of 600 MB is refused by the proxy; the finding gives the host and 100.
 
 **What you can do.** Download the archive yourself, unpack it and add the core file (for example occurrence.txt) to the tool. The unpacked file is read as an ordinary table. In /convert this finding blocks the export.
 
@@ -99,7 +99,7 @@ Severity: error
 
 **What it checks.** This client has used the daily allowance for archive downloads through the tool's server, so the archive was not fetched and not checked.
 
-**When it fires.** When the proxy answers HTTP status 429 with the reason archive_daily_budget: the daily number of archive requests or bytes for this IP address is used up. The finding names the host of the archive. The allowance starts again within 24 hours.
+**When it fires.** When the proxy answers HTTP status 429 with the reason archive_daily_budget: this IP address has used its daily allowance of 200 archive requests or 2 GiB of archive bytes. The finding names the host of the archive. The allowance starts again within 24 hours.
 
 **Example.** After many large archives in one day the next request is refused; the host of that archive is named.
 
@@ -147,7 +147,7 @@ Severity: warning
 
 **What it checks.** A file of a linked record is held back by its source (restricted access or an embargo), so it was not downloaded and not checked. This is not an error in the data, but the lack of remarks says nothing about the file.
 
-**When it fires.** When the source marks a file of a Dataverse dataset as restricted or embargoed. The finding names the file and the host. The other files of the record are still read.
+**When it fires.** When the source marks a file of a Dataverse dataset as restricted or embargoed, or when downloading the file returns status 401 or 403. The finding names the file and the host. The other files of the record are still read.
 
 **Example.** A dataset has an open file samples.csv and a restricted file raw.csv; raw.csv gets this finding.
 
@@ -159,9 +159,9 @@ Severity: warning
 
 **What it checks.** A data file of a linked record is larger than the most the tool reads from a link, so it was not downloaded and not checked.
 
-**When it fires.** When a file listed in a Dataverse dataset is a readable table type, is not held back, and its size is above the limit for linked files. The finding names the file and gives the limit in megabytes. The rule uses the size the source states.
+**When it fires.** When a file listed in a Dataverse record is a readable table type, is not held back, and its stated size is above LINKED_FILE_MAX_BYTES (30 MB), or when the download answers 413 and no size is stated. The finding names the file and gives the limit in megabytes.
 
-**Example.** A deposit holds survey.csv of 400 MB and the limit is 100 MB; the file gets this finding and the rest of the record is read.
+**Example.** A deposit holds survey.csv of 45 MB and the limit is 30 MB; the file gets this finding and the rest of the record is read.
 
 **What you can do.** Download the file and add it to the tool yourself, or split it into smaller tables. A clean result for the other files says nothing about this one. In /convert this finding is only shown and never stops the export.
 

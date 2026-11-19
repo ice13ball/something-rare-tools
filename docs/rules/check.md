@@ -15,7 +15,7 @@ Severity: error
 
 **What it checks.** A record that was opened holds no file the tool can read as a data table, only other files such as PDFs, images or text documents. Nothing in it can be checked.
 
-**When it fires.** When a linked record (a Dataverse, Zenodo or similar deposit) was read and none of its files is a table in a format the tool reads: csv, tsv, txt, tab, xlsx, xls or ods. The finding lists the names of the files that were found. Held-back files are mentioned by their own findings.
+**When it fires.** When a record from any source (Dataverse, Zenodo, GeoNetwork or a plain link) was read and none of its files is a table in a format the tool reads: csv, tsv, txt, tab, xlsx, xls or ods. The finding lists the names of the files that were found; at most ten names are listed. Held-back files are mentioned by their own findings.
 
 **Example.** A record lists report.pdf, map.png and notes.docx and no table; the finding names all three.
 
@@ -27,7 +27,7 @@ Severity: error
 
 **What it checks.** The record behind a link could not be opened, so its metadata and files were not read. The reason is a failed request to the host, and the finding names the host and the HTTP status code.
 
-**When it fires.** When the server answers a request for the record with an error status such as 403, 404 or 500, or when a file of the record cannot be downloaded. The wording differs for a server fault (status 500 and above, usually temporary) and for other statuses (the record may be private or unpublished). Whatever the other sources of the same run gave is still used.
+**When it fires.** When a request for the record or one of its files gets an error status such as 403, 404 or 500, or a proxy error (429, 504, a 413 on a file that is not an archive), or when the answer is not JSON or not Dataverse metadata, or when a Dataverse version is not released. The wording differs for a server fault (status 500 and above, usually temporary) and for other statuses (the record may be private or unpublished). Whatever the other sources of the same run gave is still used.
 
 **Example.** A link to a repository record returns status 404; the finding reads that the record on that host could not be opened (error 404).
 
@@ -51,7 +51,7 @@ Severity: warning
 
 **What it checks.** The browser could not download from a host, so the file was not read. This is a limit of the browser mode, not a fault in the data.
 
-**When it fires.** In browser mode, when a download fails before any answer arrives because the host does not allow the request (a cross-origin or content-security rule) or the network failed. The finding names the host.
+**When it fires.** In browser mode, when a download fails before any answer arrives because the host does not allow the request (a cross-origin or content-security rule) or the network failed. It also appears in server mode when the page's own fetch route could not be reached, or when a body that is not an archive was cut off midway. The finding names the host.
 
 **Example.** A link to a data file on a repository that sends no cross-origin permission; the browser refuses and the finding names the repository.
 
@@ -75,21 +75,21 @@ Severity: error
 
 **What it checks.** The download of an archive from an archive server was cut off or ran out of time before it was complete, so the archive was not checked at all.
 
-**When it fires.** When the download of a Darwin Core Archive from a listed IPT server times out (the limit of server mode is the proxy's) or the connection closes before the whole body arrived. The finding names the host. A partly received archive is never read.
+**When it fires.** When the download of a Darwin Core Archive from a listed IPT server times out (the proxy gave up after 90 s on an archive) or the connection closes before the whole body arrived. The finding names the host. A partly received archive is never read.
 
 **Example.** A large archive from a slow IPT server stops after a few megabytes; nothing of it is read.
 
 **What you can do.** Try again in a few minutes, or download the archive (.zip) yourself and add it to the tool. In /convert this finding blocks the export.
 
-## IN-ARCHIVE-TOO-LARGE — A Darwin Core Archive is larger than the size the tool's server will pass on for checking, so it was not downloaded or checked
+## IN-ARCHIVE-TOO-LARGE — An archive from an IPT server is larger than the limit for archives, IPT_MAX_BYTES (100 MB)
 
 Severity: error
 
-**What it checks.** A Darwin Core Archive is larger than the size the tool's server will pass on for checking, so it was not downloaded or checked.
+**What it checks.** An archive from an IPT server is larger than the limit for archives, IPT_MAX_BYTES (100 MB).
 
-**When it fires.** When the proxy refuses an archive with HTTP status 413 because it is above its size limit. The finding names the host and the limit in megabytes. An archive added by hand has the same limit.
+**When it fires.** When the proxy refuses an archive from an IPT server with HTTP status 413 because it is larger than IPT_MAX_BYTES (100 MB, the proxy cuts at the same size), or when, on the client side, a body without a stated length breaks off within 1 MB of that size. The finding names the host and the limit in megabytes. An archive added by hand over 100 MB is not this rule: it is IN-DWCA-UNREADABLE with the reason ZIP-TOO-LARGE.
 
-**Example.** An archive of 600 MB is refused by a proxy whose limit is 250 MB; the finding gives the host and 250.
+**Example.** An archive of 600 MB is refused by the proxy; the finding gives the host and 100.
 
 **What you can do.** Download the archive yourself, unpack it and add the core file (for example occurrence.txt) to the tool. The unpacked file is read as an ordinary table. In /convert this finding blocks the export.
 
@@ -99,7 +99,7 @@ Severity: error
 
 **What it checks.** This client has used the daily allowance for archive downloads through the tool's server, so the archive was not fetched and not checked.
 
-**When it fires.** When the proxy answers HTTP status 429 with the reason archive_daily_budget: the daily number of archive requests or bytes for this IP address is used up. The finding names the host of the archive. The allowance starts again within 24 hours.
+**When it fires.** When the proxy answers HTTP status 429 with the reason archive_daily_budget: this IP address has used its daily allowance of 200 archive requests or 2 GiB of archive bytes. The finding names the host of the archive. The allowance starts again within 24 hours.
 
 **Example.** After many large archives in one day the next request is refused; the host of that archive is named.
 
@@ -147,7 +147,7 @@ Severity: warning
 
 **What it checks.** A file of a linked record is held back by its source (restricted access or an embargo), so it was not downloaded and not checked. This is not an error in the data, but the lack of remarks says nothing about the file.
 
-**When it fires.** When the source marks a file of a Dataverse dataset as restricted or embargoed. The finding names the file and the host. The other files of the record are still read.
+**When it fires.** When the source marks a file of a Dataverse dataset as restricted or embargoed, or when downloading the file returns status 401 or 403. The finding names the file and the host. The other files of the record are still read.
 
 **Example.** A dataset has an open file samples.csv and a restricted file raw.csv; raw.csv gets this finding.
 
@@ -159,9 +159,9 @@ Severity: warning
 
 **What it checks.** A data file of a linked record is larger than the most the tool reads from a link, so it was not downloaded and not checked.
 
-**When it fires.** When a file listed in a Dataverse dataset is a readable table type, is not held back, and its size is above the limit for linked files. The finding names the file and gives the limit in megabytes. The rule uses the size the source states.
+**When it fires.** When a file listed in a Dataverse record is a readable table type, is not held back, and its stated size is above LINKED_FILE_MAX_BYTES (30 MB), or when the download answers 413 and no size is stated. The finding names the file and gives the limit in megabytes.
 
-**Example.** A deposit holds survey.csv of 400 MB and the limit is 100 MB; the file gets this finding and the rest of the record is read.
+**Example.** A deposit holds survey.csv of 45 MB and the limit is 30 MB; the file gets this finding and the rest of the record is read.
 
 **What you can do.** Download the file and add it to the tool yourself, or split it into smaller tables. A clean result for the other files says nothing about this one. In /convert this finding is only shown and never stops the export.
 
@@ -207,7 +207,7 @@ Severity: error
 
 **What it checks.** The table is laid out in a way the tool cannot read as one header row and one row per sample, so it was not read.
 
-**When it fires.** When the layout reader finds data that is transposed (variables or species in rows, samples in columns), a header that spans several rows, a row above the names that holds footnote markers, a table with no rows, a workbook with no sheet of coordinates or measurements, or no table at all. The finding gives the reason and, for a workbook, the sheet.
+**When it fires.** When the layout reader finds data that is transposed (variables or species in rows, samples in columns), a header spread over several rows (more than half of the header cells empty in a table of three or more columns, or a first data row of units that was not folded into the header), a row above the names that holds footnote markers, a table with no rows, a workbook with no sheet of coordinates or measurements, or no table at all. The finding gives the reason and, for a workbook, the sheet.
 
 **Example.** A sheet lists the variables down the first column and the samples across the top; the finding says the data is transposed.
 
@@ -219,9 +219,9 @@ Severity: info
 
 **What it checks.** The file is not saved as UTF-8, so the tool read it as an 8-bit Central European or Western code page. The letters with accents may be wrong if that guess is wrong.
 
-**When it fires.** When the bytes are not valid UTF-8 and the three 8-bit readings the tool tries (windows-1250, ISO-8859-2 and windows-1252) give the same text. The finding names the reading that was used. If the readings differ, IN-ENCODING-AMBIGUOUS is raised instead. A UTF-16 file or a UTF-8 file with a BOM is read without a finding.
+**When it fires.** When the bytes are not valid UTF-8 and all three 8-bit readings the tool tries (windows-1250, ISO-8859-2 and windows-1252) give the same text. The file is read as windows-1250 when one of the bytes 8A, 9A, 8C, 9C, 8F or 9F occurs, otherwise as ISO-8859-2; the finding names the reading used. Plain ASCII is valid UTF-8 and never raises it. If the readings differ, IN-ENCODING-AMBIGUOUS is raised instead. A UTF-16 file or a UTF-8 file with a BOM is read without a finding.
 
-**Example.** A CSV saved by an old program holds only plain letters in the bytes that differ between code pages; it is read as windows-1250.
+**Example.** A file that is not valid UTF-8 and whose only non-ASCII byte is E9 in caf followed by that byte: all three readings give the same letter, and the file is read as ISO-8859-2.
 
 **What you can do.** Check that accented letters look right, and save the file as UTF-8 when you publish. In /convert the reading is accepted once and does not stop the export.
 
@@ -255,7 +255,7 @@ Severity: warning
 
 **What it checks.** In one column of a file that uses a decimal comma, every number with a comma has exactly three digits after it, so the comma may be a decimal comma (1,250 is one and a quarter) or a thousands separator (1,250 is one thousand two hundred fifty). The file does not say which.
 
-**When it fires.** Per column of a decimal-comma file, when every cell with a comma has exactly three digits after it. One value with one, two, or four or more decimals settles the column as decimal and then no finding is raised. The finding gives the column, the number of cells, the first such value and both readings. The cells were read as decimals. When the column also holds a value with comma thousands groups, such as 1,250,000, the finding names it, because the commas may mean thousands.
+**When it fires.** Per column of a decimal-comma file, only when every number with a comma has exactly three digits after it. A single value such as 1.250,5 settles the column (with both separators the last is the decimal), and so does a value with one, two, or four or more decimals; then no finding is raised. In 1,250,000 the comma repeats, so it is a thousands mark; the question stays open for the other values and the finding names that cell. The finding gives the column, the number of cells, the first such value and both readings. The cells were read as decimals.
 
 **Example.** A column of depths in metres holds 1,250 and 2,500; read as decimals they are 1.25 and 2.5, read as thousands 1250 and 2500.
 
@@ -271,7 +271,7 @@ Severity: warning
 
 **Example.** A header of 10 names over rows of 12 values: the last two are shown as Column 11 and Column 12.
 
-**What you can do.** Give every column a name in the file, and check the first values of the last named columns in case a name is missing earlier. In /convert this finding is accepted and does not stop the export, so the person maps the extra columns as they are.
+**What you can do.** Give every column a name in the file, and check the first values of the last named columns in case a name is missing earlier. In /convert the unnamed column is left out unless it is mapped to a variable; a mapped one must be named first (CONV-COLUMN-UNNAMED blocks the export otherwise). This finding itself is accepted and does not stop the export.
 
 ## IN-HEADER-UNITS-READ — A second header row of units was read: the line under the column names holds only units, so it is not data
 
@@ -315,11 +315,11 @@ Severity: warning
 
 **What it checks.** A column of an Excel sheet holds values to the right of the last named header cell but has no name itself. It is read as a column without a name, and every cell stays where it is.
 
-**When it fires.** When a data row has a value in a column to the right of the last named header cell, or under an empty header cell. The finding gives the column letter, the number of rows with a value and their lines.
+**When it fires.** When a data row has a value in a column to the right of the last named header cell. The finding gives the column letter, the number of rows with a value and their lines.
 
 **Example.** The header names columns A to F, and column G holds numbers in 40 rows; column G is reported with those rows.
 
-**What you can do.** Give the column a name in the file, or say in /convert what it holds. In /convert this finding is only shown and never stops the export.
+**What you can do.** Give the column a name in the file. In /convert the unnamed column is left out unless it is mapped to a variable; a mapped one must be named first (CONV-COLUMN-UNNAMED blocks the export otherwise). This finding itself is only shown and never stops the export. In /convert this finding is only shown and never stops the export.
 
 ## IN-DATE1904 — An Excel workbook uses the older 1904 date system
 
@@ -349,13 +349,13 @@ Severity: info
 
 **What you can do.** Check the values the finding names. Add your own position and date columns if the sample position differs from the event's. In /convert this finding is only shown and never stops the export.
 
-## IN-PANGAEA-EVENT-NOT-USED — The Event(s) block of a PANGAEA file gives a position or date, but nothing was copied into the table, and the table has none of its own
+## IN-PANGAEA-EVENT-NOT-USED — The Event(s) block of a PANGAEA file gives a position or date, but no position was copied into the table (a date may still be), and the table has no position of its own
 
 Severity: warning
 
-**What it checks.** The Event(s) block of a PANGAEA file gives a position or date, but nothing was copied into the table, and the table has none of its own.
+**What it checks.** The Event(s) block of a PANGAEA file gives a position or date, but no position was copied into the table (a date may still be), and the table has no position of its own.
 
-**When it fires.** When the table lacks the columns and the block cannot be used: several events are listed but the table has no Event column to say which row belongs to which, or the event's position is a track (start and end differ) and not a point. The finding gives the number of events and which of the two reasons applies.
+**When it fires.** When the table lacks the position and the block cannot give it: several events are listed but the table has no Event column to say which row belongs to which, or the event's position is a track (start and end differ) and not a point, which also applies to a single event. The finding gives the number of events and which of the two reasons applies.
 
 **Example.** A block lists three stations and the table has no Event column; nothing is borrowed.
 
@@ -367,7 +367,7 @@ Severity: warning
 
 **What it checks.** Some rows of a PANGAEA table have no matching event in the Event(s) block of the file header, so nothing was taken for them.
 
-**When it fires.** When the block lists several events and the table has an Event column, for each row whose Event cell is empty, names an event that is not listed, or names an event with no position or date. The finding gives the number of rows and their lines.
+**When it fires.** When the table has an Event column, for each row whose Event cell is empty, names an event that is not listed, names an event listed twice, or names an event with no position or date (also for a single event lacking the value). The finding gives the number of rows and their lines.
 
 **Example.** Rows 12 and 13 say station 7, and the block lists stations 1 to 6.
 
@@ -735,9 +735,17 @@ Severity: error
 
 - [OBIS Manual, "Darwin Core" (iobis/manual darwin_core.md; manual.obis.org; read 2026-10-30)](https://manual.obis.org/darwin_core.html), "Location information can be documented in many DwC terms, but decimalLatitude and decimalLongitude are the minimally required terms"; "OBIS currently has seven required and one strongly recommended DwC term: occurrenceID, eventDate, decimalLongitude, decimalLatitude, scientificName, occurrenceStatus, basisOfRecord, scientificNameID"
 
-## ROW-LAT-RANGE
+## ROW-LAT-RANGE — A latitude lies outside the range of the globe, -90 to 90 degrees
 
 Severity: error
+
+**What it checks.** A latitude lies outside the range of the globe, -90 to 90 degrees. No place has such a latitude, so the value is a typing error, a swapped column or a unit mistake.
+
+**When it fires.** For every row of a sheet whose latitude column holds a number below -90 or above 90. One finding per sheet lists the lines and shows the first value as written. Text in the cell is not judged here, that is ROW-NON-NUMERIC.
+
+**Example.** A latitude column of a plankton table reads 54.31, 54.33, 154.35 on lines 5, 6 and 7. Line 7 is reported with the value 154.35, a digit typed twice.
+
+**What you can do.** Correct the value in the source, or check whether latitude and longitude changed columns. In /convert this finding blocks the export until the source is corrected.
 
 **Thresholds.**
 
@@ -748,9 +756,17 @@ Severity: error
 
 - [GTSPP Real-Time Quality Control Manual, IOC Manuals and Guides 22, rev. 1 (2010)](https://cdn.ioos.noaa.gov/media/2017/12/mg22rev1.pdf), Annex B, Test 1.3 "Impossible Location", PDF p.44
 
-## ROW-LON-RANGE
+## ROW-LON-RANGE — A longitude lies outside -180 to 180 degrees after the tool has tried the 0 to 360 scale
 
 Severity: error
+
+**What it checks.** A longitude lies outside -180 to 180 degrees after the tool has tried the 0 to 360 scale. No place has such a longitude, so the value is a typing error, a swapped column or a unit mistake.
+
+**When it fires.** For every row whose longitude is a number below -180 or above 360 (values from 180 to 360 are first read on the 0 to 360 scale and only noted as ROW-LON-360). One finding per sheet lists the lines and the first value as written.
+
+**Example.** A longitude column holds 18.62, 18.65 and 1865.0 on lines 10, 11 and 12. Line 12 is reported: a decimal point was lost.
+
+**What you can do.** Correct the value in the source, or check whether the two coordinate columns are swapped. In /convert this finding blocks the export until the source is corrected.
 
 **Thresholds.**
 
@@ -761,71 +777,175 @@ Severity: error
 
 - [GTSPP Real-Time Quality Control Manual, IOC Manuals and Guides 22, rev. 1 (2010)](https://cdn.ioos.noaa.gov/media/2017/12/mg22rev1.pdf), Annex B, Test 1.3 "Impossible Location", PDF p.44
 
-## ROW-LON-360
+## ROW-LON-360 — Longitudes are given on a 0 to 360 scale instead of -180 to 180
 
 Severity: info
+
+**What it checks.** Longitudes are given on a 0 to 360 scale instead of -180 to 180. The tool converts them, and this note says that it did so, because the published file must use -180 to 180.
+
+**When it fires.** For every row whose longitude is above 180 and not above 360. The tool subtracts 360 and reports the lines as an information note. A value above 360 is ROW-LON-RANGE.
+
+**Example.** A longitude of 350.5 on line 8 is read as -9.5, and the note names line 8 and the value 350.5.
+
+**What you can do.** Check that the converted longitude is the place you meant, and write the data on the -180 to 180 scale in your own copy. In /convert this finding is only shown.
 
 **Citations.**
 
 - [GTSPP Real-Time Quality Control Manual, IOC Manuals and Guides 22, rev. 1 (2010)](https://cdn.ioos.noaa.gov/media/2017/12/mg22rev1.pdf), Annex B, Test 1.3 "Impossible Location", PDF p.44
 
-## ROW-LAT-EQ-LON
+## ROW-LAT-EQ-LON — Latitude and longitude are identical on many rows
 
 Severity: error
 
-## ROW-LAT-EQ-LON-ISOLATED
+**What it checks.** Latitude and longitude are identical on many rows. That is almost never real: a column was copied into the other, and every position is wrong.
+
+**When it fires.** When at least 5 rows have equal latitude and longitude (other than 0, 0) and either they are a fifth or more of the rows with a position, or at least 5 of them share one value written with two or more decimals that is not a multiple of 0.25. Fewer rows give ROW-LAT-EQ-LON-ISOLATED or ROW-LAT-EQ-LON-COARSE. The two limits are choices of this tool, not published thresholds.
+
+**Example.** In a table of 30 rows with positions, 12 rows read 54.4, 54.4 on one line and 18.7, 18.7 on another. The 12 lines are reported with the first value.
+
+**What you can do.** Find the column that was copied and enter the real positions. In /convert this finding blocks the export until the positions are corrected.
+
+## ROW-LAT-EQ-LON-ISOLATED — A few rows have identical latitude and longitude with a fine decimal
 
 Severity: warning
 
-## ROW-LAT-EQ-LON-COARSE
+**What it checks.** A few rows have identical latitude and longitude with a fine decimal. It can be a coincidence, but typing one number into both columns is a common slip.
+
+**When it fires.** When rows with equal latitude and longitude, not 0, 0, do not reach the error level of ROW-LAT-EQ-LON (fewer than 5 rows, or under a fifth of the rows with a position) and the value is finer than a half degree.
+
+**Example.** Line 14 of a table of 200 positioned rows reads 41.37, 41.37. Line 14 is reported once with the value 41.37.
+
+**What you can do.** Check the position against the field notes. In /convert this finding does not block the export, but it needs your acceptance, one tick for the rule, before the export button works.
+
+## ROW-LAT-EQ-LON-COARSE — A few rows have identical latitude and longitude that are a whole or a half degree
 
 Severity: info
 
-## ROW-RAGGED
+**What it checks.** A few rows have identical latitude and longitude that are a whole or a half degree. Such coarse positions are common in historical data, so the value can be right.
+
+**When it fires.** When rows with equal latitude and longitude, not 0, 0, do not reach the error level of ROW-LAT-EQ-LON and the value is a whole or half degree. It is an information note.
+
+**Example.** A historical net haul is recorded at -65.0, -65.0, a place on the Antarctic Peninsula. The note names the line and the value, and the position can stay.
+
+**What you can do.** Only make sure that the number was not typed twice. In /convert this finding is only shown.
+
+## ROW-RAGGED — A row has more or fewer values than the header has columns
 
 Severity: error
 
-## ROW-NON-NUMERIC
+**What it checks.** A row has more or fewer values than the header has columns. Its values are shifted against the header, so no cell of the row can be trusted.
+
+**When it fires.** When the file is read: for each line whose field count differs from the header field count. The finding gives the expected count and the count of the first listed line. The rows are kept as found and are not realigned.
+
+**Example.** A header has 8 columns. Line 31 has 9 values because a comment contains an unquoted comma. Line 31 is reported with expected 8 and found 9.
+
+**What you can do.** Fix the line in the original file, usually a missing quote or a stray separator. In /convert this finding blocks the export, and the converter does not convert such a row.
+
+## ROW-NON-NUMERIC — A column that holds numbers has a text cell
 
 Severity: warning
 
-## ROW-NA-VARIANT
+**What it checks.** A column that holds numbers has a text cell. The cell cannot be used as a value, and it is not the same as a deliberate empty cell.
+
+**When it fires.** For a cell of a numeric column (a coordinate, a depth, a measurement) that is neither a number nor one of the recognised missing-value marks (empty, NA, N/A, NaN, nd, n.d., -, --, null). One finding per column lists the lines and an example. Thousands separators are not accepted, 1,234.5 is text unless the file uses decimal commas.
+
+**Example.** A depth column holds 10, 20, below detection, 40. The cell below detection on line 3 is reported with that text.
+
+**What you can do.** Replace the text with a number, or empty the cell. In /convert this finding does not block the export, but it needs your acceptance, one tick for the rule; the cell is not written as a number.
+
+## ROW-NA-VARIANT — A numeric column marks missing values in an unusual way, such as NANA or N.A
 
 Severity: warning
 
-## ROW-STATION-MOVED
+**What it checks.** A numeric column marks missing values in an unusual way, such as NANA or N.A. Such a mark is understood as missing, but the column then uses more than one mark.
+
+**When it fires.** For a numeric cell whose letters and digits, without separators, are only the letters NA repeated, and which is not one of the standard marks. One finding per column lists the lines and an example.
+
+**Example.** A salinity column holds 33.1, NANA, 33.4. NANA on line 2 is read as missing and reported.
+
+**What you can do.** Use one consistent mark, or an empty cell. In /convert this finding is only shown, and the cell is treated as missing.
+
+## ROW-STATION-MOVED — One station name appears at positions that differ by a typed digit, swapped axes or a sign
 
 Severity: warning
 
-## ROW-STATION-SPREAD
+**What it checks.** One station name appears at positions that differ by a typed digit, swapped axes or a sign. A station is one place, so one of the positions is probably wrong.
+
+**When it fires.** For rows of one station name, compared within one cruise or, without a cruise column, within one calendar year: when two positions are at least 100 km apart as written and a typed digit, exchanged latitude and longitude, or a flipped sign brings them within 50 km and at least ten times closer. The finding lists the positions and, where it applies, which sign differs. Placeholder names such as unknown do not count.
+
+**Example.** Station A3 is at 76.9 N 15.5 E on 9 rows and at 76.9 N -15.5 E on 14 rows. The finding lists both positions and says that the longitude differs only by its sign.
+
+**What you can do.** Decide which position is right and correct the other rows. In /convert this finding does not block the export, but it needs your acceptance, one tick for the rule, before the export button works.
+
+## ROW-STATION-SPREAD — One station name has positions more than 10 km apart
 
 Severity: info
 
-## ROW-STATION-SPREAD-FAR
+**What it checks.** One station name has positions more than 10 km apart. A station is usually one place, but a name that stands for an area, a transect or a cruise can legitimately span more.
+
+**When it fires.** When the largest distance between the positions of one station name, within one cruise or one calendar year, is above 10 km and not above 1000 km. The finding gives the distance rounded to km and the positions. It is an information note.
+
+**Example.** Station T1 has positions 38 km apart, because the name was used for every point of a transect. The note gives 38 km.
+
+**What you can do.** If the name means one place, correct the position. If it names a transect or an area, ignore the note. In /convert this finding is only shown.
+
+## ROW-STATION-SPREAD-FAR — One station name has positions more than 1000 km apart
 
 Severity: warning
 
-## ROW-ON-LAND-NEAR
+**What it checks.** One station name has positions more than 1000 km apart. A station is one place, so this is almost certainly a wrong position, not an area.
+
+**When it fires.** When the largest distance between the positions of one station name, within one cruise or one calendar year, is above 1000 km (a limit chosen by this tool, not a published threshold). It is a warning.
+
+**Example.** Station K7 is at 54.5 N 18.6 E on 12 rows and at 54.5 N 118.6 E on one row. The distance is about 4000 km, and both positions are listed.
+
+**What you can do.** Find which position is wrong, a sign, a digit or swapped axes, and correct it. In /convert this finding does not block the export, but it needs your acceptance, one tick for the rule.
+
+## ROW-ON-LAND-NEAR — A position lies on land 10 to 50 km from the sea, by a coarse coastline map
 
 Severity: info
+
+**What it checks.** A position lies on land 10 to 50 km from the sea, by a coarse coastline map. For a marine sample that is suspicious but can be a river mouth, a fjord or the limit of the map.
+
+**When it fires.** When the position is on land by the Natural Earth 1:10m map and its nearest sea is 10 to 50 km away. It is an information note and carries no hint about a flipped sign. Within 10 km of the sea, near rivers and canals, nothing is judged. It runs only when a land map is available.
+
+**Example.** A sample at 52.4 N 4.9 E, in the Netherlands, is 27 km from the open sea by the map. The note gives the distance.
+
+**What you can do.** Check whether the sample was taken in an estuary, a lagoon or a port; if so the position can stay. /check only: /convert has no land map, so this finding never appears there.
 
 **Citations.**
 
 - [Argo Quality Control Manual for CTD and Trajectory Data, v3.9 (20 Feb 2025)](https://archimer.ifremer.fr/doc/00228/33951/32470.pdf), section 2.1.2, Test 4 "Position on land test", p.11
 - [Natural Earth 1:10m physical vectors: land, minor islands, lakes, v5.1.2 (public domain)](https://www.naturalearthdata.com/downloads/10m-physical-vectors/), layers ne_10m_land, ne_10m_minor_islands, ne_10m_lakes; rasterised by scripts/land-mask.py
 
-## ROW-ON-LAND
+## ROW-ON-LAND — A position lies on land at least 50 km from the sea
 
 Severity: warning
+
+**What it checks.** A position lies on land at least 50 km from the sea. A marine sample cannot be taken there, so a coordinate or its sign is probably wrong.
+
+**When it fires.** When the position is on land by the Natural Earth 1:10m map and the nearest sea is at least 50 km away. The finding adds a hint when a flipped sign or exchanged latitude and longitude would put the position at sea. It runs only when a land map is available.
+
+**Example.** A position of 43.2 N 5.4 W is in the middle of Spain. With the longitude as 5.4 E it is in the Mediterranean, and the finding says so.
+
+**What you can do.** Correct the sign or the axes, or confirm that the sample is not marine. /check only: /convert has no land map, so this finding never appears there.
 
 **Citations.**
 
 - [Argo Quality Control Manual for CTD and Trajectory Data, v3.9 (20 Feb 2025)](https://archimer.ifremer.fr/doc/00228/33951/32470.pdf), section 2.1.2, Test 4 "Position on land test", p.11
 - [Natural Earth 1:10m physical vectors: land, minor islands, lakes, v5.1.2 (public domain)](https://www.naturalearthdata.com/downloads/10m-physical-vectors/), layers ne_10m_land, ne_10m_minor_islands, ne_10m_lakes; rasterised by scripts/land-mask.py
 
-## ROW-SHIP-SPEED
+## ROW-SHIP-SPEED — A ship would have to travel above 40 knots to reach a position and leave it again
 
 Severity: warning
+
+**What it checks.** A ship would have to travel above 40 knots to reach a position and leave it again. A real ship cannot, so the position or the date of that event is wrong.
+
+**When it fires.** For events of one cruise ordered by time, when both the hop into an event and the hop out of it exceed 40 knots while the hop from the previous to the next event does not. The speed is the distance, less the rounding of the written coordinates, over the longest time the written dates and times allow. Events about 10 km apart count as one point. A hint names a sign that, once reversed, makes the hops plausible.
+
+**Example.** Stations of one cruise are at 54.5 N 18.6 E, 54.6 N -18.6 E and 54.7 N 18.7 E on the same day. The middle one needs over 1000 knots to be reached, and the hint says its longitude sign.
+
+**What you can do.** Correct the position or the date of the event named. /check only: /convert passes no cruise to this check, so this finding never appears there.
 
 **Thresholds.**
 
@@ -837,9 +957,17 @@ Severity: warning
 - [GTSPP Real-Time Quality Control Manual, IOC Manuals and Guides 22, rev. 1 (2010)](https://cdn.ioos.noaa.gov/media/2017/12/mg22rev1.pdf), Annex B, Test 1.5 "Impossible Speed", PDF p.53 (per-platform maximum speed; the operator decides whether position or date/time is wrong)
 - [World Ocean Database 2018 User's Manual (prerelease, v0.10; Garcia et al.)](https://www.ncei.noaa.gov/data/oceans/woa/WOD/DOC/WOD18-UsersManual_final.pdf), section 4 "Speed check", printed p.31: "If the speed between adjoining casts is unrealistic, the date/time may be in error, the position may be wrong, or the cast may not belong to this cruise/platform."
 
-## ROW-SHIP-SPEED-UNUSUAL
+## ROW-SHIP-SPEED-UNUSUAL — A ship would have to travel faster than 15 knots to reach a position and leave it again
 
 Severity: info
+
+**What it checks.** A ship would have to travel faster than 15 knots to reach a position and leave it again. That is unusual for a research vessel doing stations, though not impossible.
+
+**When it fires.** When both hops around an event exceed 15 knots but not 40, or when one hop exceeds 40 knots and the other only 15. It is an information note and uses the same speed and grouping as ROW-SHIP-SPEED.
+
+**Example.** Three stations on one day are 80 km and 85 km apart, 3 hours each way, which is about 15 knots. The note names the middle station.
+
+**What you can do.** Check the times: an error in the hour is the usual reason. If the cruise really sailed at that speed, ignore the note. /check only: /convert passes no cruise to this check.
 
 **Thresholds.**
 
@@ -850,9 +978,17 @@ Severity: info
 
 - [World Ocean Database 2018 User's Manual (prerelease, v0.10; Garcia et al.)](https://www.ncei.noaa.gov/data/oceans/woa/WOD/DOC/WOD18-UsersManual_final.pdf), section 4 "Speed check", printed p.31: "If the speed between adjoining casts is unrealistic, the date/time may be in error, the position may be wrong, or the cast may not belong to this cruise/platform."
 
-## ROW-SHIP-SPEED-PAIR
+## ROW-SHIP-SPEED-PAIR — Two consecutive events are so far apart in space compared to time that a ship would need more than 40 knots
 
 Severity: info
+
+**What it checks.** Two consecutive events are so far apart in space compared to time that a ship would need more than 40 knots. It is not clear which of the two is wrong.
+
+**When it fires.** For a single pair of consecutive events of one cruise, for example the first or the last event or two wrong events in a row, when the speed exceeds 40 knots and neither event is already in a ROW-SHIP-SPEED finding.
+
+**Example.** The first station of a cruise is at 60.1 N 5.2 E on 3 May at 10:00 and the second at 54.0 N 8.0 E at 12:00. The pair is reported, because the speed is about 190 knots.
+
+**What you can do.** Decide which of the two events has the wrong position or time and correct it. /check only: /convert passes no cruise to this check, so this finding never appears there.
 
 **Thresholds.**
 
@@ -863,136 +999,352 @@ Severity: info
 - [World Ocean Database 2018 User's Manual (prerelease, v0.10; Garcia et al.)](https://www.ncei.noaa.gov/data/oceans/woa/WOD/DOC/WOD18-UsersManual_final.pdf), section 4 "Speed check", printed p.31: "If the speed between adjoining casts is unrealistic, the date/time may be in error, the position may be wrong, or the cast may not belong to this cruise/platform."
 - [MEDATLAS Protocol, Part I: exchange format and quality checks for observed profiles, v3 (SISMER/IFREMER, Dec 2001)](https://nodc.ogs.it/repository/documents/guidelines/medman_v3.pdf), section 4.4.4 "Check the ship velocity", PDF p.29: "If the ship velocity \> maximum velocity of the ship (default is 15 knots) between two consecutive profiles, find the erroneous data (date or location)"
 
-## ROW-DATE-UNPARSEABLE
+## ROW-DATE-UNPARSEABLE — A date cell cannot be read as a date
 
 Severity: warning
+
+**What it checks.** A date cell cannot be read as a date. Without a date the event cannot be placed in time, so it is lost from the output.
+
+**When it fires.** For a cell of the date column that is none of the accepted forms: ISO 8601, YYYY/MM/DD, DD.MM.YYYY, an unambiguous DD/MM/YYYY, YY-MM-DD, a four-digit year, YYYYMMDD in a column that is the date, or an Excel serial number. One finding per sheet lists the lines and an example.
+
+**Example.** A date column holds 2021-06-14, summer 2021 and 14 Jun 2021. The text summer 2021 on line 3 is reported.
+
+**What you can do.** Write the date in ISO form, YYYY-MM-DD. In /convert this finding blocks the export, except for the cells you have declared by the date order question, which it removes.
 
 **Citations.**
 
 - [W3C Note, Date and Time Formats (profile of ISO 8601)](https://www.w3.org/TR/NOTE-datetime), Formats: complete date YYYY-MM-DD
 - [DataCite Metadata Schema 4.6, property Date](https://datacite-metadata-schema.readthedocs.io/en/4.6/properties/date/), section 8 Date, allowed formats
 
-## ROW-TIME-OTHER-DAY
+## ROW-TIME-OTHER-DAY — The time column holds a full date and time of another day than the date column
 
 Severity: warning
 
-## ROW-DATE-MISSING
+**What it checks.** The time column holds a full date and time of another day than the date column. The time of day cannot be trusted, so it is not used.
+
+**When it fires.** When a time cell is a full datetime without a zone on a day other than the date column, or with a zone more than one day from the date. A datetime with a zone within one day of the date is read as an instant instead and does not raise this.
+
+**Example.** The date column reads 2020-08-15 and the time column reads 2020-08-16 09:30. The time of day 09:30 is not taken, and line 4 is reported.
+
+**What you can do.** Make the date and the time columns agree, or keep only the time of day in the time column. In /convert this finding blocks the export until they agree.
+
+## ROW-DATE-MISSING — Some rows have a date and others have an empty date cell
 
 Severity: info
 
-## ROW-YEAR-OUTLIER
+**What it checks.** Some rows have a date and others have an empty date cell. The rows without a date cannot be placed in time.
+
+**When it fires.** When a sheet has at least one row with a date and at least one with a blank date cell; the finding gives the count and the percentage. An unreadable date is ROW-DATE-UNPARSEABLE, and a sheet with no dates at all is META-NO-DATES. In /convert it is left out when the events are already named by CONV-EVENT-DATE-MISSING.
+
+**Example.** Of 120 rows, 100 have a date and 20 have an empty date cell. The finding gives 20 rows, about 17 percent.
+
+**What you can do.** Fill the dates, or confirm that the rows are undated on purpose. In /convert this finding is only shown.
+
+## ROW-YEAR-OUTLIER — The dates include a year that the dataset itself does not claim
 
 Severity: warning
 
-## ROW-JOIN-AMBIGUOUS
+**What it checks.** The dates include a year that the dataset itself does not claim. The label, the file name, the title or the temporal extent name other years, so either the claim or the row is wrong.
+
+**When it fires.** For rows whose year is not among the years found in the label, the file name, the record title or the temporal extent. A range such as 1994-2019 names every year in it; a number followed by a unit such as m is not read as a year. Only years between 1900 and 2100 count. It does nothing when the dataset names no year.
+
+**Example.** The title says Winter cruise 2018. Two rows are dated 2081-02-11, a swapped digit pair. The two lines are reported.
+
+**What you can do.** Correct the date, or correct the title or the temporal extent if the data really span other years. In /convert this finding is only shown.
+
+## ROW-JOIN-AMBIGUOUS — The key that joins a sheet to another sheet of positions or dates matches several rows there, and those rows differ in position or date
 
 Severity: warning
 
-## ROW-LONG-VALUE-SKIPPED
+**What it checks.** The key that joins a sheet to another sheet of positions or dates matches several rows there, and those rows differ in position or date. The tool cannot know which one is meant.
+
+**When it fires.** For every row whose join key matches two or more rows of the other sheet that differ in position or date. The row gets no position and no date from that sheet. The first matching row is never taken as a guess.
+
+**Example.** A measurement sheet joins on Station S5. The station sheet has S5 twice, at 54.2 N and at 54.9 N. Every measurement of S5 is left without a position.
+
+**What you can do.** Make the key unique, for example by adding the cruise or the date to it. In /convert this finding is only shown.
+
+## ROW-LONG-VALUE-SKIPPED — In a long sheet (one row per parameter) the same key and parameter hold different values, and no column could tell the rows apart
 
 Severity: warning
 
-## ROW-LONG-NO-PARAMETER
+**What it checks.** In a long sheet (one row per parameter) the same key and parameter hold different values, and no column could tell the rows apart. Only one value can be kept.
+
+**When it fires.** When rows with the same key and parameter have different values and no column could safely be added to the key. The first value is read, or the first one after a blank or missing value. Nothing is averaged. Equal values are not counted.
+
+**Example.** Station S2, parameter nitrate, appears with 4.1 and 4.6 and nothing else differs. 4.1 is read and 4.6 is skipped, and the finding names both.
+
+**What you can do.** Add a column that tells the rows apart, such as a replicate or a time, or remove the duplicate. In /convert this finding does not block the export, but it needs your acceptance, one tick for the rule.
+
+## ROW-LONG-NO-PARAMETER — A row of a long sheet has a value but no parameter name
 
 Severity: warning
 
-## ROW-LONG-PARAMETER-MERGED
+**What it checks.** A row of a long sheet has a value but no parameter name. Without it the value cannot be assigned to any variable.
+
+**When it fires.** For a row with a value and a blank parameter cell when no merged cell above gives a parameter. The row is not read. A row whose value is also blank is not counted.
+
+**Example.** Line 17 has the value 12.4 and an empty Parameter cell, with nothing merged above. Line 17 is not read and is reported.
+
+**What you can do.** Fill the parameter name. In /check this finding blocks; in /convert the same rows block the export as CONV-LONG-NO-PARAMETER.
+
+## ROW-LONG-PARAMETER-MERGED — In a long sheet a parameter cell is merged over several rows
 
 Severity: info
 
-## ROW-LONG-KEY-EXTENDED
+**What it checks.** In a long sheet a parameter cell is merged over several rows. The tool takes the name of the top cell for the rows below it, and tells you that it did.
+
+**When it fires.** For rows below the top cell of a merge that the workbook declares and which have a value. Only rows with a value are filled. It is an information note.
+
+**Example.** The cell Parameter says nitrate and is merged over lines 5 to 9. Lines 6 to 9 are read as nitrate, and the note lists them.
+
+**What you can do.** Check that the merge means the same parameter for all rows, or unmerge it and repeat the name. In /convert this finding does not block the export, but it needs your acceptance, one tick for the rule.
+
+## ROW-LONG-KEY-EXTENDED — In a long sheet the tool added columns to the row key, because rows with the same key and parameter held different values there
 
 Severity: info
 
-## ROW-KEY-IGNORED
+**What it checks.** In a long sheet the tool added columns to the row key, because rows with the same key and parameter held different values there. It is not proof that the rows are replicates.
+
+**When it fires.** When rows with the same key and parameter differ and one or more other columns can tell them apart; the finding names the columns used. It is an information note.
+
+**Example.** Station S3 has two nitrate rows, 4.1 and 4.6, and a Depth column of 5 and 20. Depth is added to the key, and the note says so.
+
+**What you can do.** Check that the added columns really separate different samples and not replicates. In /convert this finding does not block the export, but it needs your acceptance, one tick for the rule.
+
+## ROW-KEY-IGNORED — Columns you set to ignore differ between rows that are equal in every column that identifies them
 
 Severity: info
 
-## ROW-JOIN-KEY-BLANK
+**What it checks.** Columns you set to ignore differ between rows that are equal in every column that identifies them. Ignoring them may merge rows that are really different.
+
+**When it fires.** When rows equal in every written identifying column differ in an ignored column. Nothing is removed. A column that is ignored by default is still written.
+
+**Example.** Two rows have the same station, date and depth but different values in a Replicate column that is set to ignore. The rows are reported.
+
+**What you can do.** Stop ignoring the column if it separates real samples. In /convert this finding is only shown.
+
+## ROW-JOIN-KEY-BLANK — A part of the join key is empty on rows that have no position of their own
 
 Severity: warning
 
-## ROW-DATE-YYMMDD
+**What it checks.** A part of the join key is empty on rows that have no position of their own. Such rows cannot be matched to the sheet that holds positions.
+
+**When it fires.** For rows without a position of their own whose join key has a blank part, for example an empty station cell. The finding lists the lines.
+
+**Example.** Measurements are joined by cruise and station, and line 22 has an empty station. It cannot be matched and has no position.
+
+**What you can do.** Fill the missing part of the key. In /convert this finding is only shown.
+
+## ROW-DATE-YYMMDD — A date written with two-digit parts, NN-NN-NN, was read with the century inferred
 
 Severity: info
 
-## ROW-DATE-YY-AMBIGUOUS
+**What it checks.** A date written with two-digit parts, NN-NN-NN, was read with the century inferred. The century is a guess and can be wrong for old data.
+
+**When it fires.** Once per column, when the cells fit one reading only. The century rule: a two-digit year up to the current year plus one is 20xx, any other is 19xx. The finding gives the interpreted date and the order read (ymd, dmy or mdy). One acceptance of the rule covers the century in every column it names.
+
+**Example.** The column holds 18-07-25. It is read as year-month-day, 2018-07-25. If the cruise was in 1918 the century is wrong.
+
+**What you can do.** Write four-digit years, or check that the century is right. In /convert this finding does not block the export, but it needs your acceptance, one tick for the rule.
+
+## ROW-DATE-YY-AMBIGUOUS — A date column with two-digit parts, NN-NN-NN, can be read in more than one order and the readings give different dates
 
 Severity: warning
 
-## ROW-TZ-UNKNOWN
+**What it checks.** A date column with two-digit parts, NN-NN-NN, can be read in more than one order and the readings give different dates. It is a guess which is right.
+
+**When it fires.** Once per column, when two or more of year-month-day, day-month-year and month-day-year fit every cell, no cell rules a reading out (a part above 31, or above 12 in a month place, rules it out), and the dates differ. The tool reads year-month-day when that fits. Slash dates such as 03/04/2021 follow a different answer, the day-month order.
+
+**Example.** The column holds 05-06-07 and 08-09-10. They can be 2005-06-07 or 7 June 2005 or 6 May 2007. The column is reported once.
+
+**What you can do.** Write the dates in ISO form. In /convert this finding blocks the export until you declare the order of the two-digit year dates; that answer is separate from the day-month order of slash dates.
+
+## ROW-TZ-UNKNOWN — A date and time has no time zone, neither a UTC mark nor an offset
 
 Severity: info
 
-## ROW-UNIT-MISSING
+**What it checks.** A date and time has no time zone, neither a UTC mark nor an offset. The instant is therefore unknown by up to a day.
+
+**When it fires.** Once per column, when a date-time at minute or second precision has neither a UTC marker nor an offset. It is not raised when the column is declared to be UTC.
+
+**Example.** The column holds 2021-06-14 09:30. Without Z or +02:00 it is not known whether this is local time or UTC.
+
+**What you can do.** Add the zone, for example 2021-06-14T09:30Z, or declare that the column is UTC. In /convert this finding is only shown.
+
+## ROW-UNIT-MISSING — A measured variable has no unit in its header or in the metadata
 
 Severity: warning
 
-## ROW-HEADER-CODE-SHAPE
+**What it checks.** A measured variable has no unit in its header or in the metadata. A number without a unit cannot be compared or reused.
+
+**When it fires.** For each variable column with no unit in the header or the metadata, up to 10 are listed. A unit only inferred from a P01 code counts as missing. Salinity, pH, their spread columns and an OPeNDAP text column are exempt.
+
+**Example.** The headers are Temp, Nitrate and Chl. None has a unit, so the three are listed. Writing Temp (degC) removes it from the list.
+
+**What you can do.** Add the unit to each header, in parentheses or in the metadata. In /convert this finding is only shown.
+
+## ROW-HEADER-CODE-SHAPE — A header names a vocabulary code that does not have the shape of its collection
 
 Severity: warning
+
+**What it checks.** A header names a vocabulary code that does not have the shape of its collection. Such a code cannot exist, so the header is mistyped.
+
+**When it fires.** For a code after an explicit SDN:P01:: or SDN:P06:: prefix that is not 8 uppercase letters and digits for P01, or 4 for P06. A bare word is never read as a code.
+
+**Example.** A header reads SDN:P01::TEMPPR01. That is 8 characters and fine. SDN:P01::TEMP is only 4, so it is reported.
+
+**What you can do.** Correct the code from the vocabulary server, or remove the prefix. In /convert this finding is only shown.
 
 **Citations.**
 
 - [NERC Vocabulary Server (NVS), collections P01 (BODC Parameter Usage Vocabulary) and P06 (BODC data storage units); read 2026-10-29](https://vocab.nerc.ac.uk/collection/P06/current/), Every concept of P06 has a four-character code (411 of 411 codes read, e.g. UPAA) and every concept of P01 an eight-character one (50 613 of 50 613 codes read, e.g. TEMPPR01; 66 begin with a digit); a code of another length has no concept page: https://vocab.nerc.ac.uk/collection/P01/current/D13CMOP11/ answers 404, https://vocab.nerc.ac.uk/collection/P01/current/D13CMOP1/ is a concept.
 
-## ROW-DEPTH-SIGN
+## ROW-DEPTH-SIGN — The direction of the depth, positive down or positive up, is not stated by the header or by your declaration
 
 Severity: info
 
-## ROW-DEPTH-MIXED-SIGN
+**What it checks.** The direction of the depth, positive down or positive up, is not stated by the header or by your declaration. The same number can then mean opposite things.
+
+**When it fires.** When the depth column is known but its direction is unknown after the header and the declaration are read. It is not raised for a sheet already reported by ROW-DEPTH-MIXED-SIGN.
+
+**Example.** A column called Depth holds 5, 20 and 50 with no unit or sign note. It is not known whether 50 is 50 m below or above the surface.
+
+**What you can do.** State the direction in the header, for example Depth (m, positive down), or declare it. In /convert this finding does not block the export, but it needs your acceptance, one tick for the rule.
+
+## ROW-DEPTH-MIXED-SIGN — One sheet holds both negative and positive depths
 
 Severity: warning
 
-## ROW-MISSING-CODE
+**What it checks.** One sheet holds both negative and positive depths. Some rows probably use the opposite direction, and no direction can be chosen safely.
+
+**When it fires.** Per sheet, when non-zero depths of both signs exist. The values 0, -99, -999 and -9999 are not counted, except in /convert, where such codes count as values. No direction is chosen, not even the majority. ROW-DEPTH-RANGE then judges the size of the depth, and nothing is changed.
+
+**Example.** A depth column holds 5, 10, -20 and -30. Both signs are present, so the sheet is reported.
+
+**What you can do.** Make all depths use one direction. In /convert this finding does not block the export, but it needs your acceptance, one tick for the rule.
+
+## ROW-MISSING-CODE — A cell holds -99, -999 or -9999, which are common codes for missing values
 
 Severity: warning
 
-## ROW-DM-COORDS
+**What it checks.** A cell holds -99, -999 or -9999, which are common codes for missing values. As numbers they would be false depths or measurements.
+
+**When it fires.** Once per sheet and column, for a cell exactly equal to one of the three numbers, in the depth column (or the two Darwin Core depth bounds) and in every variable. The cell is kept as written and is left out of the depth direction, ROW-DEPTH-RANGE and CHEM-RANGE.
+
+**Example.** A salinity column holds 33.1, -999 and 33.4. The -999 on line 2 is kept as written, left out of the range checks, and reported.
+
+**What you can do.** Empty such cells in the source if they mean missing. In /convert this finding blocks the export until you answer, per column, whether the code is missing or a real value; on missing the cells are left empty and listed.
+
+## ROW-DM-COORDS — A coordinate was written in degrees and minutes, or degrees, minutes and seconds, as text
 
 Severity: info
 
-## ROW-HEMISPHERE-CONFLICT
+**What it checks.** A coordinate was written in degrees and minutes, or degrees, minutes and seconds, as text. The tool converted it to decimal degrees.
+
+**When it fires.** For each coordinate cell of that form; the finding lists the lines and the conversion. It is a note that a conversion took place.
+
+**Example.** The cell 54 30.5 N becomes 54.508333. The note shows both.
+
+**What you can do.** Check the converted value, and write decimal degrees in your own copy. In /convert this finding is only shown.
+
+## ROW-HEMISPHERE-CONFLICT — A coordinate and its hemisphere letter disagree, for example a positive latitude with S
 
 Severity: warning
 
-## ROW-HEMISPHERE-UNPAIRED
+**What it checks.** A coordinate and its hemisphere letter disagree, for example a positive latitude with S. One of the two is wrong.
+
+**When it fires.** When the value has the sign opposite to the letter N, S, E or W. The value is kept as written and is not negated again.
+
+**Example.** The latitude is 54.3 and the hemisphere column says S. The line is reported and the latitude stays 54.3.
+
+**What you can do.** Correct the value or the letter. In /convert this finding does not block the export, but it needs your acceptance, one tick for the rule.
+
+## ROW-HEMISPHERE-UNPAIRED — A hemisphere column does not match the coordinate it was mapped to
 
 Severity: warning
 
-## ROW-HEMISPHERE-MISSING
+**What it checks.** A hemisphere column does not match the coordinate it was mapped to. Its start or end word points to the other axis.
+
+**When it fires.** Once per column, when the words in the header disagree with the mapping, for example a column named Lon_EW mapped to latitude. The hemisphere is not applied.
+
+**Example.** The column EW is mapped to the latitude. It is not applied, and the finding names the column.
+
+**What you can do.** Map the hemisphere column to its own axis. In /convert this finding does not block the export, but it needs your acceptance, one tick for the rule.
+
+## ROW-HEMISPHERE-MISSING — A hemisphere column has an empty cell or a letter that is not N, S, E or W
 
 Severity: warning
 
-## ROW-ZERO-COORD
+**What it checks.** A hemisphere column has an empty cell or a letter that is not N, S, E or W. The sign of the coordinate is therefore unconfirmed.
+
+**When it fires.** For each row whose hemisphere cell is empty or not one of the four letters. The value is kept as written.
+
+**Example.** The column holds N, N and a blank. The blank line is reported and its latitude is used as written.
+
+**What you can do.** Fill the letter. In /convert this finding does not block the export, but it needs your acceptance, one tick for the rule.
+
+## ROW-ZERO-COORD — A position is exactly latitude 0 and longitude 0, a point in the Gulf of Guinea
 
 Severity: error
+
+**What it checks.** A position is exactly latitude 0 and longitude 0, a point in the Gulf of Guinea. It is the usual result of an empty cell turned into zero.
+
+**When it fires.** For a row with latitude 0 and longitude 0. It replaces ROW-LAT-EQ-LON for the same row. OBIS drops such records.
+
+**Example.** Line 6 reads 0, 0 for a sample taken in the Baltic. Line 6 is reported.
+
+**What you can do.** Enter the real position or leave the cells empty. In /convert this finding blocks the export until the position is corrected.
 
 **Citations.**
 
 - [OBIS obis-qc (Python), obisqc/location.py, master (read 2026-10-24)](https://github.com/iobis/obis-qc/blob/master/obisqc/location.py), check_record: "if record.get_interpreted("decimalLongitude") == 0 and record.get_interpreted("decimalLatitude") == 0: record.set_flag(Flag.ZERO_COORD); record.dropped = True"
 - [EMODnet Biocheck (R), README, Integrity and Format checks (read 2026-10-24)](https://github.com/EMODnet/EMODnetBiocheck/blob/master/README.md), Integrity checks: "decimalLatitude and decimalLongitude are both 0" ... "It is theoretically possible that a sampling event happens at 0-0 coordinates, however it is very common to inadvertedly add 0-0 when the actual coordinates are missing. Therefore, 0-0 coordinates should always be double checked."
 
-## ROW-NO-COORD
+## ROW-NO-COORD — A row has no latitude or no longitude although other rows of the sheet have a position
 
 Severity: warning
+
+**What it checks.** A row has no latitude or no longitude although other rows of the sheet have a position. It cannot be placed on a map.
+
+**When it fires.** For a row with a blank latitude or longitude on a sheet where other rows have a position. Not counted: blank trailing rows, summary rows, rows that inherit a position from a parent event, and continuation rows of a station block. A row with both blank is exempt when its station, date or cruise has a position elsewhere; a row with one blank coordinate is always reported. A sheet with no position at all says nothing. In /convert it is raised only for an event with no positioned parent.
+
+**Example.** Line 12 has a longitude of 18.6 and an empty latitude. Line 12 is reported.
+
+**What you can do.** Fill the position. In /convert this finding blocks the export until it is filled.
 
 **Citations.**
 
 - [OBIS obis-qc (Python), obisqc/location.py, master (read 2026-10-24)](https://github.com/iobis/obis-qc/blob/master/obisqc/location.py), check_record: "if record.get_interpreted("decimalLongitude") is None or record.get_interpreted("decimalLatitude") is None: record.set_flag(Flag.NO_COORD); record.dropped = True"
 
-## ROW-DEPTH-MIN-MAX
+## ROW-DEPTH-MIN-MAX — The minimum depth is larger than the maximum depth in the same row
 
 Severity: error
+
+**What it checks.** The minimum depth is larger than the maximum depth in the same row. One of the two is wrong.
+
+**When it fires.** For a row where minimumDepthInMeters is greater than maximumDepthInMeters, only when both Darwin Core depth columns exist. OBIS rejects such records.
+
+**Example.** Line 4 has a minimum depth of 50 and a maximum of 10. Line 4 is reported.
+
+**What you can do.** Swap or correct the two values. In /convert this finding blocks the export until they are corrected.
 
 **Citations.**
 
 - [OBIS obis-qc (Python), obisqc/location.py, master (read 2026-10-24)](https://github.com/iobis/obis-qc/blob/master/obisqc/location.py), check_record: "if record.get_interpreted("minimumDepthInMeters") \> record.get_interpreted("maximumDepthInMeters"): record.set_flag(Flag.MIN_DEPTH_EXCEEDS_MAX)"
 - [OBIS obistools (R), R/check_depth.R, master (read 2026-10-24)](https://github.com/iobis/obistools/blob/master/R/check_depth.R), check_depth, details: "minimum depth greater than maximum depth" (error); code: minGTmax \<- !is.na(maxd) & !is.na(mind) & mind \> maxd
 
-## ROW-DEPTH-RANGE
+## ROW-DEPTH-RANGE — A depth lies outside what is possible on Earth
 
 Severity: warning
+
+**What it checks.** A depth lies outside what is possible on Earth. The deepest known point is about 10,935 m.
+
+**When it fires.** For a depth below -100000 m or above 11000 m, positive down, the OBIS limits. A missing-value code is skipped unless it counts as a value (in /convert). An upward convention is judged after the sign is turned. A column in another unit, such as ft or cm, is not judged. With mixed signs the size of the depth is judged.
+
+**Example.** A depth column holds 25, 40 and 4500000, a value in millimetres. The last is reported.
+
+**What you can do.** Check the unit and the value. In /convert this finding does not block the export, but it needs your acceptance, one tick for the rule.
 
 **Thresholds.**
 
@@ -1003,29 +1355,61 @@ Severity: warning
 
 - [NOAA National Ocean Service, "How deep is the ocean?" (last updated 2026-09-23)](https://oceanservice.noaa.gov/facts/oceandepth.html), "Challenger Deep is approximately 10,935 meters (35,876 feet) deep." (the deepest part of the ocean)
 
-## ROW-DATE-FUTURE
+## ROW-DATE-FUTURE — A date, or the end of an interval, is later than today
 
 Severity: warning
+
+**What it checks.** A date, or the end of an interval, is later than today. A sample cannot have been taken in the future.
+
+**When it fires.** When the date is later than today in UTC and can have begun nowhere yet; UTC+14 is allowed, so one day ahead is not reported and two are. A year or a month counts by its first day. A two-digit-year date with an ambiguity flag is left to ROW-DATE-YYMMDD and ROW-DATE-YY-AMBIGUOUS. OBIS rejects such records.
+
+**Example.** A table dated in 2026 holds 2062-03-04, a century guessed wrong. The line is reported.
+
+**What you can do.** Correct the year or the century. In /convert this finding does not block the export, but it needs your acceptance, one tick for the rule.
 
 **Citations.**
 
 - [OBIS obis-qc (Python), obisqc/time.py, master (read 2026-10-24)](https://github.com/iobis/obis-qc/blob/master/obisqc/time.py), check_record: "if ms_end \> date_to_millis(datetime.date.today()): # date in the future record.set_flag(Flag.DATE_IN_FUTURE)"
 
-## ROW-INVISIBLE-CHAR
+## ROW-INVISIBLE-CHAR — A value contains an invisible character inside it, such as a no-break space
 
 Severity: warning
+
+**What it checks.** A value contains an invisible character inside it, such as a no-break space. Two values that look equal then differ, and joins and matches fail.
+
+**When it fires.** For a character inside a value in the station, cruise or sample identifier columns, and in the name, identifier and vocabulary columns of Darwin Core input. OBIS trims only the ends of a value.
+
+**Example.** The station name St 5 contains U+00A0 instead of a space, so it does not match St 5 elsewhere. The finding names the line and the character.
+
+**What you can do.** Retype or replace the character in the source. In /convert this finding does not block the export, but it needs your acceptance, one tick for the rule.
 
 **Citations.**
 
 - [OBIS Manual, "Common data quality issues" (iobis/manual common_qc.md; manual.obis.org)](https://manual.obis.org/common_qc.html), "Hidden characters and non-breaking spaces": "a value like Abra alba containing a non-breaking space will not match the same name typed with a normal space"; "OBIS removes leading and trailing whitespace from values during processing, but does not change spaces inside a value"; "Other invisible characters, such as tabs, line breaks within a cell, and zero-width spaces (U+200B), can cause similar problems"
 
-## ROW-YEAR-DATE-MISMATCH
+## ROW-YEAR-DATE-MISMATCH — A Year column and the date column of the same row disagree about the year
 
 Severity: warning
 
-## ROW-TEXT-MOJIBAKE
+**What it checks.** A Year column and the date column of the same row disagree about the year. One of them is wrong.
+
+**When it fires.** When a sheet has a Year column next to a date column and a row has a four-digit year from 1700 to next year that differs from the year of the date; a date range counts every year it covers. Not compared: a year-only date, a date built from the Year column, a date with an ambiguity flag, a blank or non-numeric year.
+
+**Example.** Line 9 has Year 2019 and the date 2020-03-05. The line is reported with both years.
+
+**What you can do.** Decide which of the two is right and correct the other. In /convert this finding is only shown.
+
+## ROW-TEXT-MOJIBAKE — Text shows the damage of a double encoding: letters such as accented names appear as two odd characters
 
 Severity: warning
+
+**What it checks.** Text shows the damage of a double encoding: letters such as accented names appear as two odd characters. The file was decoded with the wrong encoding at some stage.
+
+**When it fires.** When a cell contains the pair U+00C3 or U+00C2 followed by a character from U+0080 to U+00BF, as in the damaged form of an accented letter. A lone U+00C3 or U+00C2 is not matched, nor are other double-encoded forms. The finding gives the count of the pairs.
+
+**Example.** A station called Sao Joao appears as the damaged form of Sao Joao with accents, two odd characters in place of each accented letter. The cell is reported.
+
+**What you can do.** Save the source again as UTF-8 and correct the damaged text. In /convert this finding is only shown.
 
 ## DWC-TERM-MISSING — A Darwin Core table has no column for a term that OBIS requires
 
@@ -1180,7 +1564,7 @@ Severity: info
 
 **What it checks.** Two files hold the same samples. If both are used for one analysis, the samples count twice and any statistic is biased towards them.
 
-**When it fires.** For every pair of tables that share at least one recognised variable. A sample of one table matches a sample of the other when it has the same station (names compared after normalisation, as for XF-STATION-ALIAS) or, for rows without a station, the same position within the rounding of the coordinates; the same calendar day (a date with no day is never matched); and the same depth in the same unit, within rounding (a depth in one unit is never matched to a depth in another, and two missing depths match each other). Each row matches at most one row of the other table. A match counts only when at least one shared variable has a value in both rows, so the same place and time measured for different variables is one sample, not a duplicate. One finding per pair of tables, with the number of matched rows.
+**When it fires.** For every pair of tables that share at least one recognised variable. A sample of one table matches a sample of the other when it has the same station (normalised, as for XF-STATION-ALIAS) or, for rows without a station, the same position within the rounding of the coordinates; the same calendar day (no day, no match); and the same depth in the same unit, within rounding (a depth in one unit is never matched to a depth in another, and two missing depths match each other). Depth pointing up is turned round; an open direction (both signs or none) is compared on absolute depth; a depth without a unit never matches. Each row matches at most one row of the other table. A match needs a shared variable with a value in both rows. One finding per pair of tables, with the number of matched rows.
 
 **Example.** The sheets "Cruise A bottles" and "Cruise A CTD" both have a row for station S12 on 2019-05-03 at 10 m with a temperature value; the pair is reported with the number of such rows.
 
@@ -1192,7 +1576,7 @@ Severity: warning
 
 **What it checks.** The same station and depth appear in two files with the same values but different dates. One of the dates is probably wrong, for example a day and month swapped, or a year typed over.
 
-**When it fires.** For every pair of tables that share at least two recognised variables. Rows of the two tables are paired by normalised station name and the same depth (same unit, within rounding; two missing depths agree). Both rows must have a date known to the day, and the dates must differ. For every shared variable that has a value in both rows the values are compared: the rule fires when at least two variables are equal and none differs. One finding per station and pair of tables, giving the station, the two dates and one example line of each file. When one of the two dates is a two-digit-year date from a column whose order is open (see ROW-DATE-YY-AMBIGUOUS) and it was read in the default order, a sentence says that the conflict may come from the reading rather than from a wrong date.
+**When it fires.** For every pair of tables that share at least two recognised variables. Rows are paired by normalised station name and the same depth (same unit, within rounding; two missing depths agree). Depth pointing up is turned round; an open direction (both signs or none) is compared on absolute depth; a depth without a unit never matches. Both rows must have a date known to the day, and the dates must differ. For every shared variable that has a value in both rows the values are compared: the rule fires when at least two variables are equal and none differs. One finding per station and pair of tables, giving the station, the two dates and an example line of each file. When one of the two dates is a two-digit-year date from a column whose order is open (see ROW-DATE-YY-AMBIGUOUS) and it was read in the default order, a sentence says the conflict may come from the reading.
 
 **Example.** Station S12 has temperature 11.4 and salinity 35.1 at 10 m in two files, dated 2019-05-03 in one and 2019-03-05 in the other; the pair of dates is reported.
 
@@ -1216,7 +1600,7 @@ Severity: warning
 
 **What it checks.** The same variable has the same numbers in two files, but one file labels them per volume and the other per mass. If the numbers are equal, at least one label is wrong; a per-litre and a per-kilogram value of a nutrient differ by about the density of the water, a few per cent, and an amount of substance per volume and per mass are not the same unit.
 
-**When it fires.** For every pair of tables that share a recognised variable, when one table gives it in a unit of amount per volume (for example µmol/L) and the other in a unit of amount per mass (for example µmol/kg), and more than half of the samples that match in both tables (the matching of XF-DUPLICATE-SAMPLES) and have a value in both are equal within rounding. One finding per variable and pair of columns, giving the number of matched samples and how many of them are equal. Units that are in the same dimension, such as mg/L and µmol/L, are not compared here (CHEM-UNIT-PAIR looks at those within one table). Sources: the GLODAPv2 conversion of per-litre to per-kilogram values with seawater density, and the UNESCO seawater density tables.
+**When it fires.** For every pair of tables that share a recognised variable, when one table gives it in a unit of amount per volume (for example µmol/L) and the other in a unit of amount per mass (for example µmol/kg), and more than half of the samples that match in both tables (the matching of XF-DUPLICATE-SAMPLES) and have a value in both are equal within rounding. One finding per variable and pair of columns, with the counts of matched and equal samples. Other unit combinations, for example mg/L against µmol/L, are not compared here; CHEM-UNIT-PAIR compares mass and amount per litre within one table. Depth pointing up is turned round; an open direction (both signs or none) is compared on absolute depth; a depth without a unit never matches. Sources: the GLODAPv2 conversion of per-litre to per-kilogram values with seawater density, and the UNESCO seawater density tables.
 
 **Example.** Nitrate is 5.2, 8.9 and 12.4 in a file labelled µmol/L and the same three numbers in a matching file labelled µmol/kg; all three matched samples are equal, so the units are reported.
 
@@ -1257,7 +1641,7 @@ Severity: warning
 
 **What it checks.** The same chemical quantity is given twice, once as mass per volume and once as amount per volume, and the two columns do not agree after conversion. One of the columns, or one of its unit labels, is wrong, and a reader who trusts the wrong one is off by a factor of the molar mass.
 
-**When it fires.** When one table has two columns of the same recognised variable, one with a unit of mass per litre (g/L with an SI prefix, for example mg/L) and one with a unit of amount per litre (mol/L with a prefix, for example µmol/L). The mass column is converted with the molar mass of the element the variable is reported as, and the rule fires when a row differs from the other column by more than the rounding of the two reported values can explain. One finding per pair of columns, listing every disagreeing row. The elements and molar masses are carbon 12.011, nitrogen 14.007, phosphorus 30.974 and silicon 28.085 g/mol (CIAAW atomic weights). Covered: DOC, POC, DIC (carbon); nitrate, nitrite, ammonium, DIN, DON, PON, TN, TDN (nitrogen); phosphate, DOP, TDP (phosphorus); silicate (silicon). Any other variable is not converted and not judged. Rows with a missing or non-numeric value are skipped.
+**When it fires.** When one table has two columns of the same recognised variable, one with a unit of mass per litre (for example mg/L) and one with a unit of amount per litre (for example µmol/L). The mass column is converted with the molar mass of the element the variable is reported as, and the rule fires when a row differs from the other column by more than the rounding of the two reported values can explain. One finding per pair of columns, listing every disagreeing row. The elements and molar masses are carbon 12.011, nitrogen 14.007, phosphorus 30.974 and silicon 28.085 g/mol (CIAAW atomic weights). Covered: DOC, POC, DIC (carbon); nitrate, nitrite, nitrate+nitrite, ammonium, DIN, DON, PON, TN, TDN (nitrogen); phosphate, DOP, TDP (phosphorus); silicate (silicon). The mass is taken as the element (nitrate as N). Others are not judged; missing values are skipped.
 
 **Example.** A nitrate column in mg/L reads 0.62 and a nitrate column in µmol/L on the same row reads 8.1; 0.62 mg/L of nitrogen is about 44.3 µmol/L, so the row disagrees.
 
@@ -1294,7 +1678,7 @@ Severity: warning
 
 **What it checks.** Values of temperature, salinity, pressure, oxygen or pH lie outside the range used by the quality control of open-ocean profiling programmes. Such values are often unit mistakes, swapped columns or leftover codes, and they would distort any analysis that uses the file.
 
-**When it fires.** When a column that is recognised as one of the five quantities, with a unit the range was written for, holds at least one value outside the range. One finding per column, with the count and the first offending value. Ranges: temperature -2.5 to 40 °C and salinity 2 to 41 (Argo CTD range test); pressure of at least -5 dbar, with no upper bound (Argo); oxygen -5 to 600 µmol/kg (Argo dissolved oxygen); pH 6.5 to 9 (GTSPP). The unit must match: temperature in °C, pressure in dbar, oxygen in µmol/kg, salinity in PSU or with no unit, pH in pH units or with no unit. Oxygen given per volume (mL/L, mg/L, µmol/L) is not compared, since converting to per kilogram needs the density of the water, and the report says that oxygen was not checked. The values -99, -999 and -9999 are left to ROW-MISSING-CODE, unless the converter has already treated them as values.
+**When it fires.** When a column that is recognised as one of the five quantities (pressure also by the unit dbar on a column with no named variable), with a unit the range was written for, holds at least one value outside the range. One finding per column, with the count and the first offending value. Ranges: temperature -2.5 to 40 °C and salinity 2 to 41 (Argo CTD range test); pressure of at least -5 dbar, with no upper bound (Argo); oxygen -5 to 600 µmol/kg (Argo dissolved oxygen); pH 6.5 to 9 (GTSPP). The unit must match: temperature in °C, pressure in dbar, oxygen in µmol/kg, salinity in PSU or with no unit, pH in pH units or with no unit. Oxygen per volume (mL/L, mg/L, µmol/L) is not compared (it needs the water density) and the report says so. The values -99, -999 and -9999 are left to ROW-MISSING-CODE, unless the converter has already treated them as values.
 
 **Example.** A salinity column holds 35.1, 34.9 and 350.0; the last value is reported as outside 2 to 41.
 
