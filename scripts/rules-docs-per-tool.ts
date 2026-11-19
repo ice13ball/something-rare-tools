@@ -47,6 +47,9 @@ export const RUNTIME_BUILT: Record<Tool, readonly string[]> = { check: [], licen
 const LIC_IDS = ['LIC-MISSING', 'LIC-FREE-TEXT', 'LIC-TEXT-URI-CONFLICT', 'LIC-ADDED-CONDITIONS', 'LIC-EXTRA-TEXT', 'LIC-OTHER-RIGHTS-ENTRY', 'LIC-AMBIGUOUS', 'LIC-RESTRICTION-CONFLICT', 'LIC-FILES-HELD-BACK', 'LIC-DATACITE-EMPTY', 'LIC-MISMATCH'] as const;
 const RECORDLESS = 'convert/validate.ts:77 calls runChecks with records: [] and no ds.metadata; checks/run.ts:57-66 runs checkLicence only per session record';
 
+const COLLECTION_LOAD =
+  "raised only by the record loaders (sources/*, app/loadInput.ts), which the collection run never calls: its findings come only from evaluateItem -> checkLicence (collection/fixlist.ts:16-22), its fetch errors become stop reasons (collection/net.ts:217-224, stop.ts), not findings; the only caller of loadInputs is the 'Check this record' panel (pages/CollectionPage.tsx:134), a /check run whose rules are in check.md";
+
 /**
  * Rules the scan places in a tool but the tool cannot raise, each with the evidence (file:line). The scan works per top-level unit, so reaching
  * runChecks counts every rule of the units it imports; these entries correct that, one proven path at a time. Doubtful cases are NOT listed here.
@@ -55,7 +58,27 @@ const RECORDLESS = 'convert/validate.ts:77 calls runChecks with records: [] and 
 export const EXCLUDED: Record<Tool, Readonly<Record<string, string>>> = {
   check: {},
   licence: {},
-  collection: {},
+  collection: {
+    ...Object.fromEntries(
+      [
+        'IN-NO-DATA-FILE',
+        'IN-RECORD-INACCESSIBLE',
+        'IN-HOST-NOT-ALLOWED',
+        'IN-FETCH-BLOCKED',
+        'IN-FETCH-TIMEOUT',
+        'IN-FETCH-INTERRUPTED',
+        'IN-ARCHIVE-TOO-LARGE',
+        'IN-ARCHIVE-DAILY-BUDGET',
+        'IN-ARCHIVE-BUSY',
+        'IN-IPT-HOST-NOT-LISTED',
+        'IN-NO-DWC-ARCHIVE',
+        'IN-FILE-HELD-BACK',
+        'IN-FILE-TOO-LARGE',
+        'IN-FILES-NOT-READ',
+        'IN-DATAVERSE-FILES',
+      ].map((id) => [id, COLLECTION_LOAD]),
+    ),
+  },
   convert: {
     ...Object.fromEntries(LIC_IDS.map((id) => [id, RECORDLESS])),
     'META-EMPTY-LINK': `${RECORDLESS}; raised only inside checkLicence (checks/licence.ts)`,
@@ -75,6 +98,9 @@ export const EXCLUDED: Record<Tool, Readonly<Record<string, string>>> = {
     'IN-HOST-NOT-ALLOWED': 'raised only by the record loaders (licence/load.ts, sources/*); /convert fetches nothing (convert/validate.ts:77)',
     'IN-FETCH-BLOCKED': 'raised only through fetchErrorFinding (sources/fetcher.ts:266), called by loaders /convert does not use',
     'IN-FETCH-TIMEOUT': 'raised only through fetchErrorFinding (sources/fetcher.ts:266), called by loaders /convert does not use',
+    'CHEM-UNIT-PAIR': 'checkChemistry runs on the Event table only (checks/run.ts:82 via convert/validate.ts:77); its variables are the fixed Event columns (convert/dwca.ts:56-81), of which only sampleSizeValue is a variable, with no canonical name and no unit, so no mass/amount pair exists (checks/chemistry.ts:65-69)',
+    'CHEM-DIC-GT-TA': 'checks/chemistry.ts:131-132 needs variables with canonical DIC and TA; the Event table (convert/dwca.ts:56-81) has none, and the measured values go to the eMoF table, which is not run through runChecks (convert/validate.ts:77, 199)',
+    'CHEM-RANGE': 'checks/chemistry.ts:181-191 needs a temperature, salinity, oxygen, pH or dbar variable; the only Event variable is sampleSizeValue, with no canonical name and no unit (convert/dwca.ts:56-81; its unit stands in sampleSizeUnit, a volume or area: convert/build.ts:2658)',
     'ROW-SHIP-SPEED': 'checkShipSpeed groups by a cruise column or the singleCruise tick (checks/speed.ts:381-396); the Event table has no cruise column (convert/dwca.ts:57-80) and validate.ts:77 passes no singleCruise',
     'ROW-SHIP-SPEED-UNUSUAL': 'same as ROW-SHIP-SPEED (checks/speed.ts:381-396, convert/validate.ts:77)',
     'ROW-SHIP-SPEED-PAIR': 'same as ROW-SHIP-SPEED (checks/speed.ts:381-396, convert/validate.ts:77)',
