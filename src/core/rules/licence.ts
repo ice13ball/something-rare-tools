@@ -7,9 +7,11 @@ import type { RuleSpec } from './spec';
  * Licence rules (category 'A'), emitted by checkLicence() (Task 7). `file` = the record label.
  * Declared params per rule:
  *   LIC-MISSING               dataciteCompared (optional, 'no' only: the catalogue record states no licence and the DataCite comparison could not be made)
- *   LIC-FREE-TEXT             text, versionMissing, hint   text = the licence text found; versionMissing = 'yes' | 'no';
- *                                                    hint = the SPDX id of the licence we recognised in it, or the example 'CC BY 4.0'
- *                                                    when nothing was recognised (never a licence the publisher did not name)
+ *   LIC-FREE-TEXT             text, versionMissing, kind, hint   text = the licence text found; versionMissing = 'yes' | 'no';
+ *                                                    kind = 'id' (a licence with its version was read from the text: hint = its SPDX id) | 'family' (a licence
+ *                                                    without a version: hint = that licence's own family, e.g. "CC BY-NC") | 'arr' ("All rights reserved") |
+ *                                                    'oa' (a bare "Open Access") | 'none' (nothing recognised); hint is '' for the last three.
+ *                                                    Never a licence the publisher did not name: `plain` is the sentence for 'none', `plainVariants` the others
  *   LIC-TEXT-URI-CONFLICT     text, uri, textLicence, uriLicence   one statement WITH a link whose text and link classify differently, or whose text names no
                                                     licence and is not just "Open Access" (then textLicence = '—')
  *                                                    (incl. a link no SPDX id exists for); textLicence/uriLicence = SPDX id or '—'
@@ -53,16 +55,16 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
     // template param: /check never sets it, and the technical line has no place for it.
     params: [],
     plain: {
-      pl: `W metadanych nie znaleziono licencji. Podaj nazwę licencji z wersją i odnośnik, np. CC BY 4.0.`,
-      en: `No licence was found in the metadata. State the licence name with its version and a link, e.g. CC BY 4.0.`,
-      de: `In den Metadaten wurde keine Lizenz gefunden. Geben Sie den Lizenznamen mit Version und einen Link an, z. B. CC BY 4.0.`,
-      fr: `Aucune licence n'a été trouvée dans les métadonnées. Indiquez le nom de la licence avec sa version et un lien, par ex. CC BY 4.0.`,
+      pl: `W metadanych nie znaleziono licencji. Podaj licencję, którą wybrali autorzy: jej nazwę z wersją i odnośnik do oficjalnego tekstu.`,
+      en: `No licence was found in the metadata. State the licence the authors chose: its name with its version and a link to its official text.`,
+      de: `In den Metadaten wurde keine Lizenz gefunden. Geben Sie die Lizenz an, die die Autoren gewählt haben: ihren Namen mit Version und einen Link auf ihren offiziellen Text.`,
+      fr: `Aucune licence n'a été trouvée dans les métadonnées. Indiquez la licence choisie par les auteurs : son nom avec sa version et un lien vers son texte officiel.`,
     },
     plainDataciteNotCompared: {
-      pl: `W metadanych nie znaleziono licencji. Podaj nazwę licencji z wersją i odnośnik, np. CC BY 4.0. Uwaga: rekordu DOI w DataCite nie udało się porównać, więc to ustalenie opiera się tylko na rekordzie z katalogu.`,
-      en: `No licence was found in the metadata. State the licence name with its version and a link, e.g. CC BY 4.0. Note: the DOI record at DataCite could not be compared, so this finding rests on the catalogue record alone.`,
-      de: `In den Metadaten wurde keine Lizenz gefunden. Geben Sie den Lizenznamen mit Version und einen Link an, z. B. CC BY 4.0. Hinweis: Der DOI-Eintrag bei DataCite konnte nicht verglichen werden, dieser Befund beruht daher nur auf dem Katalogeintrag.`,
-      fr: `Aucune licence n'a été trouvée dans les métadonnées. Indiquez le nom de la licence avec sa version et un lien, par ex. CC BY 4.0. Remarque : la notice du DOI chez DataCite n'a pas pu être comparée ; ce constat repose donc sur la seule notice du catalogue.`,
+      pl: `W metadanych nie znaleziono licencji. Podaj licencję, którą wybrali autorzy: jej nazwę z wersją i odnośnik do oficjalnego tekstu. Uwaga: rekordu DOI w DataCite nie udało się porównać, więc to ustalenie opiera się tylko na rekordzie z katalogu.`,
+      en: `No licence was found in the metadata. State the licence the authors chose: its name with its version and a link to its official text. Note: the DOI record at DataCite could not be compared, so this finding rests on the catalogue record alone.`,
+      de: `In den Metadaten wurde keine Lizenz gefunden. Geben Sie die Lizenz an, die die Autoren gewählt haben: ihren Namen mit Version und einen Link auf ihren offiziellen Text. Hinweis: Der DOI-Eintrag bei DataCite konnte nicht verglichen werden, dieser Befund beruht daher nur auf dem Katalogeintrag.`,
+      fr: `Aucune licence n'a été trouvée dans les métadonnées. Indiquez la licence choisie par les auteurs : son nom avec sa version et un lien vers son texte officiel. Remarque : la notice du DOI chez DataCite n'a pas pu être comparée ; ce constat repose donc sur la seule notice du catalogue.`,
     },
     technical: `{file}: no licence statement (useLimitation, otherConstraints, rightsList, license) in any record.`,
   },
@@ -72,14 +74,40 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
     severity: 'warning',
     exportPolicy: 'show',
     citations: [CITE.fairFindable, CITE.dataciteTitle, CITE.dataciteIdentifier, CITE.dataciteUri, CITE.inspireLink, CITE.spdxList],
-    params: ['text', 'versionMissing', 'hint'],
+    params: ['text', 'versionMissing', 'kind', 'hint'],
     plain: {
-      pl: `Licencja jest zapisana tylko jako zwykły tekst („{text}”), którego programy nie odczytają. Podaj identyfikator tej licencji (np. {hint}) i odnośnik do jej oficjalnego tekstu.`,
-      en: `The licence is written only as free text ("{text}"), which programs cannot read. State the licence by its identifier (e.g. {hint}) and a link to its official text.`,
-      de: `Die Lizenz steht nur als Freitext („{text}“), den Programme nicht lesen können. Geben Sie die Lizenz mit ihrer Kennung (z. B. {hint}) und einem Link auf ihren offiziellen Text an.`,
-      fr: `La licence n'est écrite qu'en texte libre (« {text} »), que les programmes ne peuvent pas lire. Indiquez-la par son identifiant (par ex. {hint}) et un lien vers son texte officiel.`,
+      pl: `Licencja jest zapisana tylko jako zwykły tekst („{text}”), którego programy nie odczytają. Podaj identyfikator licencji, którą wybrali autorzy, i odnośnik do jej oficjalnego tekstu.`,
+      en: `The licence is written only as free text ("{text}"), which programs cannot read. State the licence the authors chose by its identifier and a link to its official text.`,
+      de: `Die Lizenz steht nur als Freitext („{text}“), den Programme nicht lesen können. Geben Sie die von den Autoren gewählte Lizenz mit ihrer Kennung und einem Link auf ihren offiziellen Text an.`,
+      fr: `La licence n'est écrite qu'en texte libre (« {text} »), que les programmes ne peuvent pas lire. Indiquez la licence choisie par les auteurs par son identifiant et un lien vers son texte officiel.`,
     },
-    technical: `{file} field {field}: licence given as free text '{text}' (version missing: {versionMissing}); no recognised SPDX id or licence URI. Suggested identifier: {hint}.`,
+    plainVariants: {
+      id: {
+        pl: `Licencja jest zapisana tylko jako zwykły tekst („{text}”), którego programy nie odczytają. Podaj jej identyfikator ({hint}) i odnośnik do jej oficjalnego tekstu.`,
+        en: `The licence is written only as free text ("{text}"), which programs cannot read. State it by its identifier ({hint}) and a link to its official text.`,
+        de: `Die Lizenz steht nur als Freitext („{text}“), den Programme nicht lesen können. Geben Sie sie mit ihrer Kennung ({hint}) und einem Link auf ihren offiziellen Text an.`,
+        fr: `La licence n'est écrite qu'en texte libre (« {text} »), que les programmes ne peuvent pas lire. Indiquez-la par son identifiant ({hint}) et un lien vers son texte officiel.`,
+      },
+      family: {
+        pl: `Licencja jest zapisana tylko jako zwykły tekst („{text}”), którego programy nie odczytają, i bez wersji. Podaj dokładny identyfikator tej licencji ({hint} wraz z wersją, którą wybrali autorzy) i odnośnik do jej oficjalnego tekstu.`,
+        en: `The licence is written only as free text ("{text}"), which programs cannot read, and without a version. State the exact identifier of this licence ({hint} with the version the authors chose) and a link to its official text.`,
+        de: `Die Lizenz steht nur als Freitext („{text}“), den Programme nicht lesen können, und ohne Version. Geben Sie die genaue Kennung dieser Lizenz ({hint} mit der von den Autoren gewählten Version) und einen Link auf ihren offiziellen Text an.`,
+        fr: `La licence n'est écrite qu'en texte libre (« {text} »), que les programmes ne peuvent pas lire, et sans version. Indiquez l'identifiant exact de cette licence ({hint} avec la version choisie par les auteurs) et un lien vers son texte officiel.`,
+      },
+      arr: {
+        pl: `Dane mają zapisane „{text}”. To świadomy wybór autorów, a nie błąd: oznacza, że dane nie mogą być ponownie wykorzystane bez ich zgody. Jeśli autorzy chcą pozwolić na ponowne wykorzystanie, powinni podać licencję wraz z odnośnikiem do jej oficjalnego tekstu.`,
+        en: `The data carry the statement "{text}". This is a deliberate choice by the authors, not a defect: it means the data cannot be reused without their permission. If the authors want to allow reuse, they should state a licence with a link to its official text.`,
+        de: `Die Daten tragen den Vermerk „{text}“. Das ist eine bewusste Entscheidung der Autoren und kein Fehler: Die Daten dürfen ohne ihre Erlaubnis nicht weiterverwendet werden. Wenn die Autoren eine Weiterverwendung erlauben wollen, sollten sie eine Lizenz mit einem Link auf ihren offiziellen Text angeben.`,
+        fr: `Les données portent la mention « {text} ». C'est un choix délibéré des auteurs, et non un défaut : les données ne peuvent pas être réutilisées sans leur autorisation. Si les auteurs veulent autoriser la réutilisation, ils doivent indiquer une licence avec un lien vers son texte officiel.`,
+      },
+      oa: {
+        pl: `Zapis „{text}” mówi, jak można dotrzeć do danych, a nie na jakich warunkach wolno ich używać. Podaj licencję, którą wybrali autorzy, jej identyfikator i odnośnik do oficjalnego tekstu.`,
+        en: `The statement "{text}" says how the data can be reached, not under which terms they may be used. State the licence the authors chose, by its identifier and a link to its official text.`,
+        de: `Die Angabe „{text}“ sagt, wie man an die Daten gelangt, nicht unter welchen Bedingungen sie genutzt werden dürfen. Geben Sie die von den Autoren gewählte Lizenz mit ihrer Kennung und einem Link auf ihren offiziellen Text an.`,
+        fr: `La mention « {text} » dit comment accéder aux données, et non à quelles conditions on peut les utiliser. Indiquez la licence choisie par les auteurs, par son identifiant et un lien vers son texte officiel.`,
+      },
+    },
+    technical: `{file} field {field}: licence given as free text '{text}' (version missing: {versionMissing}; kind: {kind}); no recognised SPDX id or licence URI. Identifier read from the text: {hint}.`,
   },
   {
     id: 'LIC-TEXT-URI-CONFLICT',

@@ -55,7 +55,7 @@ describe('checkLicence', () => {
     const rec = makeRecord('iso19139', { licences: [makeLicence('iso19139', { field: 'otherConstraints', text: 'CC-BY 4.0', spdx: 'CC-BY-4.0' })] });
     const f = lic(run([rec]));
     expect(ids(f)).toEqual(['LIC-FREE-TEXT']);
-    expect(f[0].params).toEqual({ text: 'CC-BY 4.0', versionMissing: 'no', hint: 'CC-BY-4.0' });
+    expect(f[0].params).toEqual({ text: 'CC-BY 4.0', versionMissing: 'no', kind: 'id', hint: 'CC-BY-4.0' });
   });
 
   it('copyright next to a versionless "CC-BY" text: LIC-FREE-TEXT, plus LIC-RESTRICTION-CONFLICT (the text names an open family; it stays unrecognised)', () => {

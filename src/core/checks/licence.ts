@@ -97,7 +97,7 @@ export function checkLicence(
         file,
         field: f.statement.statement.field,
         // `text` shows the statement as written; an spdx id recovered from prose is not what the author wrote.
-        params: { text: f.statement.statement.text ?? shownOf(f.statement), versionMissing: f.versionMissing ? 'yes' : 'no', hint: f.hint },
+        params: { text: f.statement.statement.text ?? shownOf(f.statement), versionMissing: f.versionMissing ? 'yes' : 'no', kind: f.kind, hint: f.hint },
       }),
     );
   }

@@ -375,6 +375,8 @@ export interface RuleDef {
   plainByStatus?: { server: Record<Lang, string>; other: Record<Lang, string> };
   /** LIC-MISSING of a catalogue record whose DataCite comparison could not be made (param dataciteCompared = 'no'): the same finding, with a note. */
   plainDataciteNotCompared?: Record<Lang, string>;
+  /** LIC-FREE-TEXT: the sentence for each kind of free text, chosen by the param `kind` ('family', 'id', 'arr', 'oa'); `plain` is the one for kind 'none'. */
+  plainVariants?: Record<string, Record<Lang, string>>;
   /** META-NO-EXTENT in Collection review (param scope = 'collection'): the same finding without a reference to the /check table, which Collection review does not have. */
   plainCollection?: Record<Lang, string>;
   /** Appended to LIC-EXTRA-TEXT / LIC-ADDED-CONDITIONS when param otherRest is set: another string of the statement (identifier, Zenodo title) leaves something too. */

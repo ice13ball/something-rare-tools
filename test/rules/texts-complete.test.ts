@@ -92,6 +92,7 @@ function ruleTexts(r: RuleDef): Text[] {
   add('plainOtherRest', r.plainOtherRest);
   add('plainTime', r.plainTime);
   add('plainConvert', r.plainConvert);
+  Object.entries(r.plainVariants ?? {}).forEach(([k, v]) => add(`plainVariants[${k}]`, v));
   (r.plainIf ?? []).forEach((x, i) => add(`plainIf[${i}:${x.param}]`, x.plain));
   // optional params: the trigger of each plainIf, and the params named in the rule's own comment are not in `params`; the trigger names are allowed for its own sentence only
   return out.map((t) => {

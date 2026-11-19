@@ -30,9 +30,12 @@ export function toSample(ref: string, f: Finding): Sample {
   return { ref, ruleId: f.ruleId, severity: f.severity, ...(f.field ? { field: f.field } : {}), ...(f.value ? { value: clip(f.value) } : {}), params };
 }
 
-/** A concrete value to write instead of the problem, where the rule has one (language-neutral): the licence to state. */
+/**
+ * A concrete value to write instead of the problem, where the rule has one (language-neutral): the licence to state. Never a licence the record does not
+ * state: LIC-FREE-TEXT gives the identifier we read from the text itself (kind 'id') and otherwise nothing; the sentence says what to do.
+ */
 function suggestedFix(f: Finding): string {
-  if (f.ruleId === 'LIC-FREE-TEXT') return String(f.params.hint ?? '');
+  if (f.ruleId === 'LIC-FREE-TEXT') return f.params.kind === 'id' ? String(f.params.hint ?? '') : '';
   if (f.ruleId === 'LIC-DATACITE-EMPTY') return String(f.params.licence ?? '');
   return '';
 }

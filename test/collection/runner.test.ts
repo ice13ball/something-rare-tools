@@ -17,7 +17,7 @@ const text = (b: Blob): Promise<string> => b.text();
 describe('the fix list', () => {
   it('has the columns record, field, rule_id, severity, problem, suggested_fix, source and the formula guard on every text field', () => {
     expect(fixListHeader()).toBe('record,field,rule_id,severity,problem,suggested_fix,source\n');
-    const f = makeFinding('LIC-FREE-TEXT', { file: 'x', field: '=1+1', params: { text: 'see "site"', versionMissing: 'yes', hint: 'CC-BY-4.0' } });
+    const f = makeFinding('LIC-FREE-TEXT', { file: 'x', field: '=1+1', params: { text: 'see "site"', versionMissing: 'yes', kind: 'id', hint: 'CC-BY-4.0' } });
     const row = fixListRow('=cmd|calc', f, 'en', 'csw:emodnet');
     expect(row.startsWith("'=cmd|calc,'=1+1,LIC-FREE-TEXT,warning,")).toBe(true);
     expect(row).toContain(',CC-BY-4.0,csw:emodnet\n');

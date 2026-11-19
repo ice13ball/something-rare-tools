@@ -3,7 +3,7 @@
 // The ONE place that compares what the metadata sources of a dataset say about its licence. Pure, no I/O.
 // /check maps the result to findings (checks/licence.ts); the licence page renders it directly.
 import { narrowingOf, narrowsLicence } from './narrowing';
-import { classifyStatement, isOpenLicence, isRestrictiveCode, openLicenceNamed, spdxFromUri, spdxInfo, isNeutralEntry, type SpdxInfo } from '../metadata/licence';
+import { classifyStatement, familyNamed, isAllRightsReserved, isBareOpenAccess, isOpenLicence, isRestrictiveCode, openLicenceNamed, spdxFromUri, spdxInfo, isNeutralEntry, type SpdxInfo } from '../metadata/licence';
 import type { LicenceClass, LicenceStatement, MetadataRecord, MetadataSource } from '../types';
 
 /** Statements about the metadata record itself (ISO `metadataConstraints`), not the data. */
@@ -69,6 +69,13 @@ export type Contradiction =
   | { kind: 'restriction-code'; codes: string[]; licence: string }
   | { kind: 'datacite-empty'; licence: string };
 
+/**
+ * What the free text is, which decides the sentence and the hint: 'id' = we read the publisher's own licence id from it (hint = that id);
+ * 'family' = a licence family without a version ("CC BY-NC", hint = the family); 'arr' = "All rights reserved" and 'oa' = a bare "Open Access"
+ * (each is no licence, with a sentence of its own); 'none' = nothing recognised (hint empty). The hint is never a licence the record does not state.
+ */
+export type FreeTextKind = 'id' | 'family' | 'arr' | 'oa' | 'none';
+
 export interface LicenceAnalysis {
   sources: AnalysedSource[];
   groups: SourceGroup[];
@@ -95,7 +102,7 @@ export interface LicenceAnalysis {
    */
   maybeSameDeposit: boolean;
   /** Statements exist but none is machine-readable and none is flagged as a conflict: the licence is free text only. */
-  freeText?: { statement: AnalysedStatement; source: AnalysedSource; versionMissing: boolean; hint: string };
+  freeText?: { statement: AnalysedStatement; source: AnalysedSource; versionMissing: boolean; kind: FreeTextKind; hint: string };
 }
 
 export interface AnalyseOptions {
@@ -351,13 +358,16 @@ export function analyseLicences(records: readonly MetadataRecord[], opts: Analys
     const source = sources.find((s) => s.statements.some((a) => a.statement.text)) ?? sources.find((s) => s.statements.length > 0)!;
     const first = source.statements.find((a) => a.statement.text) ?? source.statements[0];
     const text = first.statement.text ?? shownOf(first);
-    // The hint is the publisher's OWN licence when we recognised it; an example is offered only when nothing was recognised.
+    // The hint is the publisher's OWN licence (or its family without a version); it is never an example of another licence.
     const own = statements.find((a) => a.classification.kind === 'spdx');
+    const family = text ? familyNamed(text) : undefined;
+    const kind: FreeTextKind = own ? 'id' : text && isAllRightsReserved(text) ? 'arr' : text && isBareOpenAccess(text) ? 'oa' : family ? 'family' : 'none';
     result.freeText = {
       statement: first,
       source,
       versionMissing: !/\d(\.\d)?/.test(text),
-      hint: own && own.classification.kind === 'spdx' ? own.classification.id : 'CC BY 4.0',
+      kind,
+      hint: own && own.classification.kind === 'spdx' ? own.classification.id : kind === 'family' ? family! : '',
     };
   }
   return result;

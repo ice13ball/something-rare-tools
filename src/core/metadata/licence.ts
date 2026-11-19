@@ -88,9 +88,16 @@ const LOWER_IDS: ReadonlyMap<string, string> = new Map(SPDX_ENTRIES.map((e) => [
 
 const known = (id: string): Read => (INFO.has(id) ? { id } : { unmapped: true });
 
+/** Hyphen, en dash, em dash, Unicode hyphen, non-breaking hyphen, figure dash, minus: word processors turn the hyphen of "CC BY-NC" into any of them. */
+const DASHES = '\\-–—‐‑‒−';
+/** Between the elements of a CC name and before its version: whitespace, underscore and any dash. */
+const SEP = `[\\s_${DASHES}]`;
+/** "version 4.0", "v4.0" or "v. 4.0" between a CC name and its number. */
+const VERSION_WORD = `(?:v(?:ersion|\\.)?${SEP}*)`;
+
 /** BY, NC, SA, ND in SPDX order (NC before ND/SA); "by-nd-nc" of the 1.0 URLs becomes BY-NC-ND. */
 function ccVariant(raw: string): string {
-  const parts = raw.toUpperCase().split(/[\s_-]+/).filter(Boolean);
+  const parts = raw.toUpperCase().split(new RegExp(`[${DASHES}\\s_]+`)).filter(Boolean);
   const ordered = ['NC', 'ND', 'SA'].filter((p) => parts.includes(p));
   return ['BY', ...ordered].join('-');
 }
@@ -323,6 +330,9 @@ const OFFICIAL_NAMES = SPDX_ENTRIES.filter((e) => (!e.id.startsWith('CC-') && !e
     .replace(/[–—]/g, '[–—-]'),
 }));
 
+/** An optional "1.0" / "v1.0" / "version 1" after the name of a licence that has only version 1.0 (not "1.1", not "1.0.2"). */
+const ONE_POINT_ZERO = `(?:[\\s,${DASHES}]*(?:v(?:ersion)?\\.?\\s*1(?:\\.0)?|1\\.0)(?![\\d]|\\.\\d))?`;
+
 const PATTERNS: Pattern[] = [
   {
     re: new RegExp(`(?<![\\p{L}\\p{N}])(?:${[...OFFICIAL_NAMES].sort((a, b) => b.src.length - a.src.length).map((n) => n.src).join('|')})(?![\\p{L}\\p{N}])`, 'giu'),
@@ -334,7 +344,7 @@ const PATTERNS: Pattern[] = [
   {
     // "CC BY 4.0", "cc-by-4.0", "CC BY-NC-SA 3.0 DE", "CC-BY-3.0-IGO", "CC BY 3.0 Germany", "CC BY 3.0 (IGO)". A version is mandatory for an id.
     re: new RegExp(
-      `((?<![a-z0-9])cc[\\s_-]*(by(?:[\\s_-]*(?:nc|sa|nd))*)[\\s_-]*(\\d\\.\\d)(?![\\d]))(?:([\\s_/(-]*)(${PORT_NAME_RE}|[a-z]{2})(?![a-z0-9])|\\s+(\\p{L}[\\p{L}'’-]*))?`,
+      `((?<![a-z0-9])cc${SEP}*(by(?:${SEP}*(?:nc|sa|nd))*)${SEP}*${VERSION_WORD}?(\\d\\.\\d)(?![\\d]))(?:([\\s_/(-]*)(${PORT_NAME_RE}|[a-z]{2})(?![a-z0-9])|\\s+(\\p{L}[\\p{L}'’-]*))?`,
       'giu',
     ),
     read: (m) => {
@@ -348,7 +358,7 @@ const PATTERNS: Pattern[] = [
   },
   {
     // "CC BY" / "CC-BY-NC" without a version: not an id, but its family is compared with the URI.
-    re: /(?<![a-z0-9])cc[\s_-]*(by(?:[\s_-]*(?:nc|sa|nd))*)(?![\s_-]*(?:\d|nc\b|sa\b|nd\b))(?![a-z0-9])/gi,
+    re: new RegExp(`(?<![a-z0-9])cc${SEP}*(by(?:${SEP}*(?:nc|sa|nd))*)(?!${SEP}*(?:${VERSION_WORD}?\\d|nc\\b|sa\\b|nd\\b))(?![a-z0-9])`, 'gi'),
     read: (m) => ({ family: ccVariant(m[1]) }),
   },
   {
@@ -375,9 +385,10 @@ const PATTERNS: Pattern[] = [
     read: (m) => ({ family: ccVariant(['BY', ...elementsOf(m[2])].join('-')) }),
   },
   { re: /(?<![a-z0-9])cc[\s_-]*(?:0|zero)(?![a-z0-9])(?:[\s_-]*(?:v|version\s*)?1\.0(?![\d]))?|creative\s+commons\s+zero(?:[\s_-]*(?:v|version\s*)?1\.0(?![\d]))?(?:\s+universal)?/gi, read: () => ({ id: 'CC0-1.0' }) },
-  { re: /(?<![a-z0-9])(?:odc[\s-]*)?odbl(?![a-z0-9])|open\s+database\s+licen[cs]e/gi, read: () => ({ id: 'ODbL-1.0' }) },
-  { re: /(?<![a-z0-9])odc[\s-]*by(?![a-z0-9])|open\s+data\s+commons\s+attribution/gi, read: () => ({ id: 'ODC-By-1.0' }) },
-  { re: /(?<![a-z0-9])pddl(?![a-z0-9])|public\s+domain\s+dedication\s+(?:and|&)\s+licen[cs]e/gi, read: () => ({ id: 'PDDL-1.0' }) },
+  // The data licences have one version (1.0): "ODbL 1.0", "ODbL v1.0", "Open Data Commons Open Database License (ODbL) v1.0" name it. A different number ("ODbL 1.1") is not read as 1.0.
+  { re: new RegExp(`(?<![a-z0-9])(?:(?:open\\s+data\\s+commons\\s+)?open\\s+database\\s+licen[cs]e(?:\\s*\\(\\s*odbl\\s*\\))?|(?:odc[\\s-]*)?odbl(?![a-z0-9]))${ONE_POINT_ZERO}`, 'gi'), read: () => ({ id: 'ODbL-1.0' }) },
+  { re: new RegExp(`(?<![a-z0-9])(?:odc[\\s-]*by(?![a-z0-9])|open\\s+data\\s+commons\\s+attribution(?:\\s+licen[cs]e)?(?:\\s*\\(\\s*(?:odc[\\s-]*)?by\\s*\\))?)${ONE_POINT_ZERO}`, 'gi'), read: () => ({ id: 'ODC-By-1.0' }) },
+  { re: new RegExp(`(?<![a-z0-9])(?:pddl(?![a-z0-9])|public\\s+domain\\s+dedication\\s+(?:and|&)\\s+licen[cs]e(?:\\s*\\(\\s*pddl\\s*\\))?)${ONE_POINT_ZERO}`, 'gi'), read: () => ({ id: 'PDDL-1.0' }) },
   {
     re: /(?<![a-z0-9])ogl[\s-]*uk[\s-]*v?(\d)(?:\.0)?(?![\d])|open\s+government\s+licen[cs]e(?:\s*\(ogl\))?[\s,-]*(?:uk\s*)?v(?:ersion)?\s*(\d)(?:\.0)?(?![\d])|(?<![a-z0-9])ogl[\s-]*v(\d)(?:\.0)?(?![\d])/gi,
     read: (m) => known(`OGL-UK-${m[1] ?? m[2] ?? m[3]}.0`),
@@ -499,7 +510,7 @@ const DEED_CLOSING: RegExp[] = DEED_SENTENCES.map((sentence) => {
 
 /** Filler words of a licence statement (en / de / fr / pl). Everything else that is left is shown to the user. */
 const FILLER = new Set(
-  `licensed licenced use under the a an of this these dataset datasets data is are available distributed released published made international internationale unported międzynarodowe międzynarodowa międzynarodowy licence license at and with
+  `licensed licenced use under the a an of this these work content dataset datasets data is are available distributed released published made deed legalcode international internationale unported międzynarodowe międzynarodowa międzynarodowy licence license at and with
    lizenziert unter der die das dieser datensatz daten ist sind verfügbar veröffentlicht lizenz dem den
    sous licence la le les de des du ce ces jeu données est sont disponible disponibles publié publiée publiés publiées distribué distribuée distribués distribuées
    na licencji licencja licencją ten te zbiór zbioru dane danych jest są dostępny dostępne udostępniony udostępnione opublikowany`.split(/\s+/),
@@ -754,6 +765,23 @@ function readText(raw: string): TextRead {
   }
   return out;
 }
+
+/**
+ * The licence family a text names WITHOUT a version ("CC BY-NC" gives "CC BY-NC"), for the fix hint of a text that is only free text.
+ * undefined when the text names no family, names an id or more than one licence, or says anything else.
+ */
+export function familyNamed(text: string): string | undefined {
+  const r = readText(text);
+  if (r.families.length !== 1 || r.ids.length > 0 || r.unmapped || r.leftover || r.restricted) return undefined;
+  return `CC ${r.families[0]}`;
+}
+
+/** "All rights reserved" and its en / de / fr / pl forms, as the whole text (an author's own choice, not a licence). */
+const ALL_RIGHTS_RESERVED = /^(?:all\s+rights\s+reserved|alle\s+rechte\s+vorbehalten|tous\s+droits\s+réservés|wszelkie\s+prawa\s+zastrzeżone|wszystkie\s+prawa\s+zastrzeżone)[\s.,;!]*$/iu;
+export const isAllRightsReserved = (text: string): boolean => ALL_RIGHTS_RESERVED.test(text.normalize('NFKC').replace(/\s+/g, ' ').trim());
+
+/** A text that says only that the data is open access (any case; "Open-Access"; the eu-repo and COAR access values): how it is reached, not its terms. */
+export const isBareOpenAccess = (text: string): boolean => text.trim() !== '' && isNeutralUnnamed(text.normalize('NFKC'));
 
 /* ---------- a statement ---------- */
 

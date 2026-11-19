@@ -144,11 +144,11 @@ describe('what was and was not read', () => {
 });
 
 describe('free text and attribution data', () => {
-  it('free text only: the hint is the publisher\'s own licence when recognised, an example when not', () => {
+  it('free text only: the hint is the publisher\'s own licence when recognised, empty when not (never an invented one)', () => {
     const own = analyseLicences([rec('iso19139', [['Creative Commons CC-BY-SA 4.0']])]);
-    expect(own.freeText).toMatchObject({ hint: 'CC-BY-SA-4.0', versionMissing: false });
+    expect(own.freeText).toMatchObject({ hint: 'CC-BY-SA-4.0', kind: 'id', versionMissing: false });
     const none = analyseLicences([rec('iso19139', [['Open Access']])]);
-    expect(none.freeText).toMatchObject({ hint: 'CC BY 4.0', versionMissing: true });
+    expect(none.freeText).toMatchObject({ hint: '', kind: 'oa', versionMissing: true });
   });
   it('a machine-readable statement (URI naming the id, or the bare id) is not free text', () => {
     expect(analyseLicences([rec('iso19139', [['Creative Commons Attribution 4.0 International', BY]])]).freeText).toBeUndefined();

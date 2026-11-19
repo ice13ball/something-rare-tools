@@ -117,6 +117,7 @@ export function renderPlain(f: Finding, lang: Lang): string {
     if (status >= 500 && status <= 599) texts = rule.plainByStatus.server;
     else if (status !== 403 && status !== 404) texts = rule.plainByStatus.other;
   }
+  if (rule.plainVariants && typeof f.params.kind === 'string' && Object.hasOwn(rule.plainVariants, f.params.kind)) texts = rule.plainVariants[f.params.kind];
   if (rule.plainDataciteNotCompared && f.params.dataciteCompared === 'no') texts = rule.plainDataciteNotCompared;
   if (rule.plainCollection && f.params.scope === 'collection') texts = rule.plainCollection;
   if (rule.plainConvert && f.params.index !== undefined) texts = rule.plainConvert;

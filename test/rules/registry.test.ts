@@ -241,11 +241,15 @@ describe('messages', () => {
     for (const r of RULES) expect(r.plain.pl, r.id).not.toMatch(/\b(sie|moze|musi sie|jest ze|zrodl|plik nie jest zapisany w UTF)\b/);
   });
 
-  it('licence wording tells the user what to write', () => {
-    expect(getRule('LIC-MISSING').plain.en).toContain('CC BY 4.0');
-    // LIC-FREE-TEXT asks for the licence's OWN identifier ({hint}); a fixed "CC BY 4.0" would tell a publisher to switch (bug 22.10: 6).
-    expect(getRule('LIC-FREE-TEXT').plain.en).toContain('{hint}');
-    expect(getRule('LIC-FREE-TEXT').plain.en).not.toContain('CC BY 4.0');
+  it('licence wording tells the user what to write, and never names a licence the record does not state', () => {
+    expect(getRule('LIC-MISSING').plain.en).not.toContain('CC BY 4.0');
+    expect(getRule('LIC-MISSING').plain.en).toContain('the authors chose');
+    // LIC-FREE-TEXT names the licence's OWN identifier ({hint}) only where one was read from the text; a fixed "CC BY 4.0" would tell a publisher to switch (bug 22.10: 6).
+    const ft = getRule('LIC-FREE-TEXT');
+    expect(ft.plainVariants?.id.en).toContain('{hint}');
+    expect(ft.plainVariants?.family.en).toContain('{hint}');
+    expect(ft.plain.en).not.toContain('{hint}');
+    for (const t of [ft.plain, ...Object.values(ft.plainVariants ?? {})]) for (const l of Object.values(t)) expect(l).not.toContain('CC BY 4.0');
   });
 });
 

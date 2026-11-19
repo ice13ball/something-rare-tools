@@ -455,7 +455,7 @@ Severity: error
 
 **Example.** A catalogue record has title, abstract and contact, but its rights and constraints sections are empty.
 
-**What you can do.** State the licence by name and version with a link to its official text, for example CC BY 4.0, in the repository record.
+**What you can do.** State the licence the authors chose by name and version with a link to its official text, in the repository record.
 
 **Citations.**
 
@@ -470,11 +470,11 @@ Severity: warning
 
 **What it checks.** The licence is written only as free text that a program cannot read. A person understands it, but a harvester cannot tell whether the data are open.
 
-**When it fires.** Once per record, when the record has licence statements, none of them is machine-readable (an identifier field, a link to a recognised licence, or a text that is itself the identifier) and none carries a conflict (LIC-TEXT-URI-CONFLICT, LIC-ADDED-CONDITIONS, LIC-EXTRA-TEXT or LIC-AMBIGUOUS). Prose such as CC BY 4.0 without a link is free text. The finding quotes the first statement with text and says whether the text carries no version number. The suggested identifier is the licence the tool recognised in the record, or the example CC BY 4.0 when it recognised none.
+**When it fires.** Once per record, when the record has licence statements, none of them is machine-readable (an identifier field, a link to a recognised licence, or a text that is itself the identifier) and none carries a conflict (LIC-TEXT-URI-CONFLICT, LIC-ADDED-CONDITIONS, LIC-EXTRA-TEXT or LIC-AMBIGUOUS). Prose such as CC BY 4.0 without a link is free text. The finding quotes the first statement with text and says whether the text carries no version number. All rights reserved and a bare Open Access are free text too, each with a sentence of its own; All rights reserved next to a recognised licence does not raise this rule.
 
 **Example.** The rights field reads: Creative Commons Attribution licence, with no version and no link.
 
-**What you can do.** Give the identifier and the link to the official text, so that the licence is stated by both.
+**What you can do.** Give the identifier of the licence the authors chose and the link to its official text, so that the licence is stated by both. A licence read from the text is named by its identifier, one without a version by its family; the tool never suggests a licence the record does not state. All rights reserved is the authors' deliberate choice (no reuse without permission); a bare Open Access says how the data can be reached, not under which terms.
 
 **Citations.**
 

@@ -15,6 +15,7 @@ import { mixedCommunity, runCommunity, shortened, summarize, touchingCommunity, 
 /**
  * What the up-front planner (d453b59) gave on exactly these communities (its own run, same mock): the incremental planner must give the same.
  * csvSha: re-pinned when META-NO-EXTENT got its Collection wording (no "table"): the only difference in the CSV is that text.
+ * Re-pinned again when LIC-FREE-TEXT / LIC-MISSING stopped naming "CC BY 4.0" (suggested_fix of the free-text record is now empty): only those texts and that column differ.
  */
 const REF_MIXED: Summary = {
   status: 'finished',
@@ -25,7 +26,7 @@ const REF_MIXED: Summary = {
   duplicates: 0,
   notices: ['records-missing', 'zenodo-slice-short'],
   csvRows: 25954,
-  csvSha: '41a102677aa9d54f',
+  csvSha: '9a44cea7dcb15a2f',
 };
 const REF_TOUCHING: Summary = {
   status: 'finished',

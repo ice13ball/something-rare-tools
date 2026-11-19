@@ -123,10 +123,11 @@ describe('bug 22.10: 6 — LIC-FREE-TEXT must not tell a publisher to switch to 
     expect(f).toBeDefined();
     for (const lang of LANGS) expect(renderPlain(f, lang), lang).not.toMatch(/CC BY 4\.0/);
   });
-  it('nothing recognised: an example is still offered', () => {
+  it('nothing recognised: no example licence is offered, the sentence asks for the licence the authors chose', () => {
     const rec = makeRecord('iso19139', { licences: [makeLicence('iso19139', { field: 'otherConstraints', text: 'Open Access' })] });
     const f = lic(run([rec])).find((x) => x.ruleId === 'LIC-FREE-TEXT')!;
-    expect(renderPlain(f, 'en')).toContain('CC BY 4.0');
+    expect(renderPlain(f, 'en')).not.toContain('CC BY 4.0');
+    expect(renderPlain(f, 'en')).toContain('the authors chose');
   });
 });
 
