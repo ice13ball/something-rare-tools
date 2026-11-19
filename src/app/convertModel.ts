@@ -338,10 +338,10 @@ function slotRequest(c: SheetChoice, slot: OrderSlot): Pick<ConvertRequestBody['
 }
 const orderRequest = (c: SheetChoice): Pick<ConvertRequestBody['sheets'][number], 'dayMonthOrder' | 'dayMonthOrderFromFile' | 'yyOrder' | 'yyOrderFromFile'> => ({ ...slotRequest(c, 'dayMonthOrder'), ...slotRequest(c, 'yyOrder') });
 
-/** The columns the person answered "treat as missing" for, and those among them a companion file gave. */
 /** The summary-rows answer of a sheet, as the request carries it. */
 const summaryRowsRequest = (c: SheetChoice): Pick<ConvertRequestBody['sheets'][number], 'summaryRows'> => (c.summaryRows === undefined ? {} : { summaryRows: c.summaryRows });
 
+/** The columns the person answered "treat as missing" for, and those among them a companion file gave. */
 const missingCodeRequest = (c: SheetChoice): Pick<ConvertRequestBody['sheets'][number], 'missingCodes' | 'missingCodesFromFile'> => {
   const answers = c.missingCodes;
   if (answers === undefined || Object.keys(answers).length === 0) return {};
@@ -510,25 +510,22 @@ function savedSummaryRows(settings: ConvertParseResult['settings'], sheet: { nam
 }
 
 /**
- * The sheet that carries the summary-rows answer of a finding: the finding's own sheet, or, when it is the description half of a joined workbook, the results sheet joined to it (the half of the question the
- * results sheet also names wins; else the first confirmed join). Undefined when the finding names no sheet of the drop.
+ * The sheet that carries the summary-rows answer of a finding: on a joined workbook the converter names the results sheet whose run raised the finding (`resultsFile`, `resultsSheet`, on both halves of
+ * a split question), so a description joined to several results sheets answers each one on its own sheet; otherwise the finding's own sheet. Never a guess among joins.
  */
-export function summaryOwnerOf(parsed: ConvertParseResult, joins: readonly JoinChoice[], findings: readonly Finding[], f: Finding): { fileId: string; sheet: string } | undefined {
-  const file = parsed.files.find((x) => x.fileName === f.file);
-  if (file === undefined || f.sheet === undefined) return undefined;
-  const held = Number(f.params.held);
-  const mine = joins.filter((j) => j.state === 'confirmed' && j.description.fileId === file.fileId && j.description.sheet === f.sheet);
-  const named = (j: JoinChoice): boolean => findings.some((x) => (x.ruleId === 'CONV-SUMMARY-ROW-UNDECIDED' || x.ruleId === 'CONV-SUMMARY-ROW-SKIPPED') && Number(x.params.held) === held && x.sheet === j.results.sheet && parsed.files.find((y) => y.fileName === x.file)?.fileId === j.results.fileId);
-  const j = mine.find(named) ?? mine[0];
-  return j !== undefined ? { fileId: j.results.fileId, sheet: j.results.sheet } : { fileId: file.fileId, sheet: f.sheet };
+export function summaryOwnerOf(parsed: ConvertParseResult, f: Finding): { fileId: string; sheet: string } | undefined {
+  const fileName = typeof f.params.resultsFile === 'string' ? f.params.resultsFile : f.file;
+  const sheet = typeof f.params.resultsSheet === 'string' ? f.params.resultsSheet : f.sheet;
+  const file = parsed.files.find((x) => x.fileName === fileName);
+  return file === undefined || sheet === undefined ? undefined : { fileId: file.fileId, sheet };
 }
 
 /** The summary-rows answers a companion file records: the results (converted) sheet, the answer, the rows it was given for (the finding's `held`) and the rows of the sheet. Only an answer the converter said today (CONV-SUMMARY-ROW-SKIPPED). */
-export function summaryRowsSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>, joins: readonly JoinChoice[], said: readonly Finding[]): NonNullable<ConvertSettings['summaryRows']> {
+export function summaryRowsSettingsOf(parsed: ConvertParseResult, choices: Record<string, SheetChoice>, said: readonly Finding[]): NonNullable<ConvertSettings['summaryRows']> {
   const out: NonNullable<ConvertSettings['summaryRows']> = [];
   for (const f of said) {
     if (f.ruleId !== 'CONV-SUMMARY-ROW-SKIPPED') continue;
-    const owner = summaryOwnerOf(parsed, joins, said, f);
+    const owner = summaryOwnerOf(parsed, f);
     if (owner === undefined) continue;
     const c = choices[sheetKey(owner.fileId, owner.sheet)];
     const sh = parsed.files.find((x) => x.fileId === owner.fileId)?.sheets.find((x) => x.name === owner.sheet);

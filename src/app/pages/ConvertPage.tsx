@@ -394,7 +394,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     // "Leave them out (summary rows)" / "Keep (a real station)" / "Ask again" of the summary-rows question: the person's own answer, for the number of held rows the finding names (`held`); on a joined workbook
     // either half of the question stores it on the results sheet, which is the input the converter reads it from
     if (choice === 'summaryLeaveOut' || choice === 'summaryKeep' || (choice === 'askAgain' && f.ruleId === 'CONV-SUMMARY-ROW-SKIPPED')) {
-      const owner = !parsed ? undefined : summaryOwnerOf(parsed, joins, view?.findings ?? [], f);
+      const owner = !parsed ? undefined : summaryOwnerOf(parsed, f);
       const held = Number(f.params.held);
       if (owner === undefined || !Number.isInteger(held) || held < 1) return;
       const ownerKey = sheetKey(owner.fileId, owner.sheet);
@@ -1150,7 +1150,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     const yyOrder = parsed ? yyOrderSettingsOf(parsed, choices, said) : [];
     const decimalReading = parsed ? decimalReadingSettingsOf(parsed, choices) : [];
     const missingCode = parsed ? missingCodeSettingsOf(parsed, choices, said) : [];
-    const summaryRows = parsed ? summaryRowsSettingsOf(parsed, choices, joins, said) : [];
+    const summaryRows = parsed ? summaryRowsSettingsOf(parsed, choices, said) : [];
     const encoding = parsed ? encodingSettingsOf(parsed, choices) : [];
     // the position the person declared for a sheet without one: their own typed values, the one thing besides names and counts the file holds
     const declaredPosition = parsed ? declaredPositionSettingsOf(parsed, choices) : [];

@@ -298,6 +298,8 @@ describe('a joined workbook: summary rows of the description sheet', () => {
     // the same question under both sheet names (joinLines splits the lines, each half counts its own rows), with the same number to answer for: the rows of the converted sheet
     expect(q.map((x) => [x.sheet, x.lines, x.params.count, x.params.held])).toEqual([['Counts', [3], 1, 2], ['Samples', [4], 1, 2]]);
     expect(dbg).toContain('Samples:4:summary-undecided:needs-decision');
+    // both halves name the results sheet whose run raised them: the sheet that carries the answer
+    expect(q.map((x) => [x.params.resultsFile, x.params.resultsSheet])).toEqual([['book.xlsx', 'Counts'], ['book.xlsx', 'Counts']]);
     expect(result.events.some((e) => e.id === 'Total')).toBe(false);
     const answered = book(counts, [...samples.slice(0, 2), ['Total', 'ST-9', '2021-05-06', 61.9, 4.9, 30]]);
     answered[0] = { ...answered[0], summaryRows: { answer: 'leave-out', count: 2 } };

@@ -1308,9 +1308,9 @@ export function joinLines(findings: readonly Finding[], sin: ConvertSheetInput):
   const desHeader = info.description.sheet.header;
   const descriptionLineOf = (line: number): number | undefined => info.lentFrom.get(line) ?? info.descriptionOnly.get(line);
   const out: Finding[] = [];
-  // the three summary-row rules say how many rows they name: each half of a split names its own (`held`, the number an answer is given for, stays as it was)
+  // the three summary-row rules say how many rows they name: each half of a split names its own (`held`, the number an answer is given for, stays as it was) and the results sheet whose run raised it (`resultsFile`, `resultsSheet`: the sheet that carries the answer)
   const SUMMARY = new Set(['CONV-SUMMARY-ROW-UNDECIDED', 'CONV-SUMMARY-ROW-SKIPPED', 'CONV-SUMMARY-ROW-KEPT']);
-  const own = (f: Finding): Finding => (SUMMARY.has(f.ruleId) && f.lines !== undefined ? { ...f, params: { ...f.params, count: new Set(f.lines).size } } : f);
+  const own = (f: Finding): Finding => (SUMMARY.has(f.ruleId) && f.lines !== undefined ? { ...f, params: { ...f.params, count: new Set(f.lines).size, resultsFile: info.results.file, resultsSheet: sin.sheet } } : f);
   for (const f of findings) {
     // (an undated sample's finding already names the description's own lines: they must not be read as merged lines again)
     if (f.file !== info.results.file || f.sheet !== sin.sheet || (f.ruleId === 'CONV-EVENT-DATE-MISSING' && f.params.described === 'yes')) {

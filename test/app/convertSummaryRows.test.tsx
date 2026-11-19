@@ -7,7 +7,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initLang, setLang } from '../../src/app/i18n';
-import { initialChoices, requestOf, summaryRowsSettingsOf } from '../../src/app/convertModel';
+import { initialChoices, requestOf, summaryOwnerOf, summaryRowsSettingsOf } from '../../src/app/convertModel';
 import { ConvertPage } from '../../src/app/pages/ConvertPage';
 import { writeConvertSidecar } from '../../src/core/convert/settings';
 import { UI } from '../../src/core/i18n/ui';
@@ -29,9 +29,14 @@ const HEADER = ['Station', 'Sample', 'Date', 'Latitude', 'Longitude', 'Depth [m]
 const ROWS = ['Seine,k1,2023-06-14,49.5,0.2,5,Calanus finmarchicus,4', 'Somme,k2,2023-06-15,50.2,1.6,5,Calanus finmarchicus,5', 'Somme,k3,2023-06-16,50.2,1.6,6,Calanus finmarchicus,6'];
 const TEXT = [HEADER.join(','), ...ROWS].join('\n') + '\n';
 
-async function load(files: { name: string; text: string }[]): Promise<{ download: ReturnType<typeof vi.fn> }> {
+let seen: ConvertRequestBody[] = [];
+const requests = (): ConvertRequestBody[] => seen;
+async function load(files: { name: string; text: string }[], change?: (base: ConvertEngine) => Partial<ConvertEngine>): Promise<{ download: ReturnType<typeof vi.fn> }> {
   const download = vi.fn();
-  const view = render(<ConvertPage engine={createDirectConvertEngine()} download={download} downloadFile={vi.fn()} />);
+  const base = createDirectConvertEngine();
+  seen = [];
+  const engine: ConvertEngine = { ...base, ...(change === undefined ? {} : change(base)), convert: (b) => (seen.push(b), base.convert(b)) };
+  const view = render(<ConvertPage engine={engine} download={download} downloadFile={vi.fn()} />);
   chooseFiles(view.container, files);
   fireEvent.click(screen.getByRole('button', { name: T['convert.read'] }));
   await screen.findByRole('heading', { name: T['convert.columns.title'] });
@@ -53,7 +58,8 @@ describe('the question and the two answers', () => {
     const q = item('CONV-SUMMARY-ROW-UNDECIDED')!;
     expect(q.closest('.convert-findings')?.getAttribute('data-kind')).toBe('error');
     expect(within(q).getAllByRole('button').map((b) => b.textContent)).toEqual([T['convert.finding.summaryLeaveOut'], T['convert.finding.summaryKeep']]);
-    for (const b of within(q).getAllByRole('button')) expect(b.getAttribute('aria-pressed')).not.toBe('true');
+    // nothing is answered before a click: the request that produced this question carried no answer
+    expect(requests().every((b) => b.sheets.every((x) => x.summaryRows === undefined))).toBe(true);
     expect(item('CONV-SUMMARY-ROW-SKIPPED')).toBeNull();
     fireEvent.click(button(q, T['convert.finding.summaryLeaveOut']));
     await waitFor(() => expect(item('CONV-SUMMARY-ROW-SKIPPED')).not.toBeNull());
@@ -123,9 +129,9 @@ describe('the companion file', () => {
     const key = Object.keys(choices)[0];
     expect(choices[key].summaryRows).toEqual({ answer: 'keep', count: 2, fromFile: true });
     const said = [{ ruleId: 'CONV-SUMMARY-ROW-SKIPPED', file: 'hauls.csv', sheet: 'hauls.csv', params: { held: 2, count: 2, answer: 'keep' } }] as never;
-    expect(summaryRowsSettingsOf(p, choices, [], said)).toEqual([{ sheet: 'hauls.csv', answer: 'keep', count: 2, rows: 3 }]);
-    expect(summaryRowsSettingsOf(p, choices, [], [])).toEqual([]);
-    expect(summaryRowsSettingsOf(p, { ...choices, [key]: { ...choices[key], use: false } }, [], said)).toEqual([]);
+    expect(summaryRowsSettingsOf(p, choices, said)).toEqual([{ sheet: 'hauls.csv', answer: 'keep', count: 2, rows: 3 }]);
+    expect(summaryRowsSettingsOf(p, choices, [])).toEqual([]);
+    expect(summaryRowsSettingsOf(p, { ...choices, [key]: { ...choices[key], use: false } }, said)).toEqual([]);
   });
 });
 
@@ -177,5 +183,85 @@ describe('the two labels in four languages', () => {
       expect(a).not.toBe(b);
       if (lang !== 'en') expect([a, b]).not.toEqual([UI.en['convert.finding.summaryLeaveOut'], UI.en['convert.finding.summaryKeep']]);
     }
+  });
+});
+
+describe('the answer after a re-read of the file (decimal and encoding picks)', () => {
+  const HDR = ['Station', 'Sample', 'Date', 'Latitude', 'Longitude', 'Species', 'Count', 'Chlorophyll'];
+  const SEMI = [HDR.join(';'), 'Seine;k1;2023-06-14;55,5;3,5;Calanus finmarchicus;4;1,250', 'Somme;k2;2023-06-15;56,5;3,5;Calanus finmarchicus;5;2,000', 'Somme;k3;2023-06-16;56,5;3,5;Calanus finmarchicus;6;1,500'].join('\n') + '\n';
+  const lastBody = (): ConvertRequestBody => seen[seen.length - 1];
+
+  it('survives a decimal answer (the file is read again): the request still carries it and the note stays', async () => {
+    await load([{ name: 'hauls.csv', text: SEMI }]);
+    fireEvent.click(button(item('CONV-SUMMARY-ROW-UNDECIDED')!, T['convert.finding.summaryLeaveOut']));
+    await waitFor(() => expect(item('CONV-SUMMARY-ROW-SKIPPED')).not.toBeNull());
+    await idle();
+    fireEvent.click(button(item('IN-DECIMAL-AMBIGUOUS')!, T['convert.finding.thousandsSeparator']));
+    await waitFor(() => expect(item('CONV-DECIMAL-DECLARED')).not.toBeNull());
+    await idle();
+    expect(lastBody().sheets[0].summaryRows).toEqual({ answer: 'leave-out', count: 2 });
+    expect(item('CONV-SUMMARY-ROW-SKIPPED')).not.toBeNull();
+    expect(item('CONV-SUMMARY-ROW-UNDECIDED')).toBeNull();
+  });
+
+  it('a sheet whose number of columns changed under a pick starts again: the answer is gone, the question is visible and the request carries none', async () => {
+    await load([{ name: 'hauls.csv', text: SEMI }], (base) => ({
+      decimalChoice: async (fileId, sheet, index, reading) => {
+        const f = await base.decimalChoice(fileId, sheet, index, reading);
+        const name = f.sheets[0].name;
+        const at = f.sheets[0].header.length;
+        return {
+          ...f,
+          sheets: [{ ...f.sheets[0], header: [...f.sheets[0].header, 'Extra'] }],
+          mappings: [{ sheet: name, columns: [...f.mappings[0].columns, { index: at, header: 'Extra', role: { kind: 'ignore' } }] }],
+          proposals: { [name]: [...f.proposals[name], { index: at, header: 'Extra', cleanHeader: 'Extra', role: { kind: 'ignore' }, confidence: 'high', reason: 'x', reasonCode: 'text-column' } as never] },
+          samples: { [name]: [...f.samples[name], []] },
+        };
+      },
+    }));
+    fireEvent.click(button(item('CONV-SUMMARY-ROW-UNDECIDED')!, T['convert.finding.summaryKeep']));
+    await waitFor(() => expect(item('CONV-SUMMARY-ROW-SKIPPED')).not.toBeNull());
+    await idle();
+    expect(lastBody().sheets[0].summaryRows).toEqual({ answer: 'keep', count: 2 });
+    fireEvent.click(button(item('IN-DECIMAL-AMBIGUOUS')!, T['convert.finding.thousandsSeparator']));
+    await waitFor(() => expect(lastBody().sheets[0].summaryRows).toBeUndefined());
+    await idle();
+    await waitFor(() => expect(item('CONV-SUMMARY-ROW-UNDECIDED')).not.toBeNull());
+    expect(item('CONV-SUMMARY-ROW-SKIPPED')).toBeNull();
+    expect(lastBody().sheets[0].summaryRows).toBeUndefined();
+  });
+});
+
+describe('one description joined to two results sheets', () => {
+  const TAX = 'Calanus finmarchicus';
+  const R1 = csvOf(['Sample', 'Taxon', 'Count'], [['X01', TAX, 12], ['Total', TAX, 7]]);
+  const R2 = csvOf(['Sample', 'Taxon', 'Count'], [['X02', TAX, 3], ['Total', TAX, 4], ['Somme', TAX, 5]]);
+  const D = csvOf(['Sample', 'Station', 'Date', 'Latitude', 'Longitude', 'Depth'], [['X01', 'ST-1', '2021-05-03', 61.1, 4.2, 10], ['X02', 'ST-2', '2021-05-04', 61.3, 4.6, 20], ['Total', 'ST-3', '2021-05-05', 61.5, 4.9, 30], ['Somme', 'ST-4', '2021-05-06', 61.7, 4.9, 30]]);
+
+  it('each question is answered on the results sheet whose run raised it, and both close', async () => {
+    await load([{ name: 'r1.csv', text: R1 }, { name: 'r2.csv', text: R2 }, { name: 'samples.csv', text: D }]);
+    for (const b of screen.queryAllByRole('button', { name: T['convert.join.confirm'] })) fireEvent.click(b);
+    await waitFor(() => expect(seen[seen.length - 1].sampleJoin?.length).toBe(2));
+    await idle();
+    const open = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>('li[data-rule="CONV-SUMMARY-ROW-UNDECIDED"]')];
+    for (let guard = 0; guard < 6 && open().length > 0; guard++) {
+      fireEvent.click(button(open()[0], T['convert.finding.summaryLeaveOut']));
+      await idle();
+    }
+    expect(open()).toHaveLength(0);
+    const answered = seen[seen.length - 1].sheets.filter((x) => x.summaryRows !== undefined).map((x) => [x.sheet, x.summaryRows!.count]).sort();
+    expect(answered).toEqual([['r1.csv', 1], ['r2.csv', 2]]);
+  });
+});
+
+describe('which sheet carries the answer', () => {
+  const p = { files: [{ fileId: 'c1', fileName: 'r1.csv' }, { fileId: 'c2', fileName: 'r2.csv' }, { fileId: 'c3', fileName: 'samples.csv' }] } as never;
+  const finding = (params: Record<string, unknown>, file: string, sheet: string) => ({ ruleId: 'CONV-SUMMARY-ROW-UNDECIDED', file, sheet, params }) as never;
+  it('a description-half finding names the results sheet of the run that raised it, never the first join', () => {
+    expect(summaryOwnerOf(p, finding({ held: 1, resultsFile: 'r2.csv', resultsSheet: 'r2.csv' }, 'samples.csv', 'samples.csv'))).toEqual({ fileId: 'c2', sheet: 'r2.csv' });
+    expect(summaryOwnerOf(p, finding({ held: 1, resultsFile: 'r1.csv', resultsSheet: 'r1.csv' }, 'samples.csv', 'samples.csv'))).toEqual({ fileId: 'c1', sheet: 'r1.csv' });
+  });
+  it('an unjoined finding is answered on its own sheet', () => {
+    expect(summaryOwnerOf(p, finding({ held: 2 }, 'r1.csv', 'r1.csv'))).toEqual({ fileId: 'c1', sheet: 'r1.csv' });
   });
 });
