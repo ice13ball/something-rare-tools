@@ -45,7 +45,25 @@ export const AMBIENT_FILE = 'ambient.json';
 
 export function readAmbient(dir: string): Record<string, string> {
   const p = join(resolve(dir), AMBIENT_FILE);
-  return existsSync(p) ? (JSON.parse(readFileSync(p, 'utf8')) as Record<string, string>) : {};
+  if (!existsSync(p)) throw new Error(`${resolve(dir)} has no ${AMBIENT_FILE}: the recording was not marked. Record with \`npm run convert:record\` (it marks), not with the raw vitest record command.`);
+  return JSON.parse(readFileSync(p, 'utf8')) as Record<string, string>;
+}
+
+/** The committed list of test files whose calls may be skipped, and exactly how many calls each. A change here is a decision made in review, never an accident of a recording. */
+export const AMBIENT_ALLOW_FILE = resolve(process.cwd(), 'scripts/convert-replay/ambient-allow.json');
+
+/** Problems of a recording's skip list against the committed one: any test file or count that differs. Empty means the skip list is exactly the expected one. */
+export function checkAmbientAllowed(dir: string, ambient: Record<string, string> = readAmbient(dir)): string[] {
+  const allowed = JSON.parse(readFileSync(AMBIENT_ALLOW_FILE, 'utf8')) as Record<string, number>;
+  const found: Record<string, string[]> = {};
+  for (const id of Object.keys(ambient)) (found[readCall(dir, id).testFile] ??= []).push(id);
+  const problems: string[] = [];
+  for (const f of new Set([...Object.keys(found), ...Object.keys(allowed)])) {
+    const n = found[f]?.length ?? 0;
+    const want = allowed[f] ?? 0;
+    if (n !== want) problems.push(`${f}: ${n} skipped call(s), ${want} allowed in ${AMBIENT_ALLOW_FILE}${found[f] ? ` (${found[f].join(', ')})` : ''}`);
+  }
+  return problems;
 }
 
 export function callIds(dir: string): string[] {

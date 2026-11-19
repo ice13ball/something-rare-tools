@@ -89,7 +89,7 @@ describe('replay case: leave-outs and repeated identifiers', () => {
     const asked = counted({ sheets: [a, part([['b1', 'ST1', 'Calanus finmarchicus', 4, 55.2, 3.3, '2023-04-06'], ['b2', 'ST2', 'Oithona similis', 1, 55.3, 3.4, null]], {}, 'South')] });
     expect(find(asked.result.findings, 'CONV-EVENT-DATE-MISSING')).toHaveLength(1);
     const left = counted({ sheets: [a, b] });
-    expect(left.passes).toBeGreaterThanOrEqual(2);
+    expect(left.passes).toBe(2);
     expect(find(left.result.findings, 'CONV-EVENT-DATE-MISSING')).toEqual([]);
     expect(find(left.result.findings, 'CONV-ROW-LEFT-OUT')[0].params).toMatchObject({ reason: 'no-event-date', count: 1 });
     expect(left.result.occurrences.map((o) => o.id)).not.toContain('b2:Oithona similis');
@@ -140,7 +140,7 @@ describe('replay case: several sheets of one book', () => {
     const asked = counted({ sheets: joinInputs(inputs, [request], []).sheets });
     expect(find(asked.result.findings, 'CONV-EVENT-DATE-MISSING')[0].params).toMatchObject({ joined: 'yes', description: 'Samples' });
     const left = counted({ sheets: joinInputs([resultsInput(file, 'Counts', { leaveOut: [{ reason: 'no-event-date', count: 1 }] }), inputs[1]], [request], []).sheets });
-    expect(left.passes).toBeGreaterThanOrEqual(2);
+    expect(left.passes).toBe(2);
     expect(find(left.result.findings, 'CONV-ROW-LEFT-OUT')[0].params).toMatchObject({ reason: 'no-event-date', count: 1 });
     expect(left.result.occurrences.map((o) => o.id)).toEqual(['T1:Calanus finmarchicus']);
     expect(left.result.ok).toBe(true);

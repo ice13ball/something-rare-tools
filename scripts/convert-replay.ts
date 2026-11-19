@@ -4,7 +4,7 @@
  * The capture-and-replay gate for /convert (docs/superpowers/specs/2026-11-19-convert-restructuring-design.md section 2). It runs on the vitest that is installed, through its own config
  * (vitest.convert-replay.config.ts), so the default `npx vitest run` never picks it up. Three modes, chosen by the variables:
  *
- *   record   CONVERT_RECORD=<dir> npx vitest run --config vitest.convert-record.config.ts      (npm run convert:record; on the BASE commit)
+ *   record   CONVERT_RECORD=<dir> npm run convert:record      (on the BASE commit; records, then marks. Never the raw vitest record config: replay refuses an unmarked recording)
  *   replay   CONVERT_REPLAY_BASE=<dir recorded on the base commit> npx vitest run --config vitest.convert-replay.config.ts
  *            Runs convert() of THIS checkout on every recorded input and fails, naming the call and the first differing field, when a result, a pass count, an exception or an archive differs.
  *   compare  CONVERT_REPLAY_BASE=<dir A> CONVERT_REPLAY_OTHER=<dir B>        two recordings against each other (the determinism check: the same commit recorded twice)
@@ -15,7 +15,7 @@
  */
 import { writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { compareDirs, coverageOf, formatCoverage, formatMismatches, markAmbient, replayDir } from './convert-replay/replay';
+import { checkAmbientAllowed, compareDirs, coverageOf, formatCoverage, formatMismatches, markAmbient, replayDir } from './convert-replay/replay';
 
 const base = process.env.CONVERT_REPLAY_BASE ?? '';
 const other = process.env.CONVERT_REPLAY_OTHER ?? '';
@@ -33,6 +33,9 @@ describe('convert capture-and-replay', () => {
       const r = await replayDir(base);
       console.log(`convert-replay: ${r.calls} recorded calls, ${r.replayed} replayed, ${r.archivesChecked} archives checked, ${r.ambient.length} skipped (depend on their test's own mocks), ${r.unreplayable.length} unreplayable, ${r.mismatches.length} differences`);
       expect(r.calls, `${base} holds no recorded call`).toBeGreaterThan(0);
+      if (r.ambient.length > 0) console.log(`convert-replay: skipped calls:\n  ${r.ambient.join('\n  ')}`);
+      const growth = checkAmbientAllowed(base);
+      expect(growth.length, `the skipped calls differ from scripts/convert-replay/ambient-allow.json:\n${growth.join('\n')}`).toBe(0);
       expect(r.mismatches.length, `${r.mismatches.length} of ${r.calls} calls differ from the recording:\n${formatMismatches(r.mismatches)}`).toBe(0);
     },
     1_800_000,
@@ -44,8 +47,9 @@ describe('convert capture-and-replay', () => {
       const r = await markAmbient(mark);
       console.log(`convert-replay: ${r.calls} calls, ${r.ambient.length} depend on their test's own mocks and are skipped by replay${r.ambient.length === 0 ? '' : `:\n${formatMismatches(r.ambient, 12)}`}`);
       expect(r.calls).toBeGreaterThan(0);
-      // a recording where much more than a few calls differ from itself is not a recording of convert() alone: stop rather than skip it silently
-      expect(r.ambient.length, 'too many calls differ from their own recording').toBeLessThan(Math.max(10, r.calls * 0.02));
+      // a call may be skipped only if its test file is on the committed list with exactly this count: a new skipped call is a decision, not an accident
+      const growth = checkAmbientAllowed(mark);
+      expect(growth.length, `the skipped calls differ from scripts/convert-replay/ambient-allow.json:\n${growth.join('\n')}`).toBe(0);
     },
     1_800_000,
   );

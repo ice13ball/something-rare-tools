@@ -48,11 +48,17 @@ behaviour unchanged; `/check` unchanged.
    (no step in this design changes the number of passes).
 A step whose diff needs any of 1-4 to be updated is not a refactor and goes back to Michal as a behaviour change.
 
-**How to use the convert replay gate.** Recordings live in the git-ignored `convert-recordings/`; never commit them. On the base commit run
-`CONVERT_RECORD=convert-recordings/base npm run convert:record` (records every `convert()` call of the suite, then marks the calls that depend on test mocks).
-On the head commit run `CONVERT_REPLAY_BASE=convert-recordings/base npm run convert:replay`; it must report 0 differences and exit 0. Two recordings of the
-same commit are byte-identical (`diff -rq`), so any difference is a behaviour change. Coverage: `CONVERT_REPLAY_COVERAGE=convert-recordings/base npx vitest run --config vitest.convert-replay.config.ts`.
-Known gaps: see the step-0 report (no recorded sheet holds both summary and kept-summary findings; 6 mock-dependent calls are skipped).
+**How to use the convert replay gate.** Recordings live in the git-ignored `convert-recordings/`; never commit them. The base must be a commit that already
+contains this gate (fa0e0bb or later). To record the base without leaving your branch:
+`git worktree add ../convert-base <base-sha> && (cd ../convert-base && npm ci && CONVERT_RECORD=$PWD/../convert-recordings-base npm run convert:record)`
+(use an absolute `CONVERT_RECORD`; `npm run convert:record` records every `convert()` call of the suite, then marks the calls that depend on test mocks, and takes
+a few minutes). On the head commit run `CONVERT_REPLAY_BASE=<the same absolute path> npm run convert:replay`; it must report 0 differences and exit 0. Replay refuses a
+recording without `ambient.json` (an unmarked one) and fails when the skipped calls differ in test file or number from `scripts/convert-replay/ambient-allow.json`
+(today 6: 3 in `test/convert/ledger.test.ts`, 3 in `test/convert/role-unconfirmed-off.test.ts`, both use mocks that the recorded input cannot carry); change that file only on purpose,
+in review. Two recordings of the same commit are byte-identical (`diff -rq`), so any difference is a behaviour change. Coverage:
+`CONVERT_REPLAY_COVERAGE=<dir> npx vitest run --config vitest.convert-replay.config.ts`. Record and replay in the same calendar year (a few date defaults read the clock).
+Known gaps: no recorded sheet holds both summary and kept-summary findings; the 6 mock-dependent calls are skipped and guarded by their own tests only; inputs with class instances or
+a `__proto__` key replay as plain objects; only the first four successful calls of each test file get their archive bytes compared.
 
 ## 3. Stages of convertPass (question 1)
 
