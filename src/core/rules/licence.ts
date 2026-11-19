@@ -40,6 +40,8 @@ import type { RuleSpec } from './spec';
  *   LIC-OBIS-LICENCE          licence, accepts, kind information only: the one recognised licence of the dataset (SPDX id) against accepts (the list /convert takes, comma-separated);
  *                                                    kind = 'accepted' | 'not-accepted'; never when no or several licences are recognised; not in the collection review
  *   LIC-FILES-HELD-BACK       files                  files of a Dataverse dataset under restricted access or an embargo (names)
+ *   LIC-ACCESS-HELD-BACK      kind, until?           a Zenodo or PANGAEA record that is not openly accessible: kind = embargoed | restricted | closed | login (plainVariants), until = the embargo date as
+ *                                                    the source gives it (embargoed only, only when it is still ahead; a lifted or past embargo says nothing); once per dataset
  */
 /** Appended to LIC-ADDED-CONDITIONS / LIC-EXTRA-TEXT when another string of the statement (identifier, Zenodo title) leaves something too (param otherRest). */
 const OTHER_REST: Record<'pl' | 'en' | 'de' | 'fr', string> = {
@@ -238,6 +240,57 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
       fr: `Certains fichiers de ce jeu de données sont en accès restreint ou sous embargo : {files}. L'accès est décidé par le dépôt, non par la licence des métadonnées ; l'évaluation de la licence ne porte donc que sur les fichiers ouverts. S'il s'agit des données, indiquez dans la description comment les obtenir.`,
     },
     technical: `{file}: restricted or embargoed files ({files}); the stated licence does not open them, so the licence result covers the open files only.`,
+  },
+  {
+    id: 'LIC-ACCESS-HELD-BACK',
+    category: 'A',
+    severity: 'warning',
+    exportPolicy: 'show',
+    params: ['kind'],
+    plain: {
+      pl: `Dostęp do tego rekordu jest ograniczony: repozytorium wydaje dane tylko wybranym osobom. Decyduje o tym repozytorium, nie licencja z metadanych, więc jej ocena dotyczy tylko tych, którzy dane dostaną. Jeśli to dane, napisz w opisie, jak je uzyskać.`,
+      en: `Access to this record is restricted: the repository gives the data only to selected people. The repository decides that, not the licence in the metadata, so the licence verdict applies only to those who get the data. If these are the data, state in the description how to obtain them.`,
+      de: `Der Zugang zu diesem Datensatz ist eingeschränkt: Das Repositorium gibt die Daten nur an ausgewählte Personen heraus. Das entscheidet das Repositorium, nicht die Lizenz der Metadaten; die Lizenzbewertung gilt nur für alle, die die Daten erhalten. Wenn es die Daten sind, geben Sie in der Beschreibung an, wie man sie erhält.`,
+      fr: `L'accès à ce jeu de données est restreint : le dépôt ne remet les données qu'à certaines personnes. C'est le dépôt qui en décide, non la licence des métadonnées ; son évaluation ne vaut que pour ceux qui obtiennent les données. S'il s'agit des données, indiquez dans la description comment les obtenir.`,
+    },
+    plainVariants: {
+      restricted: {
+        pl: `Dostęp do tego rekordu jest ograniczony: repozytorium wydaje dane tylko wybranym osobom. Decyduje o tym repozytorium, nie licencja z metadanych, więc jej ocena dotyczy tylko tych, którzy dane dostaną. Jeśli to dane, napisz w opisie, jak je uzyskać.`,
+        en: `Access to this record is restricted: the repository gives the data only to selected people. The repository decides that, not the licence in the metadata, so the licence verdict applies only to those who get the data. If these are the data, state in the description how to obtain them.`,
+        de: `Der Zugang zu diesem Datensatz ist eingeschränkt: Das Repositorium gibt die Daten nur an ausgewählte Personen heraus. Das entscheidet das Repositorium, nicht die Lizenz der Metadaten; die Lizenzbewertung gilt nur für alle, die die Daten erhalten. Wenn es die Daten sind, geben Sie in der Beschreibung an, wie man sie erhält.`,
+        fr: `L'accès à ce jeu de données est restreint : le dépôt ne remet les données qu'à certaines personnes. C'est le dépôt qui en décide, non la licence des métadonnées ; son évaluation ne vaut que pour ceux qui obtiennent les données. S'il s'agit des données, indiquez dans la description comment les obtenir.`,
+      },
+      embargoed: {
+        pl: `Ten rekord jest objęty embargiem: do jego końca dane nie są dostępne publicznie. Decyduje o tym repozytorium, nie licencja z metadanych, więc ocena licencji dotyczy dopiero danych po zakończeniu embarga.`,
+        en: `This record is under embargo: the data are not public until it ends. The repository decides that, not the licence in the metadata, so the licence verdict applies only once the embargo has ended.`,
+        de: `Dieser Datensatz steht unter Embargo: Bis zu dessen Ende sind die Daten nicht öffentlich. Das entscheidet das Repositorium, nicht die Lizenz der Metadaten; die Lizenzbewertung gilt daher erst nach dem Ende des Embargos.`,
+        fr: `Ce jeu de données est sous embargo : les données ne sont pas publiques avant sa fin. C'est le dépôt qui en décide, non la licence des métadonnées ; l'évaluation de la licence ne vaut donc qu'après la fin de l'embargo.`,
+      },
+      closed: {
+        pl: `Ten rekord ma zamknięty dostęp: repozytorium nie udostępnia danych. Decyduje o tym repozytorium, nie licencja z metadanych, więc ocena licencji nie znaczy, że dane można dostać. Jeśli to dane, napisz w opisie, jak się z nimi zapoznać.`,
+        en: `This record is closed: the repository does not release the data. The repository decides that, not the licence in the metadata, so the licence verdict does not mean the data can be obtained. If these are the data, state in the description how to see them.`,
+        de: `Dieser Datensatz ist geschlossen: Das Repositorium gibt die Daten nicht heraus. Das entscheidet das Repositorium, nicht die Lizenz der Metadaten; die Lizenzbewertung heißt nicht, dass man die Daten erhält. Wenn es die Daten sind, geben Sie in der Beschreibung an, wie man Einsicht erhält.`,
+        fr: `Ce jeu de données est fermé : le dépôt ne diffuse pas les données. C'est le dépôt qui en décide, non la licence des métadonnées ; l'évaluation de la licence ne signifie pas que les données sont obtenables. S'il s'agit des données, indiquez dans la description comment y accéder.`,
+      },
+      login: {
+        pl: `Dostęp do tego zbioru wymaga zalogowania: repozytorium wydaje dane tylko zalogowanym osobom. Decyduje o tym repozytorium, nie licencja z metadanych, więc jej ocena dotyczy tylko tych, którzy dane dostaną. Jeśli to dane, napisz w opisie, jak je uzyskać.`,
+        en: `Access to this dataset requires a login: the repository gives the data only to people who are signed in. The repository decides that, not the licence in the metadata, so the licence verdict applies only to those who get the data. If these are the data, state in the description how to obtain them.`,
+        de: `Der Zugang zu diesem Datensatz erfordert eine Anmeldung: Das Repositorium gibt die Daten nur an angemeldete Personen heraus. Das entscheidet das Repositorium, nicht die Lizenz der Metadaten; die Lizenzbewertung gilt nur für alle, die die Daten erhalten. Wenn es die Daten sind, geben Sie in der Beschreibung an, wie man sie erhält.`,
+        fr: `L'accès à ce jeu de données exige une connexion : le dépôt ne remet les données qu'aux personnes connectées. C'est le dépôt qui en décide, non la licence des métadonnées ; son évaluation ne vaut que pour ceux qui obtiennent les données. S'il s'agit des données, indiquez dans la description comment les obtenir.`,
+      },
+    },
+    plainIf: [
+      {
+        param: 'until',
+        plain: {
+          pl: `Embargo trwa do {until}.`,
+          en: `The embargo lasts until {until}.`,
+          de: `Das Embargo dauert bis {until}.`,
+          fr: `L'embargo dure jusqu'au {until}.`,
+        },
+      },
+    ],
+    technical: `{file}: the record is not openly accessible ({kind}); the stated licence does not open it.`,
   },
   {
     id: 'LIC-DATACITE-EMPTY',

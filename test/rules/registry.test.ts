@@ -49,6 +49,7 @@ const EXPECTED: Record<string, [Severity, string]> = {
   'LIC-RESTRICTION-CONFLICT': ['warning', 'A'],
   'LIC-DATACITE-EMPTY': ['warning', 'A'],
   'LIC-FILES-HELD-BACK': ['warning', 'A'],
+  'LIC-ACCESS-HELD-BACK': ['warning', 'A'],
   'LIC-MISMATCH': ['warning', 'A'],
   'LIC-TEXT-URI-CONFLICT': ['warning', 'A'],
   'LIC-ADDED-CONDITIONS': ['warning', 'A'],
@@ -140,9 +141,9 @@ describe('rule table', () => {
   it('has exactly the planned ids, each once, with the planned severity and category', () => {
     const ids = RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
-    // the 124 rules of the checks, then the converter's CONV-* rules (registered at the reveal of /convert; their own table is test/convert/rules.test.ts)
-    expect(ids.filter((id) => !id.startsWith('CONV-')).length).toBe(124);
-    expect(ids.length).toBe(124 + CONVERT_RULES.length);
+    // the 125 rules of the checks, then the converter's CONV-* rules (registered at the reveal of /convert; their own table is test/convert/rules.test.ts)
+    expect(ids.filter((id) => !id.startsWith('CONV-')).length).toBe(125);
+    expect(ids.length).toBe(125 + CONVERT_RULES.length);
     expect([...ids.filter((id) => !id.startsWith('CONV-'))].sort()).toEqual(Object.keys(EXPECTED).sort());
     for (const r of RULES.filter((x) => !x.id.startsWith('CONV-'))) {
       expect([r.severity, r.category], r.id).toEqual(EXPECTED[r.id]);
@@ -166,7 +167,7 @@ describe('rule table', () => {
       (Object.values(m).flat() as { id?: string }[]).map((r) => r.id ?? '');
     expect(idsOf(lic).every((id) => id.startsWith('LIC-'))).toBe(true);
     expect(idsOf(meta).every((id) => id.startsWith('META-'))).toBe(true);
-    expect(idsOf(lic).length).toBe(14);
+    expect(idsOf(lic).length).toBe(15);
     expect(idsOf(meta).length).toBe(8);
   });
 });

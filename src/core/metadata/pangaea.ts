@@ -8,6 +8,12 @@ import { buildStatement } from './licence';
 
 export const PANGAEA_NS = 'http://www.pangaea.de/MetaData';
 
+function accessOfLicenceText(t: string): MetadataRecord['access'] {
+  if (/\blogin\b/i.test(t)) return { kind: 'login' };
+  if (/\brestricted\s+access\b|\baccess\b[^.]{0,30}\brestricted\b|\brestricted\b[^.]{0,30}\baccess\b/i.test(t)) return { kind: 'restricted' };
+  return undefined;
+}
+
 /**
  * Parses the metadata XML of one PANGAEA dataset. Each `md:license` becomes a statement of source 'pangaea', field 'license':
  * the name is the shown text, the label ("CC-BY-3.0") a second reading of the same text, the URI the link — so the usual
@@ -54,6 +60,9 @@ export function parsePangaeaMetainfo(xml: string, label: string): MetadataRecord
       uri: text(child(lic, PANGAEA_NS, 'URI')),
     });
     if (s) rec.licences.push(s);
+    // PANGAEA states a closed dataset in the licence entry itself ("Login required", "Data access is restricted").
+    const access = accessOfLicenceText([name, id].filter((x): x is string => !!x).join(' '));
+    if (access && !rec.access) rec.access = access;
   }
   return rec;
 }

@@ -67,6 +67,17 @@ export function heldBackFinding(records: readonly MetadataRecord[], file: string
 }
 
 /**
+ * Zenodo / PANGAEA: the record is embargoed, restricted, closed or behind a login. The licence the record states does not open it, so the licence verdict
+ * applies to whoever can get the data. One finding per dataset; the first record that says so (an embargo date wins over a plain restriction). Shared like heldBackFinding.
+ */
+export function accessFinding(records: readonly MetadataRecord[], file: string): Finding | undefined {
+  const all = records.flatMap((r) => (r.access ? [r.access] : []));
+  const a = all.find((x) => x.kind === 'embargoed') ?? all[0];
+  if (!a) return undefined;
+  return makeFinding('LIC-ACCESS-HELD-BACK', { file, params: { kind: a.kind, ...(a.until ? { until: a.until } : {}) } });
+}
+
+/**
  * Category A — licence statements across ISO 19139, DataCite, Zenodo and PANGAEA records (Task 7).
  * A thin mapping from analyseLicences() (src/core/licence/analyse.ts) to findings; no licence logic lives here.
  * `unreadable`: the sources of this record that could not be loaded (their absence is not "no licence").
@@ -113,6 +124,8 @@ export function checkLicence(
 
   const held = heldBackFinding(records, file);
   if (held) out.push(held);
+  const access = accessFinding(records, file);
+  if (access) out.push(access);
 
   const emptyLinks = records.reduce((n, r) => n + r.distributionLinks.filter((l) => l.url === '').length, 0);
   if (emptyLinks > 0) out.push(makeFinding('META-EMPTY-LINK', { file, params: { count: emptyLinks } }));

@@ -128,6 +128,16 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     action:
       'If the held files are the data, say in the description how and when they can be obtained, or open them.',
   },
+  'LIC-ACCESS-HELD-BACK': {
+    checks:
+      'Whether the Zenodo record or the PANGAEA dataset is openly accessible. Whatever licence the metadata states, the repository decides who may get the data.',
+    fires:
+      'Once per dataset, when a Zenodo record is embargoed, restricted or closed (the older access_right field and the newer access block are both read), or a PANGAEA licence entry says the data need a login or are restricted. For an embargo the finding names the end date when the record gives one. An embargo whose date has already passed, a lifted embargo and open access say nothing. Dataverse files held back have their own rule, LIC-FILES-HELD-BACK.',
+    example:
+      'A Zenodo record has access_right "embargoed" and an embargo_date in the future.',
+    action:
+      'If the data are the restricted part, say in the description how and when they can be obtained, or open them.',
+  },
   'LIC-DATACITE-EMPTY': {
     checks:
       'The DOI registration record at DataCite states no licence. Harvesters read that record first, so the data look unlicensed to them.',

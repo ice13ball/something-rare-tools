@@ -173,6 +173,8 @@ export interface MetadataRecord {
   files?: { key: string; url: string; size?: number; mimetype?: string }[];
   /** Dataverse: files under restricted access or an embargo; the licence the record states does not open them. */
   heldBackFiles?: string[];
+  /** Zenodo / PANGAEA: the record is not openly accessible (a lifted or past embargo is not recorded); the licence the record states does not open it. */
+  access?: { kind: 'embargoed' | 'restricted' | 'closed' | 'login'; until?: string };
   resourceType?: string;
   doi?: string;
   landingUrl?: string;

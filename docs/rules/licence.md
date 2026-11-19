@@ -7,7 +7,7 @@ Regenerate with `UPDATE_RULES_DOC=1 npx vitest run test/rules/rules-docs-per-too
 
 The list is the rules the tool can raise, found by a static scan of its code, so a few may never fire in practice. Severity is error, warning or info. Every number a rule compares against is listed with its source. Each rule has four short parts: what it checks, when it fires, an invented example, and what the person can do.
 
-16 rules.
+17 rules.
 
 ## IN-RECORD-INACCESSIBLE — The record behind a link could not be opened, so its metadata and files were not read
 
@@ -186,6 +186,18 @@ Severity: warning
 **Example.** A Dataverse dataset has four files, and two of them are marked restricted.
 
 **What you can do.** If the held files are the data, say in the description how and when they can be obtained, or open them.
+
+## LIC-ACCESS-HELD-BACK — Whether the Zenodo record or the PANGAEA dataset is openly accessible
+
+Severity: warning
+
+**What it checks.** Whether the Zenodo record or the PANGAEA dataset is openly accessible. Whatever licence the metadata states, the repository decides who may get the data.
+
+**When it fires.** Once per dataset, when a Zenodo record is embargoed, restricted or closed (the older access_right field and the newer access block are both read), or a PANGAEA licence entry says the data need a login or are restricted. For an embargo the finding names the end date when the record gives one. An embargo whose date has already passed, a lifted embargo and open access say nothing. Dataverse files held back have their own rule, LIC-FILES-HELD-BACK.
+
+**Example.** A Zenodo record has access_right "embargoed" and an embargo_date in the future.
+
+**What you can do.** If the data are the restricted part, say in the description how and when they can be obtained, or open them.
 
 ## LIC-DATACITE-EMPTY — The DOI registration record at DataCite states no licence
 

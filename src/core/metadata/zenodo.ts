@@ -71,7 +71,32 @@ function extentOfDates(dates: unknown): MetadataRecord['temporalExtent'] {
   return unionExtents(found.map((d) => extentOfDate({ date: str(d.date), start: str(d.start), end: str(d.end) })));
 }
 
-export function parseZenodoRecord(json: unknown, label: string): MetadataRecord {
+/** Zenodo's access state: legacy `metadata.access_right` + `embargo_date`, InvenioRDM `access.record` / `access.files` / `access.embargo`. An embargo whose date has passed is open (Zenodo lifts it). */
+function accessOf(json: Obj, md: Obj, now: number): MetadataRecord['access'] {
+  const future = (d: string | undefined): boolean => {
+    const t = Date.parse(d ?? '');
+    return Number.isFinite(t) && t > now;
+  };
+  const right = str(md.access_right)?.toLowerCase();
+  if (right === 'embargoed') {
+    const until = str(md.embargo_date);
+    if (until === undefined) return { kind: 'embargoed' };
+    return future(until) ? { kind: 'embargoed', until } : undefined;
+  }
+  if (right === 'restricted' || right === 'closed') return { kind: right };
+  const a = isObj(json.access) ? json.access : undefined;
+  if (!a) return undefined;
+  const e = isObj(a.embargo) ? a.embargo : undefined;
+  if (e?.active === true) {
+    const until = str(e.until);
+    if (until === undefined) return { kind: 'embargoed' };
+    if (future(until)) return { kind: 'embargoed', until };
+  }
+  if (str(a.record)?.toLowerCase() === 'restricted' || str(a.files)?.toLowerCase() === 'restricted') return { kind: 'restricted' };
+  return undefined;
+}
+
+export function parseZenodoRecord(json: unknown, label: string, now: number = Date.now()): MetadataRecord {
   const rec: MetadataRecord = {
     source: 'zenodo',
     label,
@@ -126,6 +151,9 @@ export function parseZenodoRecord(json: unknown, label: string): MetadataRecord 
     const l = licence(`rights[${i}]`, str(r.id), str(r.link), localised(r.title));
     if (l) rec.licences.push(l);
   });
+
+  const access = accessOf(json, md, now);
+  if (access) rec.access = access;
 
   const bbox = bboxOfLocations(md.locations);
   if (bbox) rec.bbox = bbox;
