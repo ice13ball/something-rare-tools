@@ -632,7 +632,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     exportPolicy: 'show',
     params: ['count', 'column', 'from'],
     plain: {
-      pl: `{count} {+count:pusta komórka w kolumnie „{column}” została uzupełniona|puste komórki w kolumnie „{column}” zostały uzupełnione|pustych komórek w kolumnie „{column}” zostało uzupełnionych} z arkusza „{from}”.`,
+      pl: `{count} {+count:pusta komórka|puste komórki|pustych komórek} w kolumnie „{column}” {+count:została uzupełniona|zostały uzupełnione|zostało uzupełnionych} z arkusza „{from}”.`,
       en: `{count} blank {+count:cell|cells} in column "{column}" {+count:was|were} filled from sheet "{from}".`,
       de: `{count} {+count:leere Zelle|leere Zellen} in der Spalte „{column}“ {+count:wurde|wurden} aus dem Blatt „{from}“ ergänzt.`,
       fr: `{count} {+count:cellule vide|cellules vides} de la colonne « {column} » {+count:a été remplie|ont été remplies} à partir de la feuille « {from} ».`,

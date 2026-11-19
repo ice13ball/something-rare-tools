@@ -30,11 +30,6 @@ const KNOWN: Record<string, string[]> = {
     "ROW-RAGGED plain de plural token +lines has 3 forms, expected 2",
     "ROW-DATE-UNPARSEABLE plainTime pl plural token +lines has 2 forms, expected 3",
   ],
-  // REAL DEFECT (user-visible): the Polish plural token holds {column} and {from} inside its forms. TOKEN in i18n/plural.ts is /\{\+(\w+):([^{}]*)\}/, which cannot match a
-  // token that contains braces, so the whole token is printed raw: "3 {+count:pusta komórka w kolumnie „Depth” ...|...} z arkusza „Stations”." Fix: write the placeholders outside the token.
-  'REAL DEFECT: plural token containing placeholders is never rendered, the raw {+count:...} text is shown to the reader': [
-    "CONV-JOIN-FILLED plain pl stray brace after removing placeholders and plural tokens",
-  ],
   // The English text names the readings {first} and {second}; pl, de and fr name {isoFirst} and {isoSecond}. All four are declared params that the converter sets, so every language renders.
   // Whether English should show the ISO form too is a wording decision, not a rendering fault.
   'Placeholder names differ from English but all are declared and set (a wording difference)': [
@@ -48,7 +43,6 @@ const KNOWN: Record<string, string[]> = {
     "ROW-LONG-VALUE-SKIPPED plain pl English has plural token +count, this language has none for it (asymmetry)",
     "ROW-LONG-VALUE-SKIPPED plain fr English has plural token +count, this language has none for it (asymmetry)",
     "CONV-JOIN-PROPOSED plain pl English has plural token +covered, this language has none for it (asymmetry)",
-    "CONV-JOIN-FILLED plain pl English has plural token +count, this language has none for it (asymmetry)",
     "CONV-TAXON-SAME-EVENT plain de English has plural token +count, this language has none for it (asymmetry)",
     "CONV-TAXON-SAME-EVENT plain fr English has plural token +count, this language has none for it (asymmetry)",
     "CONV-SAMPLE-PER-ROW plain de English has plural token +occurrences, this language has none for it (asymmetry)",
