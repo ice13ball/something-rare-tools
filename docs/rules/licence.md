@@ -15,7 +15,7 @@ Severity: error
 
 **What it checks.** The record behind a link could not be opened, so its metadata and files were not read. The reason is a failed request to the host, and the finding names the host and the HTTP status code.
 
-**When it fires.** When a request for the record or one of its files gets an error status such as 403, 404 or 500, or a proxy error (429, 504, a 413 on a file that is not an archive), or when the answer is not JSON or not Dataverse metadata, or when a Dataverse version is not released. The wording has three forms: a server fault for status 500 to 599 (usually temporary), a record that may be private or unpublished for 403 and 404, and a neutral "try again later" for any other status, with no guess about the reason. Whatever the other sources of the same run gave is still used.
+**When it fires.** When a request for the record or one of its files gets an error status such as 403, 404 or 500, or a proxy error (429, 504, a 413 on a file that is not an archive), or when the answer is not JSON or is not the metadata of the source (Dataverse, PANGAEA, an ISO record from GeoNetwork), or when DataCite, GBIF or OBIS do not know the DOI or id (reported as 404), or when a Dataverse version is not released. The wording has three forms: a server fault for status 500 to 599 (usually temporary), a record that may be private or unpublished for 403 and 404, and a neutral "try again later" for any other status, with no guess about the reason. Whatever the other sources of the same run gave is still used.
 
 **Example.** A link to a repository record returns status 404; the finding reads that the record on that host could not be opened (error 404).
 
@@ -27,9 +27,9 @@ Severity: warning
 
 **What it checks.** A link points to a host the tool is not allowed to open, so nothing was fetched from it.
 
-**When it fires.** When a link in a record, or one the person pasted, names a host that is not on the tool's list of data hosts. Only the host name is reported, never the whole address.
+**When it fires.** When a link the person pasted names a host that is not on the tool's list of data hosts. From a record, only the data links of a GeoNetwork record that end in a table extension are looked at, one finding per host. It also fires when a download from a listed host is redirected to a host that is not listed, and for a pasted DOI whose landing page is off the list. Only the host name is reported, never the whole address.
 
-**Example.** A record links its data to a personal file-sharing site that is not on the list; the finding names that site and nothing is downloaded.
+**Example.** A GeoNetwork record has a distribution link to https://files.example.invalid/share/data.csv; the host files.example.invalid is not on the list, so it is named and nothing is downloaded.
 
 **What you can do.** Download the file from that site yourself and add it to the tool. The tool does not widen its list of hosts for one run. In /convert this finding is only shown and never stops the export.
 
@@ -39,7 +39,7 @@ Severity: warning
 
 **What it checks.** The browser could not download from a host, so the file was not read. This is a limit of the browser mode, not a fault in the data.
 
-**When it fires.** In browser mode, when a download fails before any answer arrives because the host does not allow the request (a cross-origin or content-security rule) or the network failed. It also appears in server mode when the page's own fetch route could not be reached, or when a body that is not an archive was cut off midway. The finding names the host.
+**When it fires.** In browser mode, when a download fails before any answer arrives because the host does not allow the request (a cross-origin or content-security rule) or the network failed. It also appears in server mode when the page's own fetch route could not be reached, or when a body from a host that is not a listed IPT server was cut off midway (at an IPT server it is IN-FETCH-INTERRUPTED). The finding names the host.
 
 **Example.** A link to a data file on a repository that sends no cross-origin permission; the browser refuses and the finding names the repository.
 
@@ -51,7 +51,7 @@ Severity: warning
 
 **What it checks.** A host did not start to answer in time, so the browser stopped waiting and the file was not read.
 
-**When it fires.** In browser mode, when a download receives no response within 30 seconds. A slow body that has already started is not a timeout: a download cut off after it began is IN-FETCH-INTERRUPTED. The finding names the host.
+**When it fires.** In browser mode, when a download receives no response within 30 seconds. A download that starts and is then cut off is not a timeout: at a listed IPT server it is IN-FETCH-INTERRUPTED, at another host IN-FETCH-BLOCKED. In server mode this rule does not occur. The finding names the host.
 
 **Example.** A repository server is overloaded and sends nothing for 30 seconds; the request is abandoned and the host is named.
 
@@ -63,7 +63,7 @@ Severity: warning
 
 **What it checks.** A licence statement has both a text and a link, and they do not agree. Either one is wrong, or the text is not about the licence at all.
 
-**When it fires.** For one statement that has a link, when the text itself offers several licences, or the text and the link read as different licences, or a text with no version names only a licence family against the link of another family, or the link is a licence link the tool has no identifier for while the text names one, or the text names no licence and says more than plain Open Access next to a licence link. For DataCite and Zenodo it also fires when the text is an exact licence name but the link is no licence link and no access value. A text that is empty, plain Open Access or Public Domain next to a CC0 link is neutral and does not fire it. One finding per statement, with the licence read from the text and from the link, a dash meaning not recognised.
+**When it fires.** For one statement that has a link, when the text itself offers several licences, or the text and the link read as different licences, or a text with no version names only a licence family against the link of another family, or the link is a licence link the tool has no identifier for while the text names one, or the text names no licence and says more than plain Open Access next to a licence link. For DataCite and Zenodo it also fires when the text is an exact licence name (the full title or identifier, not an abbreviation such as CC BY 4.0, which stays LIC-FREE-TEXT) but the link is no licence link and no access value. A text that is empty, plain Open Access next to any recognised licence link, or Public Domain next to a CC0 link, is neutral and does not fire it. One finding per statement, with both readings, a dash meaning not recognised.
 
 **Example.** The text says CC BY 4.0 and the link points to the page of the CC BY-NC 4.0 licence.
 
@@ -97,7 +97,7 @@ Severity: warning
 
 **What it checks.** A licence text names a licence and also says something else. The extra words may change the licence, so the statement is not read as the standard licence until a person has looked.
 
-**When it fires.** For a statement whose text names a licence, when the readings of text and link agree and something is left over after the licence name and the neutral wording are removed, and the leftover has no restriction marker. A leftover with a restriction marker is LIC-ADDED-CONDITIONS instead. The finding quotes the leftover, and the leftover of another string of the same statement (identifier or Zenodo title) is added when there is one.
+**When it fires.** For a statement whose text names a licence, when the readings of text and link agree and something is left over after the licence name and the neutral wording are removed, and the leftover has no restriction marker. It counts only next to a name the tool turns into an identifier or a family; next to one it has no identifier for (GNU GPL), such a leftover gives LIC-FREE-TEXT. A leftover with a restriction marker is LIC-ADDED-CONDITIONS instead. The finding quotes the leftover, and the leftover of another string of the same statement (identifier or Zenodo title) is added when there is one.
 
 **Example.** The text reads CC BY 4.0, please contact the data manager.
 

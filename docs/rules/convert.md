@@ -15,7 +15,7 @@ Severity: error · Export policy: block
 
 **What it checks.** The table is laid out in a way the tool cannot read as one header row and one row per sample, so it was not read.
 
-**When it fires.** When the layout reader finds data that is transposed (variables or species in rows, samples in columns), a header spread over several rows (more than half of the header cells empty in a table of three or more columns, or a first data row of units that was not folded into the header), a row above the names that holds footnote markers, a table with no rows, a workbook with no sheet of coordinates or measurements, or no table at all. The finding gives the reason and, for a workbook, the sheet.
+**When it fires.** When the layout reader finds data that is transposed (variables in rows, samples in columns; the first column must hold at least two names the tool knows as columns, such as Latitude or Temperature; species in rows are not detected here, only in /convert), a header spread over several rows (more than half of the header cells empty in a table of three or more columns, or a first data row of units that was not folded into the header), a row above the names that holds footnote markers, a table with no rows (only when every sheet is empty), a workbook with no sheet of coordinates or measurements, or no table at all. In /convert a transposed sheet is reported as CONV-SHEET-TRANSPOSED instead. The finding gives the reason and, for a workbook, the sheet.
 
 **Example.** A sheet lists the variables down the first column and the samples across the top; the finding says the data is transposed.
 
@@ -27,7 +27,7 @@ Severity: info · Export policy: accept
 
 **What it checks.** The file is not saved as UTF-8, so the tool read it as an 8-bit Central European or Western code page. The letters with accents may be wrong if that guess is wrong.
 
-**When it fires.** When the bytes are not valid UTF-8 and all three 8-bit readings the tool tries (windows-1250, ISO-8859-2 and windows-1252) give the same text. The file is read as windows-1250 when one of the bytes 8A, 9A, 8C, 9C, 8F or 9F occurs, otherwise as ISO-8859-2; the finding names the reading used. Plain ASCII is valid UTF-8 and never raises it. If the readings differ, IN-ENCODING-AMBIGUOUS is raised instead. A UTF-16 file or a UTF-8 file with a BOM is read without a finding.
+**When it fires.** When the bytes are not valid UTF-8 and all three 8-bit readings the tool tries (windows-1250, ISO-8859-2 and windows-1252) give the same text. The file is read as ISO-8859-2 (a byte 8A, 9A, 8C, 9C, 8F or 9F makes the readings differ, so that case is IN-ENCODING-AMBIGUOUS, read as windows-1250). Plain ASCII is valid UTF-8 and never raises it. If the readings differ, IN-ENCODING-AMBIGUOUS is raised instead. A UTF-16 file or a UTF-8 file with a BOM is read without a finding.
 
 **Example.** A file that is not valid UTF-8 and whose only non-ASCII byte is E9 in caf followed by that byte: all three readings give the same letter, and the file is read as ISO-8859-2.
 
@@ -63,7 +63,7 @@ Severity: warning · Export policy: block
 
 **What it checks.** In one column of a file that uses a decimal comma, every number with a comma has exactly three digits after it, so the comma may be a decimal comma (1,250 is one and a quarter) or a thousands separator (1,250 is one thousand two hundred fifty). The file does not say which.
 
-**When it fires.** Per column of a decimal-comma file, only when every number with a comma has exactly three digits after it. A single value such as 1.250,5 settles the column (with both separators the last is the decimal), and so does a value with one, two, or four or more decimals; then no finding is raised. In 1,250,000 the comma repeats, so it is a thousands mark; the question stays open for the other values and the finding names that cell. The finding gives the column, the number of cells, the first such value and both readings. The cells were read as decimals.
+**When it fires.** Per column of a decimal-comma file, only when every number with a comma has exactly three digits after it. A single value such as 1.250,5 settles the column (with both separators the last is the decimal), and so does a value with one, two, or four or more decimals, a value with a leading zero (0,125) or with four or more digits before the comma (1234,500), since such a number cannot be a thousands group; then no finding is raised. In 1,250,000 the comma repeats, so it is a thousands mark; the question stays open for the other values and the finding names that cell. The finding gives the column, the number of cells, the first such value and both readings. The cells were read as decimals.
 
 **Example.** A column of depths in metres holds 1,250 and 2,500; read as decimals they are 1.25 and 2.5, read as thousands 1250 and 2500.
 
@@ -87,9 +87,9 @@ Severity: info · Export policy: show
 
 **What it checks.** A second header row of units was read: the line under the column names holds only units, so it is not data. The units were added to the column names.
 
-**When it fires.** When the row directly under the header (or under a row of statistic labels) has only unit cells, at least two of which go into a header, every cell has a name above it, and the numbers below fit the units. A unit that disagrees with the one the name already gives means the row is not folded. The finding gives the line and the first changed name, for example a column now named a \[h\]. The line numbers in the report stay the file's own.
+**When it fires.** When the row directly under the header (or under a row of statistic labels) has only unit cells, at least two of its cells are units (a unit the header already states counts, so a single name may be the only one that changes), every cell has a name above it, and the numbers below fit the units. A unit that disagrees with the one the name already gives means the row is not folded. The finding gives the line and the first changed name, for example a column now named a \[h\]. The line numbers in the report stay the file's own.
 
-**Example.** A header latitude, longitude over a row degrees_north, degrees_east: the names become latitude \[degrees_north\] and longitude \[degrees_east\].
+**Example.** A header latitude, longitude over a row degrees_north, degrees_east, then rows of numbers: the names become latitude \[degrees_north\] and longitude \[degrees_east\].
 
 **What you can do.** Nothing to fix. If you prefer a single header row, put the unit into the column name. In /convert this finding is only shown and never stops the export.
 
@@ -99,9 +99,9 @@ Severity: info · Export policy: show
 
 **What it checks.** A row of units under the header was recognised and skipped. The column names already carried the same units, so no name was changed.
 
-**When it fires.** When the row under the header holds only units and every column it names has the same unit in its own header too, for instance depth \[m\] over m. The row is not a data row and the report keeps the file's own line numbers. The finding gives the line.
+**When it fires.** When the row under the header holds only units and every column it names has the same unit in its own header too, for instance depth \[m\] over m. It needs numbers under at least two of the units and at least one data row below the units row; otherwise the row is not recognised and nothing is reported. The row is not a data row and the report keeps the file's own line numbers. The finding gives the line.
 
-**Example.** The header holds temperature \[C\] and depth \[m\] and the next line holds C and m.
+**Example.** The header holds temperature \[°C\] and depth \[m\], the next line holds °C and m, and rows of numbers follow.
 
 **What you can do.** Nothing to fix. Remove the second row if you want a plain single header. In /convert this finding is only shown and never stops the export.
 
@@ -163,7 +163,7 @@ Severity: warning · Export policy: show
 
 **What it checks.** The Event(s) block of a PANGAEA file gives a position or date, but no position was copied into the table (a date may still be), and the table has no position of its own.
 
-**When it fires.** When the table lacks the position and the block cannot give it: several events are listed but the table has no Event column to say which row belongs to which, or the event's position is a track (start and end differ) and not a point, which also applies to a single event. The finding gives the number of events and which of the two reasons applies.
+**When it fires.** When the table lacks the position or the date and the block cannot give it: several events are listed but the table has no Event column to say which row belongs to which, or the event's position is a track (start and end differ) and not a point, which also applies to a single event; the track reason is given only when none of the listed events is a point. The finding gives the number of events and which of the two reasons applies.
 
 **Example.** A block lists three stations and the table has no Event column; nothing is borrowed.
 
@@ -175,7 +175,7 @@ Severity: warning · Export policy: show
 
 **What it checks.** Some rows of a PANGAEA table have no matching event in the Event(s) block of the file header, so nothing was taken for them.
 
-**When it fires.** When the table has an Event column, for each row whose Event cell is empty, names an event that is not listed, names an event listed twice, or names an event with no position or date (also for a single event lacking the value). The finding gives the number of rows and their lines.
+**When it fires.** When the table has an Event column, for each row whose Event cell is empty, names an event that is not listed, names an event listed twice, or names an event with no position or date . With one event the Event column is not consulted: every row takes that event, and a single event with neither position nor date gives no finding. The finding appears only when at least one column was added, and gives the number of rows and their lines.
 
 **Example.** Rows 12 and 13 say station 7, and the block lists stations 1 to 6.
 
@@ -199,7 +199,7 @@ Severity: error · Export policy: block
 
 **What it checks.** A latitude lies outside the range of the globe, -90 to 90 degrees. No place has such a latitude, so the value is a typing error, a swapped column or a unit mistake.
 
-**When it fires.** For every row of a sheet whose latitude column holds a number below -90 or above 90. One finding per sheet lists the lines and shows the first value as written. Text in the cell is not judged here, that is ROW-NON-NUMERIC.
+**When it fires.** For every row of a sheet whose latitude column holds a number below -90 or above 90. One finding per sheet lists the lines and shows the first value as written. Text in the cell is not judged here, that is ROW-NON-NUMERIC; so is a value with a hemisphere letter (95.5 N) or in degrees and minutes. Only a plain number is judged here.
 
 **Example.** A latitude column of a plankton table reads 54.31, 54.33, 154.35 on lines 5, 6 and 7. Line 7 is reported with the value 154.35, a digit typed twice.
 
@@ -220,7 +220,7 @@ Severity: error · Export policy: block
 
 **What it checks.** A longitude lies outside -180 to 180 degrees after the tool has tried the 0 to 360 scale. No place has such a longitude, so the value is a typing error, a swapped column or a unit mistake.
 
-**When it fires.** For every row whose longitude is a number below -180 or above 360 (values from 180 to 360 are first read on the 0 to 360 scale and only noted as ROW-LON-360). One finding per sheet lists the lines and the first value as written.
+**When it fires.** For every row whose longitude is a number below -180 or above 360 (values from 180 to 360 are first read on the 0 to 360 scale and only noted as ROW-LON-360). One finding per sheet lists the lines and the first value as written. Only a plain number is judged: a value with a hemisphere letter (200 W) or in degrees and minutes is ROW-NON-NUMERIC.
 
 **Example.** A longitude column holds 18.62, 18.65 and 1865.0 on lines 10, 11 and 12. Line 12 is reported: a decimal point was lost.
 
@@ -293,7 +293,7 @@ Severity: error · Export policy: block
 
 **What it checks.** A row has more or fewer values than the header has columns. Its values are shifted against the header, so no cell of the row can be trusted.
 
-**When it fires.** When the file is read: for each line whose field count differs from the header field count. The finding gives the expected count and the count of the first listed line. The rows are kept as found and are not realigned.
+**When it fires.** When the file is read: for each line whose field count differs from the header field count. The finding gives the expected count and the count of the first listed line. The rows are kept as found and are not realigned. Not raised when at least 95 percent of the rows (3 rows or more) are wider than the header and the extra cells hold values (IN-HEADER-SHORT extends the header instead), nor when every row only ends with an empty extra field (a trailing delimiter). Never raised for a workbook sheet.
 
 **Example.** A header has 8 columns. Line 31 has 9 values because a comment contains an unquoted comma. Line 31 is reported with expected 8 and found 9.
 
@@ -307,7 +307,7 @@ Severity: warning · Export policy: accept
 
 **When it fires.** For a cell of a numeric column (a coordinate, a depth, a measurement) that is neither a number nor one of the recognised missing-value marks (empty, NA, N/A, NaN, nd, n.d., -, --, null). One finding per column lists the lines and an example. Thousands separators are not accepted, 1,234.5 is text unless the file uses decimal commas.
 
-**Example.** A depth column holds 10, 20, below detection, 40. The cell below detection on line 3 is reported with that text.
+**Example.** A depth column holds 10, 20, below detection, 40. The cell below detection on line 4 is reported with that text.
 
 **What you can do.** Replace the text with a number, or empty the cell. In /convert this finding does not block the export, but it needs your acceptance, one tick for the rule; the cell is not written as a number.
 
@@ -319,7 +319,7 @@ Severity: warning · Export policy: show
 
 **When it fires.** For a numeric cell whose letters and digits, without separators, are only the letters NA repeated, and which is not one of the standard marks. One finding per column lists the lines and an example.
 
-**Example.** A salinity column holds 33.1, NANA, 33.4. NANA on line 2 is read as missing and reported.
+**Example.** A salinity column holds 33.1, NANA, 33.4. NANA on line 3 is read as missing and reported.
 
 **What you can do.** Use one consistent mark, or an empty cell. In /convert this finding is only shown, and the cell is treated as missing.
 
@@ -329,7 +329,7 @@ Severity: warning · Export policy: accept
 
 **What it checks.** One station name appears at positions that differ by a typed digit, swapped axes or a sign. A station is one place, so one of the positions is probably wrong.
 
-**When it fires.** For rows of one station name, compared within one cruise or, without a cruise column, within one calendar year, when two positions differ in one of three ways. A typed digit: one coordinate differs by a whole number of degrees and the other keeps its whole degree; the shifted coordinate needs two written decimals (one inside a cruise, not .0 or .5) and there is no distance limit. Exchanged axes: each position is the other with latitude and longitude swapped. A sign: as written the positions are at least 100 km apart, and with one sign flipped they are within 50 km and at least ten times closer. Placeholder names such as unknown do not count.
+**When it fires.** For rows of one station name, compared within one cruise or, without a cruise column, within one calendar year, when two positions differ in one of three ways. A typed digit: one coordinate differs by a whole number of degrees and the other keeps its whole degree; the shifted coordinate needs two written decimals (one inside a cruise, not .0 or .5) and there is no distance limit. Exchanged axes: each position is the other with latitude and longitude swapped. A sign: as written the positions are at least 100 km apart, and with one sign flipped they are within 50 km and at least ten times closer. Placeholder names such as unknown do not count. Among rows with neither a cruise nor a date a typed digit is not looked for; such a station gets ROW-STATION-SPREAD instead.
 
 **Example.** Station A3 is at 76.9 N 15.5 E on 9 rows and at 76.9 N -15.5 E on 14 rows. The finding lists both positions and says that the longitude differs only by its sign.
 
@@ -341,7 +341,7 @@ Severity: info · Export policy: show
 
 **What it checks.** One station name has positions more than 10 km apart. A station is usually one place, but a name that stands for an area, a transect or a cruise can legitimately span more.
 
-**When it fires.** When the largest distance between the positions of one station name, within one cruise or one calendar year, is above 10 km, and either it is not above 1000 km or the name is an expedition or cruise label, or a generic label such as Sta. 1 with no cruise or date to anchor it; those stay a note even above 1000 km. The finding gives the distance rounded to km and the positions. It is an information note.
+**When it fires.** When the largest distance between the positions of one station name, within one cruise or one calendar year, is above 10 km, and either it is not above 1000 km or the name is an expedition or cruise label, or a generic label such as Sta. 1 with no cruise or date to anchor it; those stay a note even above 1000 km. Not raised when a pair of positions matches ROW-STATION-MOVED (only that is raised); placeholder names such as unknown and positions with latitude equal to longitude are skipped. The finding gives the distance rounded to km and the positions. It is an information note.
 
 **Example.** Station T1 has positions 38 km apart, because the name was used for every point of a transect. The note gives 38 km.
 
@@ -365,9 +365,9 @@ Severity: warning · Export policy: block
 
 **What it checks.** A date cell cannot be read as a date. Without a date the event cannot be placed in time, so it is lost from the output.
 
-**When it fires.** For a cell of the date column that is none of the accepted forms: ISO 8601, YYYY/MM/DD, DD.MM.YYYY, an unambiguous DD/MM/YYYY, YY-MM-DD, a four-digit year, YYYYMMDD in a column that is the date, or an Excel serial number. One finding per sheet lists the lines and an example.
+**When it fires.** For a cell of the date column that is none of the accepted forms: ISO 8601, YYYY/MM/DD, DD.MM.YYYY, an unambiguous DD/MM/YYYY, YY-MM-DD, a four-digit year, YYYYMMDD in a column that is the date, or an Excel serial number. Also raised for a time cell that cannot be read as a time of day, and for Year, Month and Day columns that do not make a date. One finding per sheet lists the lines and an example.
 
-**Example.** A date column holds 2021-06-14, summer 2021 and 14 Jun 2021. The text summer 2021 on line 3 is reported.
+**Example.** A date column holds 2021-06-14, summer 2021 and 2021-06-16. The text summer 2021 on line 3 is reported.
 
 **What you can do.** Write the date in ISO form, YYYY-MM-DD. In /convert this finding blocks the export, except for the cells you have declared by the date order question, which it removes.
 
@@ -406,9 +406,9 @@ Severity: warning · Export policy: show
 
 **What it checks.** The dates include a year that the dataset itself does not claim. The label, the file name, the title or the temporal extent name other years, so either the claim or the row is wrong.
 
-**When it fires.** For rows whose year is not among the years found in the label, the file name, the record title or the temporal extent. A range such as 1994-2019 names every year in it; a number followed by a unit such as m is not read as a year. Only years between 1900 and 2100 count. It does nothing when the dataset names no year.
+**When it fires.** For rows whose year is not among the years found in the label, the file name, the record title or the temporal extent. A range such as 1994-2019 names every year in it; a number followed by a unit such as m is not read as a year. Only years between 1900 and 2100 count. It does nothing when the dataset names no year. A date later than today is ROW-DATE-FUTURE only, not here.
 
-**Example.** The title says Winter cruise 2018. Two rows are dated 2081-02-11, a swapped digit pair. The two lines are reported.
+**Example.** The title says Winter cruise 2018. Two rows are dated 2008-02-11, a mistyped digit. The two lines are reported.
 
 **What you can do.** Correct the date, or correct the title or the temporal extent if the data really span other years. In /convert this finding is only shown.
 
@@ -430,7 +430,7 @@ Severity: info · Export policy: accept
 
 **What it checks.** A date written with two-digit parts, NN-NN-NN, was read with the century inferred. The century is a guess and can be wrong for old data.
 
-**When it fires.** Once per column, when the order of the cells is fixed, because some cell rules the other readings out or the order was declared. The century rule: a two-digit year up to the current year plus one is 20xx, any other is 19xx. The finding gives the interpreted date and the order read (ymd, dmy or mdy). One acceptance of the rule covers the century in every column it names.
+**When it fires.** Once per column, when the order of the cells is fixed, because some cell rules the other readings out or the order was declared. The century rule: a two-digit year up to the current year plus one is 20xx, any other is 19xx. The finding gives the interpreted date and the order read (ymd, dmy or mdy). Also raised when several orders fit but every cell gives the same date in each (12-12-12); the order then lists all of them. One acceptance of the rule covers the century in every column it names.
 
 **Example.** The column holds 98-07-25. 98 cannot be a day or a month, so it is read as year-month-day, 1998-07-25, with the century 19xx. If the cruise was in 2098 the century is wrong.
 
@@ -492,7 +492,7 @@ Severity: warning · Export policy: block
 
 **When it fires.** Once per sheet and column, for a cell exactly equal to one of the three numbers, in the depth column (or the two Darwin Core depth bounds) and in every variable. The cell is kept as written and is left out of the depth direction, ROW-DEPTH-RANGE and CHEM-RANGE.
 
-**Example.** A salinity column holds 33.1, -999 and 33.4. The -999 on line 2 is kept as written, left out of the range checks, and reported.
+**Example.** A salinity column holds 33.1, -999 and 33.4 on lines 2 to 4, under a header on line 1. The -999 on line 3 is kept as written, left out of the range checks, and reported.
 
 **What you can do.** Empty such cells in the source if they mean missing. In /convert this finding blocks the export until you answer, per column, whether the code is missing or a real value; on missing the cells are left empty and listed.
 
@@ -502,7 +502,7 @@ Severity: info · Export policy: show
 
 **What it checks.** A coordinate was written in degrees and minutes, or degrees, minutes and seconds, as text. The tool converted it to decimal degrees.
 
-**When it fires.** For each coordinate cell of that form; the finding lists the lines and the conversion. It is a note that a conversion took place.
+**When it fires.** Once for each coordinate column that holds a cell of that form; the finding names the column and one example cell and lists no lines. It is a note that a conversion took place.
 
 **Example.** The cell 54 30.5 N becomes 54.508333. The note shows both.
 
@@ -665,7 +665,7 @@ Severity: warning · Export policy: show
 
 **What it checks.** Text shows the damage of a double encoding: letters such as accented names appear as two odd characters. The file was decoded with the wrong encoding at some stage.
 
-**When it fires.** When a cell contains the pair U+00C3 or U+00C2 followed by a character from U+0080 to U+00BF, as in the damaged form of an accented letter. A lone U+00C3 or U+00C2 is not matched, nor are other double-encoded forms. The finding gives the count of the pairs.
+**When it fires.** When a cell contains the pair U+00C3 or U+00C2 followed by a character from U+0080 to U+00BF, as in the damaged form of an accented letter. A lone U+00C3 or U+00C2 is not matched, nor are other double-encoded forms. The finding is one per sheet, reads the header row as well, names the columns and gives the count of cells, not pairs. Not raised for a file already reported as IN-ENCODING-FALLBACK or IN-ENCODING-AMBIGUOUS, because there the pair comes from the fallback decoding.
 
 **Example.** A station called Sao Joao appears as the damaged form of Sao Joao with accents, two odd characters in place of each accented letter. The cell is reported.
 
@@ -677,7 +677,7 @@ Severity: error · Export policy: block
 
 **What it checks.** A Darwin Core table has no column for a term that OBIS requires. Without the required terms the records cannot be published in OBIS, so the file is not ready however good its other columns are.
 
-**When it fires.** Only on Darwin Core input: an Archive, or a table with at least three distinct Darwin Core terms in its header (spelled exactly, capitals count) plus one of occurrenceID, eventID, parentEventID, scientificName, scientificNameID, taxonID, basisOfRecord or occurrenceStatus. With eventID or parentEventID and no occurrence term it is an Event core, otherwise an Occurrence core. Always required: eventDate, decimalLatitude, decimalLongitude and an identifier (eventID for Event; occurrenceID or eventID for Occurrence; an Archive core id may stand for it). Occurrence also needs scientificName, occurrenceStatus and basisOfRecord. An occurrence table with an eventID column not blank in every row is the occurrence side of an event and occurrence pair, and then the date and coordinates are not required of it. Sources: obistools check_fields, OBIS Manual.
+**When it fires.** Only on Darwin Core input: an Archive, or a table with at least three distinct Darwin Core terms in its header (spelled exactly, capitals count) plus one of occurrenceID, eventID, parentEventID, scientificName, scientificNameID, taxonID, basisOfRecord or occurrenceStatus. With eventID or parentEventID and no occurrence term it is an Event core, otherwise an Occurrence core. Always required: eventDate, decimalLatitude, decimalLongitude and an identifier (eventID for Event; occurrenceID or eventID for Occurrence; an Archive core id may stand for it). Occurrence also needs scientificName, occurrenceStatus and basisOfRecord. An occurrence table with an eventID column with a value in at least one row is the occurrence side of an event and occurrence pair, and then the date and coordinates are not required of it. Sources: obistools check_fields, OBIS Manual.
 
 **Example.** A table with the columns occurrenceID, scientificName, eventDate, decimalLatitude and decimalLongitude but no occurrenceStatus and no basisOfRecord column is reported as missing occurrenceStatus and basisOfRecord.
 
@@ -763,7 +763,7 @@ Severity: error · Export policy: block
 
 **What it checks.** A parentEventID points at an event that is not in the eventID column of the same table. The hierarchy of events then has a broken link, and a reader cannot rebuild the cruise, station and sample structure.
 
-**When it fires.** Only on Darwin Core input read as an Event core that has a parentEventID column. Every non-blank parentEventID that matches no eventID of the table is listed with its lines, and the finding counts the different missing parents. It does not run when the archive was read only in part (the first 200000 rows, see IN-DWCA-PARTIAL), because the parent may be in a row that was not read. Sources: obistools check_eventids and Biocheck.
+**When it fires.** Only on Darwin Core input read as an Event core that has a parentEventID column and an eventID column (in an archive the core id column); without one only DWC-TERM-MISSING is raised. Every non-blank parentEventID that matches no eventID of the table is listed with its lines, and the finding counts the different missing parents. It does not run when the archive was read only in part (the first 200000 rows, see IN-DWCA-PARTIAL), because the parent may be in a row that was not read. Sources: obistools check_eventids and Biocheck.
 
 **Example.** An event table whose parentEventID cells name CRUISE-A on three lines, while no eventID is CRUISE-A, is reported.
 
@@ -780,7 +780,7 @@ Severity: error · Export policy: block
 
 **What it checks.** The eventID and parentEventID columns form a circle: an event is its own ancestor. A hierarchy that never reaches a top event cannot be read, and GBIF flags it as an infinite lineage.
 
-**When it fires.** Only on Darwin Core input read as an Event core that has a parentEventID column. Each eventID is followed to its parent, then to that parent, and so on; every row on a circle is listed and counted. A row whose parentEventID equals its own eventID is a circle of one. When an eventID repeats, its first non-blank parent is used. The search visits each event once. It does not run when the archive was read only in part (the first 200000 rows, see IN-DWCA-PARTIAL). Source: the GBIF issue PARENT_EVENT_INFINITE_LINEAGE.
+**When it fires.** Only on Darwin Core input read as an Event core that has a parentEventID column and an eventID column (in an archive the core id column); without one only DWC-TERM-MISSING is raised. Each eventID is followed to its parent, then to that parent, and so on; every row on a circle is listed and counted. A row whose parentEventID equals its own eventID is a circle of one. When an eventID repeats, its first non-blank parent is used. The search visits each event once. It does not run when the archive was read only in part (the first 200000 rows, see IN-DWCA-PARTIAL). Source: the GBIF issue PARENT_EVENT_INFINITE_LINEAGE.
 
 **Example.** Event A has parent B, B has parent C and C has parent A: all three rows are reported.
 
@@ -920,7 +920,7 @@ Severity: warning · Export policy: accept
 
 **What it checks.** Some columns have a taxon, quantity, date, latitude or longitude role that the converter proposed and the file does not state by name. A stated name means an exact Darwin Core term, an exact vocabulary entry, a unit in the header or a PANGAEA geocode.
 
-**When it fires.** Once per sheet when at least one column has such a proposed role. A column whose role the person changed is not listed. Nothing is re-roled and nothing about this finding is written to the archive or the companion file.
+**When it fires.** Once per sheet when at least one column has such a proposed role. A column whose role the person changed is not listed. Nothing is re-roled and nothing about this finding is written to the archive or the companion file. A species name used as a column header of a wide sheet is not listed here; the page handles those columns itself.
 
 **Example.** A column headed "Latitude_dd" holds values from 54.1 to 54.9. The header is not an exact Darwin Core term, so the proposed latitude role is not confirmed. The finding lists "Latitude_dd" and asks to check it.
 
@@ -956,7 +956,7 @@ Severity: info · Export policy: show
 
 **What it checks.** The sample code of every row is made of the columns the person picked. This note repeats the choice, so it is visible in the report: the columns, the number of samples, the number of rows and the name that starts every sample ID.
 
-**When it fires.** Once per sheet whenever a sample key is in use, whether picked on the page or read from the companion file. Information only.
+**When it fires.** Once per sheet whenever a sample key is in use, whether picked on the page or read from the companion file. Information only. A profile sheet never gets this note.
 
 **Example.** The person picks Station and Date. The note says: samples 14, rows 112, every sample ID starts with the name of the file (the name of the sheet for a workbook), then come the two values.
 
@@ -968,7 +968,7 @@ Severity: info · Export policy: show
 
 **What it checks.** Another sheet seems to describe the samples of this results sheet and is linked to it by key columns. The converter shows how many samples it covers and joins nothing until the person confirms.
 
-**When it fires.** When a sheet whose rows describe the samples of a results sheet is linked to it by a key, the description sheet holds at least half of the samples of the results sheet, the results sheet has a taxon and the description sheet has none (neither is a profile sheet), and the link is neither confirmed nor declined (sampleJoinNo). The note gives the number of samples found in the description sheet.
+**When it fires.** When a sheet whose rows describe the samples of a results sheet is linked to it by a key, the description sheet holds at least half of the samples of the results sheet, the results sheet has a taxon and the description sheet has none (neither is a profile sheet), and the link is neither confirmed nor declined (sampleJoinNo). The note gives the number of samples found in the description sheet. A results sheet that already has a confirmed join gets no further proposal; the results side of the key is the picked sample key or a sample ID, station or cruise column.
 
 **Example.** A results sheet has 40 samples by station and date, and a sheet "Stations" has a row for 38 of them. The note proposes the link and says 38 of 40 samples were found.
 
@@ -980,7 +980,7 @@ Severity: info · Export policy: show
 
 **What it checks.** A sheet that seems to describe the samples is in the long layout, one row per parameter, or was turned by the person. Joining such a sheet is not supported yet.
 
-**When it fires.** When the proposed description sheet (which holds at least half of the samples of the results sheet) has a parameter column and a value column, so that it was regrouped by the converter, or was turned by the person, instead of having one row per sample. Both sheets are then converted exactly as if there were no join.
+**When it fires.** When the proposed description sheet (which holds at least half of the samples of the results sheet) was regrouped by the converter from a parameter column and a value column, or was turned by the person, instead of having one row per sample. It replaces CONV-JOIN-PROPOSED for such a sheet and has the same conditions (no confirmed or declined join, a results sheet with a taxon); a long-looking sheet that was neither regrouped nor turned gets CONV-JOIN-PROPOSED instead. Both sheets are then converted exactly as if there were no join.
 
 **Example.** A sheet "Environment" has the columns Station, Parameter and Value, with several rows per station. It is linked to the results by Station, but cannot be joined.
 
@@ -1030,7 +1030,7 @@ Severity: error · Export policy: block
 
 **When it fires.** When the results sheet and the description sheet hold a different set of columns of the same text role, such as station, cruise or sample code (not one against one, and not the same set). A date, a position or a depth held in different column structures is merged into resolved columns and does not raise it.
 
-**Example.** The results sheet has two station columns (Station and Substation) and the description sheet has one Station column. The finding names both sets.
+**Example.** The person gave two results columns (Station and Substation) the role station, and the description sheet has one Station column. The finding names both sets. (Left on the recognised roles, Substation is ignored and this is not raised.)
 
 **What you can do.** Use the same columns in both sheets, or set the columns of one of the sheets to ignore. In /convert this finding blocks the export.
 
@@ -1040,7 +1040,7 @@ Severity: error · Export policy: block
 
 **What it checks.** Some samples of the results sheet have no row in the description sheet. The converter will not invent a description for them.
 
-**When it fires.** When a confirmed join leaves one or more results samples without a matching row (this includes results rows with a blank part of the key, named by their lines), and that has not been answered. The finding lists up to the first samples and, when the description sheet has samples without results, a few of them to show a near miss.
+**When it fires.** When a confirmed join leaves one or more results samples without a matching row (this includes results rows with a blank part of the key, named by their lines), and that has not been answered. The finding lists up to the first samples and, when the description sheet has samples without results, a few of them to show a near miss. When no key of the results sheet is in the description sheet at all, CONV-JOIN-NO-MATCH is raised instead. The description-only near miss is given only on the first results sheet that uses the description sheet.
 
 **Example.** The results sheet has samples S1 to S40, and the description sheet lacks S39 and S40. The finding names both.
 
@@ -1064,7 +1064,7 @@ Severity: info · Export policy: show
 
 **What it checks.** The person chose to convert the samples that have no description with only what the results sheet says. This note lists them. Nothing is invented for them.
 
-**When it fires.** When the answer "results only" is given for the samples without a row in the description sheet. Information only.
+**When it fires.** When the answer "results only" is given for the samples without a row in the description sheet. It counts only for the same number of samples as now lack a description, and never when no key matches (then CONV-JOIN-NO-MATCH stands). Information only.
 
 **Example.** Samples S39 and S40 have no description. The person chose to convert them from the results sheet only, and the note names both.
 
@@ -1100,7 +1100,7 @@ Severity: error · Export policy: block
 
 **What it checks.** A part of the join key is blank in some rows, so no row of the other sheet can be found for them.
 
-**When it fires.** For every row of the results sheet (or of the description sheet, as the finding says) in which a column of the join key is empty. One finding per sheet lists the lines and the columns.
+**When it fires.** For every row of the results sheet (or of the description sheet, as the finding says) in which a column of the join key is empty. One finding per sheet lists the lines and the columns. The results-side finding is not raised once the "results only" answer is given for the same number of samples; a description row with every cell empty is skipped.
 
 **Example.** The join key is station plus date, and lines 5 and 6 of the results sheet have a station but no date.
 
@@ -1153,9 +1153,9 @@ Severity: error · Export policy: block
 
 **What it checks.** A value contains a tab or a line break. The archive files are tab-separated with one record per line, so such a value would break them.
 
-**When it fires.** For every cell with a tab or a line break inside it: a data value, but also a header (a taxon header, a variable name or a unit), an abundance class label, the sampling device label, or a value typed on the page and written to an output table. One finding per column lists the lines and shows the first value with the character shown as a space. The export is blocked and nothing is written until the character is removed.
+**When it fires.** For every cell with a tab or a line break inside it: a data value, but also a header (a taxon header, a variable name or a unit), an abundance class label, the sampling device label, or a value typed on the page and written to an output table. One finding per column lists the lines and shows the first value with the character shown as a space. The export is blocked and nothing is written until the character is removed. Cells of a column that is not written (one set to ignore, such as a free remarks column) are not read.
 
-**Example.** A remarks cell on line 18 holds two lines of text. The finding quotes it with a space in place of the break.
+**Example.** A station cell on line 18 holds two lines of text, 'north' and 'bay'. The finding names the column Station and quotes it as 'north bay'.
 
 **What you can do.** Replace the character with a space in the sheet. In /convert this finding blocks the export.
 
@@ -1227,15 +1227,15 @@ Severity: warning · Export policy: accept
 
 - [OBIS Manual, "How to format Occurrence tables" (manual.obis.org/format_occurrence.html; read 2026-10-29): occurrenceStatus is required, a quantity is not](https://manual.obis.org/format_occurrence.html), "These required data fields include the following eight terms: occurrenceID, eventID, ..., occurrenceStatus, basisOfRecord, scientificName, ..." (organismQuantity and organismQuantityType are not among them); "Add and fill basisOfRecord and occurrenceStatus fields"
 
-## CONV-BIOMASS-UNIT-UNCLEAR — The unit of a weight column is missing, unclear or in two kinds, so the unit is left empty
+## CONV-BIOMASS-UNIT-UNCLEAR — The unit of a weight column is missing or unclear, so the unit is left empty
 
 Severity: warning · Export policy: accept
 
-**What it checks.** The unit of a weight column is missing, unclear or in two kinds, so the unit is left empty. A partial or guessed unit would change the meaning of the number.
+**What it checks.** The unit of a weight column is missing or unclear, so the unit is left empty. A partial or guessed unit would change the meaning of the number.
 
-**When it fires.** Three cases. The header holds a mass unit not in brackets followed by words the converter does not understand (neither a per-area or per-volume part nor a kind of mass); the finding quotes the unrecognised rest. The header has no unit at all (variant none). Or two different mass units appear in the weight columns. The lines are named.
+**When it fires.** Three cases. The header holds a mass unit not in brackets followed by words the converter does not understand (neither a per-area or per-volume part nor a kind of mass); the finding quotes the unrecognised rest. The header has no unit at all (variant none). Or one header names two different mass units (Weight kg g). Two columns that each have their own unit (Weight \[g\] and Weight \[kg\]) raise nothing: each keeps its unit. A unit in brackets or as a clear word of the name (weight_kg_total) also raises nothing. The lines are named.
 
-**Example.** A header "Weight kg of the best sample" holds the unit kg and unclear words. measurementUnit is left empty. A header "Weight" with no unit raises the none variant.
+**Example.** A header "Weight kg of the best sample" holds the unit kg and unclear words. measurementUnit is left empty. A header "Weight" with no unit raises the none variant, and one header "Weight kg g" raises the finding too.
 
 **What you can do.** Put one unit in brackets in the header, for example \[kg/km2\], and load the file again. In /convert this warning must be accepted once.
 
@@ -1245,7 +1245,7 @@ Severity: error · Export policy: block
 
 **What it checks.** A column looks like the total of a taxon in a sample, repeated on each size class row. Summed as it is, the number would be inflated by the number of size classes.
 
-**When it fires.** When the value is the same on every row of at least 4 groups of rows that share sample, taxon, life stage and qualifier, those groups are at least half of the groups that count as evidence, and the column has at least 2 distinct values. A group counts as evidence only when its value is not smaller than the number of its rows (a count of 1 is not counted). The same pattern is also raised as variants for a weight and for groups that disagree, even after the answer one occurrence per sample and taxon.
+**When it fires.** When the value is the same on every row of at least 4 groups of rows that share sample, taxon, life stage and qualifier, those groups are at least half of the groups that count as evidence, and the column has at least 2 distinct values. A group counts as evidence only when its value is not smaller than the number of its rows (a count of 1 is not counted). The finding is not raised again after the answer one occurrence per sample and taxon (CONV-QUANTITY-REPEATED-ONCE instead) or after real counts held for the same number of rows (CONV-QUANTITY-REAL-COUNTS instead). The variants for a weight and for groups that disagree are raised even after that answer.
 
 **Example.** A sheet has several samples, each with three size-class rows per taxon, and each row repeats the total of its taxon (120 in one sample, 80 in another). In at least 4 groups the sum would be three times the total. The finding names the column and the size column that differs.
 
@@ -1293,7 +1293,7 @@ Severity: error · Export policy: block
 
 **What it checks.** Some rows are exact copies of another row in every column but a per-row identifier, with a quantity above 1. Written as they are, the quantity would be counted twice.
 
-**When it fires.** For every row identical to an earlier one in every column but a per-row identifier, with a quantity above 1 for a count, above 0 for a density, a biomass or another quantity, or any identical row when the sheet is declared as its own records. The finding gives the sum of the quantity with the copies and without them. The sums are left out for a percent cover, an abundance class, or own records with no quantity column.
+**When it fires.** For every row identical to an earlier one in every column but a per-row identifier, with a quantity above 1 for a count, above 0 for a density, a biomass or another quantity, or any identical row when the sheet is declared as its own records. The finding gives the sum of the quantity with the copies and without them. The sums are left out for a percent cover, an abundance class, or own records with no quantity column. Not raised once the copies have been left out (CONV-ROW-COPIES-DROPPED instead), kept as records (CONV-ROW-COPIES-KEPT instead) or declared real counts.
 
 **Example.** Lines 30 and 31 are identical, with the count 14. With both the sum is 28, without the copy 14.
 
@@ -1315,9 +1315,9 @@ Severity: warning · Export policy: accept
 
 Severity: warning · Export policy: accept
 
-**What it checks.** Some rows are identical to another row and have a count of 1. A table of single specimens looks exactly like this, so nothing is blocked.
+**What it checks.** Some rows are identical to another row and have a count of 1. A table of single specimens looks exactly like this, so this note itself blocks nothing.
 
-**When it fires.** For every row identical to an earlier one with a count of 1 when the sheet is not declared as its own records. The finding gives the sum as separate records and the sum if they were copies.
+**When it fires.** For every row identical to an earlier one with a count of 1 when the sheet is not declared as its own records. The finding gives the sum as separate records and the sum if they were copies. Without an occurrenceID column the same rows also raise the blocking CONV-ID-DUPLICATE (copies variant); with a unique occurrenceID column only this note is raised. Not raised under held real counts, and the leave-out-copies answer does not apply to rows with a count of 1.
 
 **Example.** Five rows read Calanus, size 2, count 1. As specimens the sum is 5, as copies of one record it is 1.
 
@@ -1365,7 +1365,7 @@ Severity: info · Export policy: show
 
 **What it checks.** As the person chose, rows that could not be placed were left out of the archive and are listed in the file beside it. Nothing was deleted from the source.
 
-**When it fires.** When the answer to leave out the rows of one reason is applied, from the page or the companion file (leaveOut). Information only.
+**When it fires.** When the answer to leave out the rows of one reason is applied, from the page or the companion file (leaveOut). Information only. The answer holds only while the sheet has the same number of such rows as when it was given (a companion file also the same number of rows in all); with another number the question is asked again.
 
 **Example.** 5 rows with a count but no taxon name were left out and listed.
 
@@ -1391,7 +1391,7 @@ Severity: warning · Export policy: accept
 
 **When it fires.** Superseded in /convert. The row is raised together with the fate no-taxon, and the question CONV-ROW-NOT-UNDERSTOOD (reason no-taxon) takes over the same lines, so this finding does not reach the report. For the rows with a quantity or a biomass and an empty taxon cell, the finding would list the lines and the column.
 
-**Example.** Line 52 has the count 6 and no taxon. It is not converted.
+**Example.** Line 52 has the count 6 and no taxon; the question CONV-ROW-NOT-UNDERSTOOD (reason no-taxon) lists line 52 and this finding stays hidden.
 
 **What you can do.** Leave the rows out and list them (leaveOut) when CONV-ROW-NOT-UNDERSTOOD asks, or type the taxon name in the sheet. The export is blocked until one of them is done.
 
@@ -1401,9 +1401,9 @@ Severity: error · Export policy: block
 
 **What it checks.** A column read as a time of day holds full dates, and no column is the date. The events would have no eventDate, and a date that is in the file is never dropped silently.
 
-**When it fires.** When the sheet has a time column and no date column, and half or more of the filled cells of the time column are dates: full dates, spreadsheet serials in a date-formatted column, or date-looking text that the date parser does not read. A year part column also counts as a date. Placeholder dates of a spreadsheet (1899-12-30) or an epoch (1970-01-01) are times and are not counted.
+**When it fires.** When the sheet has a time column and no date column, and half or more of the filled cells of the time column are dates: full dates, spreadsheet serials in a date-formatted column, or date-looking text that the date parser does not read. A year part column also counts as a date. Placeholder dates of a spreadsheet (1899-12-30) or an epoch (1970-01-01) are times and are not counted. It does not fire when the sheet has a date column, a combined date and time column or a year part column. A column of full datetimes is read as date and time by itself, so the finding appears only for a column the person set to time of day (or one with enough real times).
 
-**Example.** The column "Time" holds 2024-05-03 10:15 in all rows, and no other column is a date.
+**Example.** The person gave the column "Time" the meaning time of day, but it holds 2024-05-03 10:15 in all rows, and no other column is a date.
 
 **What you can do.** Give the column the meaning "Date and time" on the page. In /convert this finding blocks the export.
 
@@ -1449,7 +1449,7 @@ Severity: info · Export policy: show
 
 **What it checks.** The day and month order declared for a date column was used for its ambiguous dates. It applies to the date written, the date inside an identifier and the date compared in a join.
 
-**When it fires.** When a declared order (dayMonthOrder, or yyOrder for NN-NN-NN dates) is applied to a column. Information only.
+**When it fires.** When a declared order (dayMonthOrder, or yyOrder for NN-NN-NN dates) is applied to a column. Information only. It is said only when the declaration decided at least one ambiguous cell. If the clear dates of the column already show the same order, or no cell is ambiguous, nothing is said; if they show the other order, CONV-DATE-ORDER-CONTRADICTED is raised instead.
 
 **Example.** The person declared day first for the column "Date", so 03/04/2024 is 3 April everywhere.
 
@@ -1461,9 +1461,9 @@ Severity: info · Export policy: show
 
 **What it checks.** The comma in the numbers of a column was read as the person declared, a decimal comma or a thousands separator, everywhere the column is used.
 
-**When it fires.** When a declared reading (decimalReading) is applied to a column. Under thousands every cell written n,nnn is read without its commas; under decimal the column is read as it was. Other columns are not affected. Information only.
+**When it fires.** When a declared reading (decimalReading) is applied to a column that IN-DECIMAL-AMBIGUOUS asked about (a file with decimal commas, a column whose every comma value has three digits after the comma); a declaration for any other column is ignored. Under thousands every cell written n,nnn is read without its commas; under decimal the column is read as it was. Other columns are not affected. Information only.
 
-**Example.** The cells 1,250 of the column "Count" were declared a thousands separator and are read as 1250.
+**Example.** In a file that writes decimal commas (55,5), every comma value of the column "Count" is written n,nnn (1,250 and 2,000), so IN-DECIMAL-AMBIGUOUS asked; the person declared a thousands separator and 1,250 is read as 1250.
 
 **What you can do.** Nothing to answer. "Ask again" takes the answer back. The saved answer holds only while the column and the same number of rows are found. In /convert this note is only shown.
 
@@ -1473,7 +1473,7 @@ Severity: info · Export policy: show
 
 **What it checks.** Cells holding exactly -99, -999 or -9999 in a number column were handled as the person declared: as missing values or as real values.
 
-**When it fires.** When the answer to ROW-MISSING-CODE (missingCode) is applied to a column. Missing means the cells are left empty before the sheet is read and listed with the reason missing-code; real means they are written as they are. Other columns are not touched.
+**When it fires.** When the answer to ROW-MISSING-CODE (missingCode) is applied to a column. Missing means the cells are left empty before the sheet is read and listed with the reason missing-code; real means they are written as they are. Other columns are not touched. It is raised for a column that holds at least one such cell; an answer given for a column without one says nothing.
 
 **Example.** 4 cells of the column "Depth" hold -999, and the person answered missing. No depth is written for them.
 
@@ -1525,7 +1525,7 @@ Severity: info · Export policy: accept
 
 **What it checks.** Zero cells were left out because the species list was not declared complete. A zero means absent only when every species of the list was looked for in the sample.
 
-**When it fires.** When a numeric 0 is in a quantity cell and the full species list tick is off, which is the default. In a presence list the same holds for marks of absence such as "-" or "absent" (variant presence). An empty or NA cell never becomes a record either.
+**When it fires.** When a numeric 0 is in a quantity cell and the full species list tick is off, which is the default. In a presence list the same holds for marks of absence such as "-" or "absent" (variant presence). An empty or NA cell never becomes a record either. A zero in a row of a long sheet that has a weight above zero belongs to CONV-ZERO-WITH-BIOMASS and is not counted here; a zero in a row with no taxon name is listed by CONV-ROW-NOT-UNDERSTOOD.
 
 **Example.** 37 zeros in a count table were not converted, because the full list was not ticked.
 
@@ -1541,9 +1541,9 @@ Severity: error · Export policy: block
 
 **What it checks.** The rows of one sample differ in a value that must be the same for the whole sample. A sample is one event, and the first row is not silently preferred.
 
-**When it fires.** For every sample whose rows differ in a sample-level value such as position, date or depth. The finding names what differs, the sample and the lines.
+**When it fires.** For every sample whose rows differ in a sample-level value such as position, date, depth, sample size, depth below the seafloor or a measured value. The finding names what differs, the sample and the lines. On a long sheet with a station column, rows of one sample code that differ in date or time are read as separate visits (CONV-ID-REVISIT) and do not raise this; a sample key declared on the page switches that reading off.
 
-**Example.** Sample S5 has two rows with different dates, 2024-05-03 and 2024-05-04.
+**Example.** Sample S5 has two rows (two taxa) with the depths 5 m and 10 m.
 
 **What you can do.** Make the values equal in the source, or use a sample code that separates the samples. In /convert this finding blocks the export.
 
@@ -1565,7 +1565,7 @@ Severity: info · Export policy: accept
 
 **What it checks.** Columns that give the same value for every row of one taxon (a species code, an identifier, a trophic group) are attributes of the taxon, not measurements, and were not written.
 
-**When it fires.** For a numeric column that the tool itself proposed to ignore, whose value is a function of the taxon column but varies between samples, with at least two values overall, no unit and no size word, and either a name that says code, id, tsn, key, serial or trophic, or when at least 3 taxa are listed more than once and cover half of all taxa. A text column is never listed, and a column the person set is not listed.
+**When it fires.** For a numeric column that the tool itself proposed to ignore, whose value is a function of the taxon column but varies between samples, with at least two values overall, no unit and no size word, and either a name that says code, id, tsn, key, serial or trophic, or when at least 3 taxa are listed more than once and cover half of all taxa. A text column is never listed, and a column the person set is not listed. Only for a long sheet with a taxon column; a wide sheet never raises it.
 
 **Example.** A column "TSN" holds the same number on every row of one species and is not written.
 
@@ -1656,7 +1656,7 @@ Severity: error · Export policy: block
 
 **When it fires.** For a column to the right of the last named header cell (a blank cell in the middle of the header is left as it is) that is mapped as a variable still named Column N, or as a taxon header (IN-HEADER-SHORT). The internal name is Column N.
 
-**Example.** The header names stop at the fourth column, and the fifth column holds numbers, so it would be written as a variable named Column 5.
+**Example.** The header names stop at the fourth column, the data rows hold numbers in a fifth column, and the person maps that column as a variable but leaves its name Column 5, so it would be written as a variable named Column 5.
 
 **What you can do.** Type a name for the variable, or choose another meaning for the column, for example Ignore. In /convert this finding blocks the export.
 
@@ -1678,21 +1678,21 @@ Severity: error · Export policy: block
 
 **What it checks.** The table looks transposed, with variables or species in rows. Row 1 would be read as the header, so the sheet was not read.
 
-**When it fires.** When variables are in rows, or when species are in rows: at least 3 Latin names make up at least 60 percent of the first column, there are at least 2 other headers, and at least 80 percent of the cells are numbers or marks (+, x, \*). A normal wide sheet with species as headers is never flagged. The sheet is not converted.
+**When it fires.** When variables are in rows, or when species are in rows: at least 3 Latin names make up at least 60 percent of the first column, there are at least 2 other headers, and at least 80 percent of the cells are numbers or marks (+, x, \*). A normal wide sheet with species as headers is never flagged. The sheet is not converted. Not raised for a profile sheet, a sheet turned with the turn button, a long sheet that was regrouped, or a sheet ticked "Read as a normal table".
 
 **Example.** The first column lists species and the other columns are the samples S1, S2, S3.
 
 **What you can do.** Transpose the table in your spreadsheet (samples in rows, species or variables in columns) and load it again, press the turn button on the page, or tick "Read as a normal table" for the sheet (kept as transposedAsTable). In /convert this finding blocks the export.
 
-## CONV-SHEET-UNITS-ROW — The first row under the header looks like units (m, degrees_north) but could not be folded into the header, so the sheet was not read
+## CONV-SHEET-UNITS-ROW — The first row under the header looks like units (m, degC) but could not be folded into the header, so the sheet was not read
 
 Severity: error · Export policy: block
 
-**What it checks.** The first row under the header looks like units (m, degrees_north) but could not be folded into the header, so the sheet was not read.
+**What it checks.** The first row under the header looks like units (m, degC) but could not be folded into the header, so the sheet was not read.
 
-**When it fires.** Only when the units row could not be folded into the header: text or codes stand under some of the unit columns, or a row with a non-unit cell and at least two unit cells has numbers below. The clean case, units over numbers, is folded into the header silently and raises nothing.
+**When it fires.** Only when the units row could not be folded into the header: text or codes stand under some of the unit columns, or a row with a non-unit cell and at least two unit cells has numbers below. The clean case, units over numbers, is folded into the header silently and raises nothing. Not raised for a profile sheet, a turned sheet, a regrouped long sheet, or a sheet ticked "Read as a normal table"; at least two cells of the row must be units the converter knows (m, degC, PSU).
 
-**Example.** Line 2 holds m, degrees_north and a word under the header Depth, Latitude and Station, and the Station column holds text codes below. The row is not folded, so it is reported.
+**Example.** Line 2 holds m, degC and the word note under the header Depth, Temp and Station, and numbers stand under Depth and Temp. The row is not folded, so it is reported.
 
 **What you can do.** Write the units into the column names, for example "depth \[m\]", and load the file again, or tick "Read as a normal table" if the row is data (kept as transposedAsTable). In /convert this finding blocks the export.
 
@@ -1704,7 +1704,7 @@ Severity: info · Export policy: show
 
 **When it fires.** When a sheet with a parameter column and a value column was regrouped; the regrouping is automatic. The note gives the number of samples and the parameter columns, one per parameter and unit, headed name \[unit\]. Information only.
 
-**Example.** 240 rows with parameters Temperature and Salinity became 60 samples with two parameter columns.
+**Example.** 120 rows with parameters Temperature and Salinity became 60 samples with two parameter columns.
 
 **What you can do.** Nothing to answer. Check the parameter columns. To undo the regrouping, tick "read as a normal table" for the sheet (kept as longAsTable). In /convert this note is only shown.
 
@@ -1738,7 +1738,7 @@ Severity: info · Export policy: show
 
 **What it checks.** Two parameters of a long sheet would make two columns with the same header. A header must be unique, so the converter adds a number in brackets to the repeated one and tells you which.
 
-**When it fires.** Fires once per long sheet when a parameter column header equals the header of another column. The count is the number of renamed headers. Only the new header changes; the data does not.
+**When it fires.** Fires once per long sheet when a parameter column header equals the header of another column. The count is the number of renamed headers. Only the new header changes; the data does not. The comparison ignores case and covers the columns kept as the sample key and the parameter columns before it.
 
 **Example.** A long sheet has a parameter called Depth and a column called Depth. The parameter column becomes Depth (2).
 
@@ -1798,7 +1798,7 @@ Severity: error · Export policy: block
 
 **What it checks.** In a turned sheet (its samples are the columns) the header of each sample column becomes the sample code. A column with values and an empty header has no code.
 
-**When it fires.** Fires on a sheet declared as turned when one or more columns right of the name column hold values and have a blank header. Those columns are not turned.
+**When it fires.** Fires on a sheet declared as turned when one or more columns right of the name column hold values and have a blank header. Those columns are not turned. Columns declared as not samples are never checked, so a blank header there raises nothing.
 
 **Example.** A turned sheet has the headers Name, S1, S2 and an empty header above a third column of numbers.
 
@@ -1810,7 +1810,7 @@ Severity: error · Export policy: block
 
 **What it checks.** In a turned sheet two sample columns with the same header would get the same sample code. The converter does not choose between them.
 
-**When it fires.** Fires when the trimmed header is used by two or more columns right of the name column. None of those columns is turned. The message names the header and the columns.
+**When it fires.** Fires when the trimmed header is used by two or more columns right of the name column. None of those columns is turned. Columns declared as not samples are left out of the count. The message names the header and the columns.
 
 **Example.** A turned sheet has the headers Name, S1, S1, S2. The header S1 is on two columns.
 
@@ -1858,7 +1858,7 @@ Severity: error · Export policy: block
 
 **What it checks.** Darwin Core depth is in metres. A depth column with another unit cannot be written unless the converter has an exact factor for it.
 
-**When it fires.** Fires when a depth column states a unit that is not metres and not one of the converted units (fathom, foot, km). A centimetre depth is usually a depth in sediment and blocks too. Nothing is written from the column.
+**When it fires.** Fires when a depth column states a unit that is not metres and not one of the converted units (fathom, foot, km). A centimetre depth is usually a depth in sediment and blocks too. Nothing is written from the column. It also fires when the header gives fathom, foot or km together with other words (Depth_ft_corrected) or with a second unit (Depth (m or ft)); only a unit that ends the name or is followed by min, max, top, bottom, mean and the like is converted.
 
 **Example.** A depth column is headed "Depth (cm)" in a water-column sheet.
 
@@ -1876,7 +1876,7 @@ Severity: warning · Export policy: accept
 
 **When it fires.** Fires once per depth column (plain, minimum or maximum) that has the unit fathom (fm), foot (ft) or km and at least one numeric cell. The arithmetic is exact, on the digits of the cell. The message shows the factor and one example.
 
-**Example.** The cell "10 ft" is written as 3.048 m and verbatimDepth keeps "10 ft".
+**Example.** A depth column headed "Depth (ft)" holds the number 10. It is written as 3.048 m and verbatimDepth keeps "10 ft".
 
 **What you can do.** Check the unit in the header. Accept the conversion once before the export; the outcome is a tool step, not your answer. If the unit is wrong, correct it in the header of the column.
 
@@ -1983,7 +1983,7 @@ Severity: info · Export policy: show
 
 **What it checks.** A sheet without a station column can treat each distinct position as a station. The station ID is made of the cruise code and the position as written.
 
-**When it fires.** Fires when the sheet has no station column and you ticked "each distinct position is a station". It gives the number of stations and the first one.
+**When it fires.** Fires when the sheet has no station column and you ticked "each distinct position is a station". It gives the number of stations and the first one. Only a profile sheet (CTD-style) is affected by the tick; other sheets without a station column are not.
 
 **Example.** Three distinct latitude and longitude pairs give three stations, the first named CR1:54.1_18.5.
 
@@ -1995,7 +1995,7 @@ Severity: error · Export policy: block
 
 **What it checks.** A sample-size column must hold a positive number in each row, because sampleSizeValue needs one.
 
-**When it fires.** Fires when cells of the sample-size column are empty, zero or not a number. The message gives the count, the lines and one example.
+**When it fires.** Fires when cells of the sample-size column are empty, zero or not a number. The message gives the count, the lines and one example. A negative value is reported by CONV-NEGATIVE-QUANTITY instead.
 
 **Example.** The sample-size column holds 0.5, 0 and "n/a" in three rows. Two rows are refused.
 
@@ -2019,7 +2019,7 @@ Severity: error · Export policy: block
 
 **What it checks.** The converter needs a taxon and a quantity to make occurrences. A sheet with no column marked as taxon has nothing to name them with.
 
-**When it fires.** Fires when no column has the taxon role: for a wide sheet no taxon header columns, for a long sheet no taxon column. A long sheet with a taxon column and no quantity gets CONV-SPECIES-LIST-NO-COUNTS or CONV-TAXON-NO-QUANTITY instead.
+**When it fires.** Fires when no column has the taxon role: for a wide sheet no taxon header columns, for a long sheet no taxon column. A long sheet with a taxon column and no quantity gets CONV-SPECIES-LIST-NO-COUNTS or CONV-TAXON-NO-QUANTITY instead. A sheet that holds only measured variables is reported as CONV-ENV-ONLY-SHEET instead, and nothing is raised when the presence tick or an own count applies.
 
 **Example.** A wide sheet has only the columns Station, Date and Notes, with no measured variable and no species.
 
@@ -2031,7 +2031,7 @@ Severity: error · Export policy: block
 
 **What it checks.** A long sheet has a taxon column and no numbers. It may be a list of species found. The converter does not guess that, because no count means nothing is quantified.
 
-**When it fires.** Fires on a long sheet with a taxon column, no quantity column and no measured-variable column (with a measured variable it is CONV-TAXON-NO-QUANTITY). It replaces CONV-NO-TAXON, CONV-QUANTITY-UNDECLARED and CONV-NO-OCCURRENCES for that sheet.
+**When it fires.** Fires on a long sheet with a taxon column, no quantity column and no measured-variable column (with a measured variable it is CONV-TAXON-NO-QUANTITY). It replaces CONV-NO-TAXON, CONV-QUANTITY-UNDECLARED and CONV-NO-OCCURRENCES for that sheet. Not raised when the presence tick is set or the sheet has its own count column.
 
 **Example.** A sheet lists Station A with the species Mytilus edulis and Macoma balthica, and nothing else.
 
@@ -2047,7 +2047,7 @@ Severity: error · Export policy: block
 
 **What it checks.** In a species list ticked as presence only, a wide cell is read as a mark. A value that is not a mark is not guessed.
 
-**When it fires.** Fires when a cell holds anything else than a mark or empty: for example a number above 1, a negative number or other text. Marks are x, X, +, \*, a tick, 1, yes, y, tak, ja, oui, present and similar. Absence marks (0, -, absent, no, nie, nein, non) are never an error: they write an absence only when the full-species-list tick is set, otherwise the cell is skipped. 0 and 1 are read as numbers, so 1.0 is a presence.
+**When it fires.** Fires when a cell holds anything else than a mark or empty: for example a number above 1, a negative number or other text. Marks are x, X, +, \*, a tick, 1, yes, y, tak, ja, oui, present and similar. Absence marks (0, -, absent, no, nie, nein, non) are never an error: they write an absence only when the full-species-list tick is set, otherwise the cell is skipped. 0 and 1 are read as numbers, so 1.0 is a presence. A blank cell or NA is read as absent and does not fire.
 
 **Example.** A cell holds 12 in a sheet ticked as presence only.
 
@@ -2063,7 +2063,7 @@ Severity: error · Export policy: block
 
 **What it checks.** A long sheet has a taxon column and other measured columns but no quantity column. The converter cannot tell what the numbers count.
 
-**When it fires.** Fires on a long sheet with a taxon column, measured variable columns and no quantity column. It replaces CONV-NO-TAXON, CONV-QUANTITY-UNDECLARED and CONV-NO-OCCURRENCES for that sheet. A sheet with no numbers at all gets CONV-SPECIES-LIST-NO-COUNTS.
+**When it fires.** Fires on a long sheet with a taxon column, measured variable columns and no quantity column. It replaces CONV-NO-TAXON, CONV-QUANTITY-UNDECLARED and CONV-NO-OCCURRENCES for that sheet. A sheet with no numbers at all gets CONV-SPECIES-LIST-NO-COUNTS. Not raised when the presence tick or an own count column applies.
 
 **Example.** A long sheet has Taxon, Station and Temperature, but no Count or Biomass column.
 
@@ -2087,7 +2087,7 @@ Severity: warning · Export policy: block
 
 **What it checks.** A row that reads like a total or a statistic is not a sample. The converter holds it back and asks, because a station really called Total or Somme is a real station.
 
-**When it fires.** Fires when the sample code or station is a total word (total, suma, razem, summe, gesamt, somme) as the whole cell, or a statistics label (mean, average, median, sd and similar) in a block of two or more label rows with no date or position. A lone n, se, cv, min, max or count gives CONV-SUMMARY-ROW-KEPT instead.
+**When it fires.** Fires when a row with no date or position has a total word (total, suma, razem, summe, gesamt, somme) or an unambiguous statistics label (mean, average, median, sd and similar) as the whole cell, even alone. The label is read in the sample-code column, or in the station column only when the sample code is blank or itself a label. A short code (n, se, cv, min, max, count) joins only inside a block of two or more label rows that holds an unambiguous label; alone, or in a block of short codes only, it gives CONV-SUMMARY-ROW-KEPT instead.
 
 **Example.** Three rows at the end of a sheet are labelled Mean, SD and Total, with no date or position.
 
@@ -2111,9 +2111,9 @@ Severity: warning · Export policy: accept
 
 **What it checks.** A row whose code is a short ambiguous label standing alone is kept as a sample, because it may be a real station. You are told so, in case it is not.
 
-**When it fires.** Fires for a sample code or station that is n, se, cv, min, max or count (a compass point such as N counts too), with no date and no position, not in a block of two or more label rows. The row is converted.
+**When it fires.** Fires for a sample code that is n, se, cv, min, max or count (a compass point such as N counts too), with no date and no position, when it stands alone or in a block of such short codes only; a block that holds an unambiguous label such as Mean gives CONV-SUMMARY-ROW-UNDECIDED. The station column is read only when the sample code is blank or itself a label. The row is converted.
 
-**Example.** One row has the station "N" with no date or position, in a sheet with no other label rows.
+**Example.** One row has the sample code "n" with no date or position, in a sheet with no other label rows.
 
 **What you can do.** If it is a real station, accept once. If it is not, correct the sheet and load it again. The outcome is a tool default, so the export needs the acceptance.
 
@@ -2123,7 +2123,7 @@ Severity: warning · Export policy: accept
 
 **What it checks.** The same sample code at one station on rows that differ in date, time or depth is read as separate visits. Each visit gets its own event whose ID is made of the data.
 
-**When it fires.** Fires when a sample code repeats at one station and the rows differ in the fewest of date, time and depth that tell them apart (a long sheet never uses depth). The ID is \<station\>:\<date\>\[T\<time\>\]\[:\<depth\>m\]:\<code\>. Rows identical in all of these stay a real duplicate (CONV-ID-DUPLICATE). The same code at another station is not a revisit.
+**When it fires.** Fires when a sample code repeats at one station and the rows differ in the fewest of date, time and depth that tell them apart (a long sheet never uses depth). The ID is \<station\>:\<date\>\[T\<time\>\]\[:\<depth\>m\]:\<code\>. Rows identical in all of these stay a real duplicate (CONV-ID-DUPLICATE). The same code at another station is not a revisit. Not applied when you picked a sample key.
 
 **Example.** Sample code S1 appears at Station A on 2024-05-01 and on 2024-06-01. The two visits become two events.
 
@@ -2147,9 +2147,9 @@ Severity: warning · Export policy: accept
 
 **What it checks.** Wet, dry and ash-free dry mass have different NERC concepts. If the kind of biomass is not known, the value is written with no measurementTypeID.
 
-**When it fires.** Fires when a biomass or weight column is written with measurementType biomass and the header names no kind and you chose none. The concepts are wet S0600088, dry S0600087 and ash-free dry S0600086. There is no default.
+**When it fires.** Fires when a biomass or weight column is written with measurementType biomass and the header names no kind and you chose none. The concepts are wet S0600088, dry S0600087 and ash-free dry S0600086. There is no default. It is raised only on a long sheet, and only for rows where the taxon is present and the biomass cell holds a number.
 
-**Example.** A column headed "Biomass" has no word like wet, dry or AFDW.
+**Example.** A long sheet has a Species column, an Abundance column and a column headed "Biomass" with weights of 226.5, 124 and 36, and no word like wet, dry or AFDW in the header.
 
 **What you can do.** Choose the kind in the role list of the column (companion setting biomassBasis=\<basis\>:\<sheet\> with wet, dry or afdw), or accept once that no identifier is written.
 
@@ -2233,7 +2233,7 @@ Severity: error · Export policy: block
 
 **When it fires.** Fires when an eMoF row has an empty measurementType. The type is the label of the verified NERC concept, or the meaning you declared.
 
-**Example.** A column of numbers has no verified concept and no declared meaning.
+**Example.** A measurement row of the export model has an empty type text. A sheet column never makes one: a column with no verified concept is written with its header as the type and raises CONV-NERC-UNKNOWN.
 
 **What you can do.** Declare what the numbers of the column mean, in the quantity declaration form or by the role of the column. The export is blocked until then.
 
@@ -2279,9 +2279,9 @@ Severity: info · Export policy: accept
 
 **What it checks.** A numeric column that always equals the year of the row date is a year beside the date, not a measurement. It is proposed as ignore.
 
-**When it fires.** Fires when a column the proposer would read as a measured variable holds whole years from 1800 to 2100 that equal the year of the date of the same row, on at least 3 rows with both filled. The first 500 rows are read, and the sheet must have a matching date column.
+**When it fires.** Fires when a column the proposer would read as a measured variable holds whole years from 1800 to 2100 that equal the year of the date of the same row, on at least 3 rows with both filled. The first 500 rows are read, and the sheet must have a matching date column. Raised on a long sheet (one row per taxon and sample); on a sheet with one column per taxon a Year column of whole years is ignored for its values and reported as CONV-COLUMN-IGNORED-PROPOSED.
 
-**Example.** A column Year holds 2023 on every row, and the Date column also has 2023.
+**Example.** On a long sheet with a Species column, a column Year holds 2023 on every row, and the Date column also has 2023.
 
 **What you can do.** If it is a measurement, give it that role back with one click. If it is the sampling year of rows without a date, give it the meaning date. Otherwise accept once.
 
@@ -2331,7 +2331,7 @@ Severity: warning · Export policy: accept
 
 **What it checks.** A name that WoRMS does not know keeps an empty scientificNameID, which OBIS and BioCheck report as missing.
 
-**When it fires.** Fires when the lookup returns no record for a name (an empty result, or HTTP 204 for a whole batch). The message names the names.
+**When it fires.** Fires when the lookup returns no record for a name (an empty result, or HTTP 204 for a whole batch). The message names the names. A name the user set to no ID on the page, and a name that has a taxon ID from the sheet on any row, does not fire.
 
 **Example.** The invented name "Zzyxia novella" has no near record in WoRMS and returns nothing. A near misspelling of a real name returns a near match instead (CONV-WORMS-UNDECIDED).
 
@@ -2349,7 +2349,7 @@ Severity: warning · Export policy: accept
 
 **When it fires.** Fires when the record has isMarine and isBrackish unset and isFreshwater or isTerrestrial set. A record with no habitat flag at all is unknown and does not fire. The ID is written as confirmed.
 
-**Example.** The confirmed name Daphnia magna is a strictly freshwater crustacean.
+**Example.** A confirmed name whose WoRMS record has isMarine 0, isBrackish 0, isFreshwater 0 and isTerrestrial 1 (a land animal). A freshwater crustacean that WoRMS also flags as brackish, like Daphnia magna, does not fire.
 
 **What you can do.** Check that these are the right taxa. Accept once; the IDs are written as confirmed.
 
@@ -2399,7 +2399,7 @@ Severity: warning · Export policy: accept
 
 **What it checks.** BioCheck reports "No sampling instrument present" when no sampling device is given. The device is written as the measurement NMSPINST.
 
-**When it fires.** Fires when no sampling device is chosen for the sheet, so no NMSPINST row is written.
+**When it fires.** Fires when no sampling device is chosen for the sheet, so no NMSPINST row is written. Profile sheets are not judged, and a sheet with no sample written does not fire; an own-text device of only spaces counts as missing.
 
 **Example.** The device field of the sheet form is empty.
 
@@ -2447,7 +2447,7 @@ Severity: warning · Export policy: accept
 
 **What it checks.** A profile station is matched to a biology station by exact text. A profile station with no match becomes a station event of its own.
 
-**When it fires.** Fires when a station of the profile sheet matches no station of the biology sheets. The match is exact on the trimmed station text, and on the cruise when the sheet gives one. Nothing is matched approximately.
+**When it fires.** Fires when a station of the profile sheet matches no station of the biology sheets. The match is exact on the trimmed station text, and on the cruise when the sheet gives one. Exception: with the option to ignore a trailing cast number ticked, a station that ends in -N and has exactly one biology station with that name without -N is matched (CONV-PROFILE-STATION-CAST-MATCHED) and is not listed here.
 
 **Example.** The profile sheet has the station "St 5" and the biology sheet has "St5".
 
@@ -2459,7 +2459,7 @@ Severity: warning · Export policy: accept
 
 **What it checks.** Two samplings at one station are close together. A matched profile station far from its biology station may be a wrong match.
 
-**When it fires.** Fires when a matched profile station lies more than 10 km (great-circle distance) from the biology station. The position of a profile station is that of its first level with one; that of a biology station is its first sample with one.
+**When it fires.** Fires when a matched profile station lies more than 10 km (great-circle distance) from the biology station. The position of a profile station is that of its first level with one; that of a biology station is its first sample with one. The same fact is not also raised as ROW-STATION-SPREAD-\* for that station.
 
 **Example.** The profile station "St 5" is 35 km from the biology station "St 5".
 
@@ -2483,7 +2483,7 @@ Severity: info · Export policy: show
 
 **What it checks.** In a PANGAEA file the parameter list in the header gives the long names of the columns. If it does not fit the columns, the table-header abbreviations are used as taxon names, and an abbreviation can stand for two taxa.
 
-**When it fires.** Fires on a wide sheet of a PANGAEA file with at least one taxon column when the Parameter block of the header does not match the table columns (another number of parameters than of table columns without the event columns, or an abbreviation that is not what the column header starts with), or when the header has no Parameter block at all.
+**When it fires.** Fires on a wide sheet of a PANGAEA file with at least one taxon column when the Parameter block of the header does not match the table columns (another number of parameters than of table columns without the event columns, an abbreviation that is not what the column header starts with, or a parameter with no abbreviation), or when the header has no Parameter block at all.
 
 **Example.** The header lists 12 parameters and the table has 11 columns.
 
@@ -2519,9 +2519,9 @@ Severity: error · Export policy: block
 
 **What it checks.** Every sample needs a latitude and a longitude, on itself or on a parent.
 
-**When it fires.** Fires when samples have no position and the sheet has no column mapped as latitude or longitude, or only one of them. A mapped column that is blank in every row gives the empty-column variant. The empty decimalLatitude and decimalLongitude of the output are not repeated.
+**When it fires.** Fires when samples have no position and the sheet has no column mapped as latitude or longitude, or only one of them. A mapped column that is blank in every row gives the empty-column variant. The empty decimalLatitude and decimalLongitude of the output are not repeated. Not raised when any sample of the sheet already has a position (a mapped column with values in both, a joined sheet, a declared position), nor for a profile sheet, nor when a declared position is refused: that refusal is the only message.
 
-**Example.** A wide sheet has Station, Date and one column per species, with no position columns and no joined sheet.
+**Example.** A wide sheet has Sample, Station, Date and one column per species, with no position columns and no joined sheet.
 
 **What you can do.** Mark the latitude and longitude columns, join the sheet that describes the samples, or, only when the sheet has no latitude or longitude column at all, declare one position for the sheet (declaredPosition=\<lat\>:\<lon\>:\<uncertainty\>:\<rows\>:\<sheet\>); with one of the two columns marked the declaration is refused. Profile sheets are not covered. The export is blocked until then.
 
@@ -2579,7 +2579,7 @@ Severity: error · Export policy: block
 
 **What it checks.** A declared date that cannot be used is not applied, and nothing is written from it.
 
-**When it fires.** Fires for one of these reasons: format (not YYYY, YYYY-MM, YYYY-MM-DD or two of them joined by a slash), order (the interval ends before it starts), future (later than today), some-dated (a sample already has a date; a declaration never fills gaps), date-joined, date-turned or profile.
+**When it fires.** Fires for one of these reasons: format (not YYYY, YYYY-MM, YYYY-MM-DD or two of them joined by a slash), order (the interval ends before it starts), future (later than today), some-dated (a sample already has a date; a declaration never fills gaps), date-joined, date-turned, profile or no-today (the caller gave no date of today). When the date was read from a companion file, some-dated, date-joined, date-turned and profile are CONV-DATE-DECLARED-HELD and do not block.
 
 **Example.** You declare 2019-13 as the date.
 
@@ -2591,7 +2591,7 @@ Severity: error · Export policy: block
 
 **What it checks.** OBIS requires an eventDate on every sample. A station never gives its date to a sample; a replicate takes the date of its sample.
 
-**When it fires.** Fires when sample events have no eventDate. With how=blank-cells a date column exists and these samples have empty cells. With how=no-date-role nothing on the sheet is marked as a date. Turned sheets, sheets read as one row per sample out of a long one, and sheets whose date comes from a joined description sheet have their own wording and advice: a turned sample is a source column and a pivoted line is not a line of the file, so no leave-out is offered there, and on a joined sheet the empty date cells are in the description sheet.
+**When it fires.** Fires when sample events have no eventDate. With how=blank-cells a date column exists and these samples have empty cells. With how=no-date-role nothing on the sheet is marked as a date. Turned sheets, sheets read as one row per sample out of a long one, and sheets whose date comes from a joined description sheet have their own wording and advice: a turned sample is a source column and a pivoted line is not a line of the file, so no leave-out is offered there, and on a joined sheet the empty date cells are in the description sheet. A profile sheet is not judged here, and a sample whose date cells hold something unreadable is not counted (that is a row finding).
 
 **Example.** Five of 40 samples have an empty Date cell.
 
@@ -2603,7 +2603,7 @@ Severity: error · Export policy: block
 
 **What it checks.** A profile level is placed under its station, so every row needs one.
 
-**When it fires.** Fires when profile rows hold data and no station text. These rows are not converted.
+**When it fires.** Fires when profile rows hold data and no station text. These rows are not converted. Rows with no data are not counted; with each distinct position as a station ticked it fires only for rows without a readable position.
 
 **Example.** Twelve rows of a profile sheet have an empty Station cell.
 

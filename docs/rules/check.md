@@ -15,7 +15,7 @@ Severity: error
 
 **What it checks.** A record that was opened holds no file the tool can read as a data table, only other files such as PDFs, images or text documents. Nothing in it can be checked.
 
-**When it fires.** When a record from any source (Dataverse, Zenodo, GeoNetwork or a plain link) was read and none of its files is a table in a format the tool reads: csv, tsv, txt, tab, xlsx, xls or ods. The finding lists the names of the files that were found; at most ten names are listed. Held-back files are mentioned by their own findings.
+**When it fires.** When a record from any source (Dataverse, Zenodo, GeoNetwork or a plain link) was read and none of its files is a table in a format the tool reads: csv, tsv, txt, tab, xlsx, xls or ods. The finding lists the names of the files that were found; at most ten names are listed, and only for Dataverse and Zenodo records (for a GeoNetwork record or a DOI with no known repository the list is empty). A README is not counted as a table. A Dataverse record whose only table is held back or too large gets the finding of that file instead.
 
 **Example.** A record lists report.pdf, map.png and notes.docx and no table; the finding names all three.
 
@@ -27,7 +27,7 @@ Severity: error
 
 **What it checks.** The record behind a link could not be opened, so its metadata and files were not read. The reason is a failed request to the host, and the finding names the host and the HTTP status code.
 
-**When it fires.** When a request for the record or one of its files gets an error status such as 403, 404 or 500, or a proxy error (429, 504, a 413 on a file that is not an archive), or when the answer is not JSON or not Dataverse metadata, or when a Dataverse version is not released. The wording has three forms: a server fault for status 500 to 599 (usually temporary), a record that may be private or unpublished for 403 and 404, and a neutral "try again later" for any other status, with no guess about the reason. Whatever the other sources of the same run gave is still used.
+**When it fires.** When a request for the record or one of its files gets an error status such as 403, 404 or 500, or a proxy error (429, 504, a 413 on a file that is not an archive), or when the answer is not JSON or is not the metadata of the source (Dataverse, PANGAEA, an ISO record from GeoNetwork), or when DataCite, GBIF or OBIS do not know the DOI or id (reported as 404), or when a Dataverse version is not released. The wording has three forms: a server fault for status 500 to 599 (usually temporary), a record that may be private or unpublished for 403 and 404, and a neutral "try again later" for any other status, with no guess about the reason. Whatever the other sources of the same run gave is still used.
 
 **Example.** A link to a repository record returns status 404; the finding reads that the record on that host could not be opened (error 404).
 
@@ -39,9 +39,9 @@ Severity: warning
 
 **What it checks.** A link points to a host the tool is not allowed to open, so nothing was fetched from it.
 
-**When it fires.** When a link in a record, or one the person pasted, names a host that is not on the tool's list of data hosts. Only the host name is reported, never the whole address.
+**When it fires.** When a link the person pasted names a host that is not on the tool's list of data hosts. From a record, only the data links of a GeoNetwork record that end in a table extension are looked at, one finding per host. It also fires when a download from a listed host is redirected to a host that is not listed, and for a pasted DOI whose landing page is off the list. Only the host name is reported, never the whole address.
 
-**Example.** A record links its data to a personal file-sharing site that is not on the list; the finding names that site and nothing is downloaded.
+**Example.** A GeoNetwork record has a distribution link to https://files.example.invalid/share/data.csv; the host files.example.invalid is not on the list, so it is named and nothing is downloaded.
 
 **What you can do.** Download the file from that site yourself and add it to the tool. The tool does not widen its list of hosts for one run. In /convert this finding is only shown and never stops the export.
 
@@ -51,7 +51,7 @@ Severity: warning
 
 **What it checks.** The browser could not download from a host, so the file was not read. This is a limit of the browser mode, not a fault in the data.
 
-**When it fires.** In browser mode, when a download fails before any answer arrives because the host does not allow the request (a cross-origin or content-security rule) or the network failed. It also appears in server mode when the page's own fetch route could not be reached, or when a body that is not an archive was cut off midway. The finding names the host.
+**When it fires.** In browser mode, when a download fails before any answer arrives because the host does not allow the request (a cross-origin or content-security rule) or the network failed. It also appears in server mode when the page's own fetch route could not be reached, or when a body from a host that is not a listed IPT server was cut off midway (at an IPT server it is IN-FETCH-INTERRUPTED). The finding names the host.
 
 **Example.** A link to a data file on a repository that sends no cross-origin permission; the browser refuses and the finding names the repository.
 
@@ -63,7 +63,7 @@ Severity: warning
 
 **What it checks.** A host did not start to answer in time, so the browser stopped waiting and the file was not read.
 
-**When it fires.** In browser mode, when a download receives no response within 30 seconds. A slow body that has already started is not a timeout: a download cut off after it began is IN-FETCH-INTERRUPTED. The finding names the host.
+**When it fires.** In browser mode, when a download receives no response within 30 seconds. A download that starts and is then cut off is not a timeout: at a listed IPT server it is IN-FETCH-INTERRUPTED, at another host IN-FETCH-BLOCKED. In server mode this rule does not occur. The finding names the host.
 
 **Example.** A repository server is overloaded and sends nothing for 30 seconds; the request is abandoned and the host is named.
 
@@ -75,7 +75,7 @@ Severity: error
 
 **What it checks.** The download of an archive from an archive server was cut off or ran out of time before it was complete, so the archive was not checked at all.
 
-**When it fires.** When the download of a Darwin Core Archive from a listed IPT server times out (the proxy gave up after 90 s on an archive) or the connection closes before the whole body arrived. The finding names the host. A partly received archive is never read.
+**When it fires.** When the download of a Darwin Core Archive from a listed IPT server times out (the proxy gave up after 90 s on an archive) or the connection closes before the whole body arrived. A body that breaks off within 1 MB of the 100 MB limit is IN-ARCHIVE-TOO-LARGE instead. The connection-closed case also applies to any other page from a listed IPT server and in browser mode; the 90 s timeout only to an archive in server mode. The finding names the host. A partly received archive is never read.
 
 **Example.** A large archive from a slow IPT server stops after a few megabytes; nothing of it is read.
 
@@ -99,7 +99,7 @@ Severity: error
 
 **What it checks.** This client has used the daily allowance for archive downloads through the tool's server, so the archive was not fetched and not checked.
 
-**When it fires.** When the proxy answers HTTP status 429 with the reason archive_daily_budget: this IP address has used its daily allowance of 200 archive requests or 2 GiB of archive bytes. The finding names the host of the archive. The allowance starts again within 24 hours.
+**When it fires.** When the proxy answers HTTP status 429 with the reason archive_daily_budget: this IP address has used its daily allowance of 200 archive requests or 2 GiB of archive bytes. The finding names the host of the archive. If the client also has two archive downloads running, IN-ARCHIVE-BUSY is raised instead (the busy check comes first). The allowance starts again within 24 hours.
 
 **Example.** After many large archives in one day the next request is refused; the host of that archive is named.
 
@@ -147,7 +147,7 @@ Severity: warning
 
 **What it checks.** A file of a linked record is held back by its source (restricted access or an embargo), so it was not downloaded and not checked. This is not an error in the data, but the lack of remarks says nothing about the file.
 
-**When it fires.** When the source marks a file of a Dataverse dataset as restricted or embargoed, or when downloading the file returns status 401 or 403. The finding names the file and the host. The other files of the record are still read.
+**When it fires.** When the source marks a file of a Dataverse dataset as restricted or embargoed, or when downloading the file returns status 401 or 403. A restricted or embargoed document, picture or README is not reported (documents are left out before this test). The finding names the file and the host. The other files of the record are still read.
 
 **Example.** A dataset has an open file samples.csv and a restricted file raw.csv; raw.csv gets this finding.
 
@@ -171,7 +171,7 @@ Severity: warning
 
 **What it checks.** Some files of a linked record may hold data but are in a format the tool does not read, such as zip or NetCDF, so they were not checked. The report names them so that it never reads as if the whole dataset was checked.
 
-**When it fires.** When a Dataverse record has at least one table the tool reads and, besides, files that are not tables and are not documents, images or a README. The finding names those files. Documents, pictures and READMEs describe the deposit and are left out of the list. If the record has no table at all, IN-NO-DATA-FILE is raised instead.
+**When it fires.** When a Dataverse record has at least one table the tool reads and, besides, files that are not tables and are not documents, images or a README. The finding names those files. Documents, pictures and READMEs describe the deposit and are left out of the list. A restricted or embargoed file is reported by IN-FILE-HELD-BACK instead. A table that is held back or too large still counts as a table, so IN-NO-DATA-FILE is not raised. If the record has no table at all, IN-NO-DATA-FILE is raised instead.
 
 **Example.** A record holds counts.csv and also model.nc and images.zip; the finding names model.nc and images.zip.
 
@@ -183,19 +183,19 @@ Severity: info
 
 **What it checks.** A note about what was read from a Dataverse dataset: which version, and in which form its tables were read.
 
-**When it fires.** Every time a Dataverse dataset is read. It states the version (the latest published one) and the host. It also says whether the tables were read as the author uploaded them, as the .tab copy Dataverse made when the original cannot be read, or that no data file was read at all.
+**When it fires.** Every time the version of a Dataverse dataset is read (not when the record cannot be loaded). It states the version (the latest published one) and the host. It also says whether the tables were read as the author uploaded them, as the .tab copy Dataverse made when the original cannot be read, or that no data file was read at all. Only tables Dataverse converted to .tab are named; a table uploaded as CSV or Excel is not listed.
 
 **Example.** Version 2.1 of a dataset is read from a Dataverse host; one table in its original form and one as the .tab copy.
 
 **What you can do.** Nothing to fix. If the dataset has been updated since, run the check again to read the newer version. In /convert this finding is only shown and never stops the export.
 
-## IN-FILE-UNREADABLE — None of the files that were added could be read at all, for example a damaged workbook or a file in an unsupported format
+## IN-FILE-UNREADABLE — None of the files that were added could be read at all, for example a damaged workbook
 
 Severity: error
 
-**What it checks.** None of the files that were added could be read at all, for example a damaged workbook or a file in an unsupported format. Nothing was checked, so the absence of other remarks does not mean the data are fine.
+**What it checks.** None of the files that were added could be read at all, for example a damaged workbook. Nothing was checked, so the absence of other remarks does not mean the data are fine.
 
-**When it fires.** When every added file fails to parse. The finding lists the names of the files, comma-separated. If at least one file is read, a failing file is not reported by this rule.
+**When it fires.** When every added file fails to parse. A file of a kind the tool does not read at all (such as a PDF) is listed as not read and does not raise this rule; only a file that fails while being parsed counts. The finding lists the names of the files, comma-separated. If at least one file is read, a failing file is not reported by this rule.
 
 **Example.** A workbook that was cut off during copying cannot be opened; the finding names it.
 
@@ -207,7 +207,7 @@ Severity: error
 
 **What it checks.** The table is laid out in a way the tool cannot read as one header row and one row per sample, so it was not read.
 
-**When it fires.** When the layout reader finds data that is transposed (variables or species in rows, samples in columns), a header spread over several rows (more than half of the header cells empty in a table of three or more columns, or a first data row of units that was not folded into the header), a row above the names that holds footnote markers, a table with no rows, a workbook with no sheet of coordinates or measurements, or no table at all. The finding gives the reason and, for a workbook, the sheet.
+**When it fires.** When the layout reader finds data that is transposed (variables in rows, samples in columns; the first column must hold at least two names the tool knows as columns, such as Latitude or Temperature; species in rows are not detected here, only in /convert), a header spread over several rows (more than half of the header cells empty in a table of three or more columns, or a first data row of units that was not folded into the header), a row above the names that holds footnote markers, a table with no rows (only when every sheet is empty), a workbook with no sheet of coordinates or measurements, or no table at all. In /convert a transposed sheet is reported as CONV-SHEET-TRANSPOSED instead. The finding gives the reason and, for a workbook, the sheet.
 
 **Example.** A sheet lists the variables down the first column and the samples across the top; the finding says the data is transposed.
 
@@ -219,7 +219,7 @@ Severity: info
 
 **What it checks.** The file is not saved as UTF-8, so the tool read it as an 8-bit Central European or Western code page. The letters with accents may be wrong if that guess is wrong.
 
-**When it fires.** When the bytes are not valid UTF-8 and all three 8-bit readings the tool tries (windows-1250, ISO-8859-2 and windows-1252) give the same text. The file is read as windows-1250 when one of the bytes 8A, 9A, 8C, 9C, 8F or 9F occurs, otherwise as ISO-8859-2; the finding names the reading used. Plain ASCII is valid UTF-8 and never raises it. If the readings differ, IN-ENCODING-AMBIGUOUS is raised instead. A UTF-16 file or a UTF-8 file with a BOM is read without a finding.
+**When it fires.** When the bytes are not valid UTF-8 and all three 8-bit readings the tool tries (windows-1250, ISO-8859-2 and windows-1252) give the same text. The file is read as ISO-8859-2 (a byte 8A, 9A, 8C, 9C, 8F or 9F makes the readings differ, so that case is IN-ENCODING-AMBIGUOUS, read as windows-1250). Plain ASCII is valid UTF-8 and never raises it. If the readings differ, IN-ENCODING-AMBIGUOUS is raised instead. A UTF-16 file or a UTF-8 file with a BOM is read without a finding.
 
 **Example.** A file that is not valid UTF-8 and whose only non-ASCII byte is E9 in caf followed by that byte: all three readings give the same letter, and the file is read as ISO-8859-2.
 
@@ -255,7 +255,7 @@ Severity: warning
 
 **What it checks.** In one column of a file that uses a decimal comma, every number with a comma has exactly three digits after it, so the comma may be a decimal comma (1,250 is one and a quarter) or a thousands separator (1,250 is one thousand two hundred fifty). The file does not say which.
 
-**When it fires.** Per column of a decimal-comma file, only when every number with a comma has exactly three digits after it. A single value such as 1.250,5 settles the column (with both separators the last is the decimal), and so does a value with one, two, or four or more decimals; then no finding is raised. In 1,250,000 the comma repeats, so it is a thousands mark; the question stays open for the other values and the finding names that cell. The finding gives the column, the number of cells, the first such value and both readings. The cells were read as decimals.
+**When it fires.** Per column of a decimal-comma file, only when every number with a comma has exactly three digits after it. A single value such as 1.250,5 settles the column (with both separators the last is the decimal), and so does a value with one, two, or four or more decimals, a value with a leading zero (0,125) or with four or more digits before the comma (1234,500), since such a number cannot be a thousands group; then no finding is raised. In 1,250,000 the comma repeats, so it is a thousands mark; the question stays open for the other values and the finding names that cell. The finding gives the column, the number of cells, the first such value and both readings. The cells were read as decimals.
 
 **Example.** A column of depths in metres holds 1,250 and 2,500; read as decimals they are 1.25 and 2.5, read as thousands 1250 and 2500.
 
@@ -279,9 +279,9 @@ Severity: info
 
 **What it checks.** A second header row of units was read: the line under the column names holds only units, so it is not data. The units were added to the column names.
 
-**When it fires.** When the row directly under the header (or under a row of statistic labels) has only unit cells, at least two of which go into a header, every cell has a name above it, and the numbers below fit the units. A unit that disagrees with the one the name already gives means the row is not folded. The finding gives the line and the first changed name, for example a column now named a \[h\]. The line numbers in the report stay the file's own.
+**When it fires.** When the row directly under the header (or under a row of statistic labels) has only unit cells, at least two of its cells are units (a unit the header already states counts, so a single name may be the only one that changes), every cell has a name above it, and the numbers below fit the units. A unit that disagrees with the one the name already gives means the row is not folded. The finding gives the line and the first changed name, for example a column now named a \[h\]. The line numbers in the report stay the file's own.
 
-**Example.** A header latitude, longitude over a row degrees_north, degrees_east: the names become latitude \[degrees_north\] and longitude \[degrees_east\].
+**Example.** A header latitude, longitude over a row degrees_north, degrees_east, then rows of numbers: the names become latitude \[degrees_north\] and longitude \[degrees_east\].
 
 **What you can do.** Nothing to fix. If you prefer a single header row, put the unit into the column name. In /convert this finding is only shown and never stops the export.
 
@@ -291,9 +291,9 @@ Severity: info
 
 **What it checks.** A row of units under the header was recognised and skipped. The column names already carried the same units, so no name was changed.
 
-**When it fires.** When the row under the header holds only units and every column it names has the same unit in its own header too, for instance depth \[m\] over m. The row is not a data row and the report keeps the file's own line numbers. The finding gives the line.
+**When it fires.** When the row under the header holds only units and every column it names has the same unit in its own header too, for instance depth \[m\] over m. It needs numbers under at least two of the units and at least one data row below the units row; otherwise the row is not recognised and nothing is reported. The row is not a data row and the report keeps the file's own line numbers. The finding gives the line.
 
-**Example.** The header holds temperature \[C\] and depth \[m\] and the next line holds C and m.
+**Example.** The header holds temperature \[°C\] and depth \[m\], the next line holds °C and m, and rows of numbers follow.
 
 **What you can do.** Nothing to fix. Remove the second row if you want a plain single header. In /convert this finding is only shown and never stops the export.
 
@@ -355,7 +355,7 @@ Severity: warning
 
 **What it checks.** The Event(s) block of a PANGAEA file gives a position or date, but no position was copied into the table (a date may still be), and the table has no position of its own.
 
-**When it fires.** When the table lacks the position and the block cannot give it: several events are listed but the table has no Event column to say which row belongs to which, or the event's position is a track (start and end differ) and not a point, which also applies to a single event. The finding gives the number of events and which of the two reasons applies.
+**When it fires.** When the table lacks the position or the date and the block cannot give it: several events are listed but the table has no Event column to say which row belongs to which, or the event's position is a track (start and end differ) and not a point, which also applies to a single event; the track reason is given only when none of the listed events is a point. The finding gives the number of events and which of the two reasons applies.
 
 **Example.** A block lists three stations and the table has no Event column; nothing is borrowed.
 
@@ -367,7 +367,7 @@ Severity: warning
 
 **What it checks.** Some rows of a PANGAEA table have no matching event in the Event(s) block of the file header, so nothing was taken for them.
 
-**When it fires.** When the table has an Event column, for each row whose Event cell is empty, names an event that is not listed, names an event listed twice, or names an event with no position or date (also for a single event lacking the value). The finding gives the number of rows and their lines.
+**When it fires.** When the table has an Event column, for each row whose Event cell is empty, names an event that is not listed, names an event listed twice, or names an event with no position or date . With one event the Event column is not consulted: every row takes that event, and a single event with neither position nor date gives no finding. The finding appears only when at least one column was added, and gives the number of rows and their lines.
 
 **Example.** Rows 12 and 13 say station 7, and the block lists stations 1 to 6.
 
@@ -379,7 +379,7 @@ Severity: error
 
 **What it checks.** A file named .zip is not a Darwin Core Archive, so nothing was checked. It has no meta.xml and may not even be a ZIP, for example a saved error page.
 
-**When it fires.** When the file has no meta.xml at its root or in its single top-level folder, or is not a zip at all.
+**When it fires.** When the file has no meta.xml at its root or in its single top-level folder, or does not begin with the zip signature (PK); a file that begins with PK but cannot be opened as a zip is IN-DWCA-UNREADABLE.
 
 **Example.** A web page saved with a .zip extension.
 
@@ -403,7 +403,7 @@ Severity: error
 
 **What it checks.** A Darwin Core Archive could not be read safely, so nothing was checked.
 
-**When it fires.** When the zip is damaged, encrypted, uses an unsupported method, is too large or has too many entries, or when meta.xml is missing, too big, has a DTD, is not well-formed or does not describe a single core file with fields. The finding gives a language-neutral reason code such as ZIP-ENCRYPTED or DWCA-META-INVALID.
+**When it fires.** When the zip is damaged, encrypted, uses an unsupported method, is too large or has too many entries, or when meta.xml is too big, has a DTD, is not well-formed or does not describe a single core file with fields, or when the core file that meta.xml names is not in the archive (DWCA-CORE-MISSING). The finding gives a language-neutral reason code such as ZIP-ENCRYPTED or DWCA-META-INVALID.
 
 **Example.** An archive with a password-protected entry gives ZIP-ENCRYPTED.
 
@@ -439,7 +439,7 @@ Severity: info
 
 **What it checks.** The core of the archive is Event, so the tool checked the event table. Its Occurrence extension was counted, not checked row by row.
 
-**When it fires.** When the core is Event and an Occurrence extension exists. The finding gives the number of occurrence rows.
+**When it fires.** When the core is Event and meta.xml lists an Occurrence extension whose file is in the archive and can be read (otherwise nothing is reported). The finding gives the number of occurrence rows.
 
 **Example.** An event-core archive with an Occurrence extension of 4,200 rows.
 
@@ -491,7 +491,7 @@ Severity: warning
 
 **What it checks.** A licence statement has both a text and a link, and they do not agree. Either one is wrong, or the text is not about the licence at all.
 
-**When it fires.** For one statement that has a link, when the text itself offers several licences, or the text and the link read as different licences, or a text with no version names only a licence family against the link of another family, or the link is a licence link the tool has no identifier for while the text names one, or the text names no licence and says more than plain Open Access next to a licence link. For DataCite and Zenodo it also fires when the text is an exact licence name but the link is no licence link and no access value. A text that is empty, plain Open Access or Public Domain next to a CC0 link is neutral and does not fire it. One finding per statement, with the licence read from the text and from the link, a dash meaning not recognised.
+**When it fires.** For one statement that has a link, when the text itself offers several licences, or the text and the link read as different licences, or a text with no version names only a licence family against the link of another family, or the link is a licence link the tool has no identifier for while the text names one, or the text names no licence and says more than plain Open Access next to a licence link. For DataCite and Zenodo it also fires when the text is an exact licence name (the full title or identifier, not an abbreviation such as CC BY 4.0, which stays LIC-FREE-TEXT) but the link is no licence link and no access value. A text that is empty, plain Open Access next to any recognised licence link, or Public Domain next to a CC0 link, is neutral and does not fire it. One finding per statement, with both readings, a dash meaning not recognised.
 
 **Example.** The text says CC BY 4.0 and the link points to the page of the CC BY-NC 4.0 licence.
 
@@ -525,7 +525,7 @@ Severity: warning
 
 **What it checks.** A licence text names a licence and also says something else. The extra words may change the licence, so the statement is not read as the standard licence until a person has looked.
 
-**When it fires.** For a statement whose text names a licence, when the readings of text and link agree and something is left over after the licence name and the neutral wording are removed, and the leftover has no restriction marker. A leftover with a restriction marker is LIC-ADDED-CONDITIONS instead. The finding quotes the leftover, and the leftover of another string of the same statement (identifier or Zenodo title) is added when there is one.
+**When it fires.** For a statement whose text names a licence, when the readings of text and link agree and something is left over after the licence name and the neutral wording are removed, and the leftover has no restriction marker. It counts only next to a name the tool turns into an identifier or a family; next to one it has no identifier for (GNU GPL), such a leftover gives LIC-FREE-TEXT. A leftover with a restriction marker is LIC-ADDED-CONDITIONS instead. The finding quotes the leftover, and the leftover of another string of the same statement (identifier or Zenodo title) is added when there is one.
 
 **Example.** The text reads CC BY 4.0, please contact the data manager.
 
@@ -689,7 +689,7 @@ Severity: warning
 
 **What it checks.** Some rows of the table have a position outside the geographic area the record states. Either the coordinates are wrong (a swapped sign, a swapped latitude and longitude) or the area in the record is too small.
 
-**When it fires.** When a record gives a bounding box and at least one row has a latitude and a longitude outside it. The box is widened by half a unit of the last decimal place of the row coordinate and of the box edge, so a value rounded to the precision of the box is not outside it. A box whose west edge is greater than its east edge is read as crossing the antimeridian. A row at exactly 0, 0 is left to ROW-ZERO-COORD and not reported here. Rows without a position are not counted. One finding lists the rows, their number and one example position.
+**When it fires.** When a record gives a bounding box and at least one row has a latitude and a longitude outside it. The box is widened by half a unit of the last decimal place of the row coordinate and of the box edge, so a value rounded to the precision of the box is not outside it. Where several records give a box, one is used, in the same order as for the time span (ISO 19139, DataCite, PANGAEA, Zenodo, Dataverse); they are never merged. A box whose west edge is greater than its east edge is read as crossing the antimeridian. A row at exactly 0, 0 is left to ROW-ZERO-COORD and not reported here. Rows without a position are not counted. One finding lists the rows, their number and one example position.
 
 **Example.** A record gives a box from 54 to 56 degrees north and 10 to 12 degrees east, and four rows lie at 54.5 north and minus 11.2 (a lost sign).
 
@@ -741,7 +741,7 @@ Severity: error
 
 **What it checks.** A latitude lies outside the range of the globe, -90 to 90 degrees. No place has such a latitude, so the value is a typing error, a swapped column or a unit mistake.
 
-**When it fires.** For every row of a sheet whose latitude column holds a number below -90 or above 90. One finding per sheet lists the lines and shows the first value as written. Text in the cell is not judged here, that is ROW-NON-NUMERIC.
+**When it fires.** For every row of a sheet whose latitude column holds a number below -90 or above 90. One finding per sheet lists the lines and shows the first value as written. Text in the cell is not judged here, that is ROW-NON-NUMERIC; so is a value with a hemisphere letter (95.5 N) or in degrees and minutes. Only a plain number is judged here.
 
 **Example.** A latitude column of a plankton table reads 54.31, 54.33, 154.35 on lines 5, 6 and 7. Line 7 is reported with the value 154.35, a digit typed twice.
 
@@ -762,7 +762,7 @@ Severity: error
 
 **What it checks.** A longitude lies outside -180 to 180 degrees after the tool has tried the 0 to 360 scale. No place has such a longitude, so the value is a typing error, a swapped column or a unit mistake.
 
-**When it fires.** For every row whose longitude is a number below -180 or above 360 (values from 180 to 360 are first read on the 0 to 360 scale and only noted as ROW-LON-360). One finding per sheet lists the lines and the first value as written.
+**When it fires.** For every row whose longitude is a number below -180 or above 360 (values from 180 to 360 are first read on the 0 to 360 scale and only noted as ROW-LON-360). One finding per sheet lists the lines and the first value as written. Only a plain number is judged: a value with a hemisphere letter (200 W) or in degrees and minutes is ROW-NON-NUMERIC.
 
 **Example.** A longitude column holds 18.62, 18.65 and 1865.0 on lines 10, 11 and 12. Line 12 is reported: a decimal point was lost.
 
@@ -835,7 +835,7 @@ Severity: error
 
 **What it checks.** A row has more or fewer values than the header has columns. Its values are shifted against the header, so no cell of the row can be trusted.
 
-**When it fires.** When the file is read: for each line whose field count differs from the header field count. The finding gives the expected count and the count of the first listed line. The rows are kept as found and are not realigned.
+**When it fires.** When the file is read: for each line whose field count differs from the header field count. The finding gives the expected count and the count of the first listed line. The rows are kept as found and are not realigned. Not raised when at least 95 percent of the rows (3 rows or more) are wider than the header and the extra cells hold values (IN-HEADER-SHORT extends the header instead), nor when every row only ends with an empty extra field (a trailing delimiter). Never raised for a workbook sheet.
 
 **Example.** A header has 8 columns. Line 31 has 9 values because a comment contains an unquoted comma. Line 31 is reported with expected 8 and found 9.
 
@@ -849,7 +849,7 @@ Severity: warning
 
 **When it fires.** For a cell of a numeric column (a coordinate, a depth, a measurement) that is neither a number nor one of the recognised missing-value marks (empty, NA, N/A, NaN, nd, n.d., -, --, null). One finding per column lists the lines and an example. Thousands separators are not accepted, 1,234.5 is text unless the file uses decimal commas.
 
-**Example.** A depth column holds 10, 20, below detection, 40. The cell below detection on line 3 is reported with that text.
+**Example.** A depth column holds 10, 20, below detection, 40. The cell below detection on line 4 is reported with that text.
 
 **What you can do.** Replace the text with a number, or empty the cell. In /convert this finding does not block the export, but it needs your acceptance, one tick for the rule; the cell is not written as a number.
 
@@ -861,7 +861,7 @@ Severity: warning
 
 **When it fires.** For a numeric cell whose letters and digits, without separators, are only the letters NA repeated, and which is not one of the standard marks. One finding per column lists the lines and an example.
 
-**Example.** A salinity column holds 33.1, NANA, 33.4. NANA on line 2 is read as missing and reported.
+**Example.** A salinity column holds 33.1, NANA, 33.4. NANA on line 3 is read as missing and reported.
 
 **What you can do.** Use one consistent mark, or an empty cell. In /convert this finding is only shown, and the cell is treated as missing.
 
@@ -871,7 +871,7 @@ Severity: warning
 
 **What it checks.** One station name appears at positions that differ by a typed digit, swapped axes or a sign. A station is one place, so one of the positions is probably wrong.
 
-**When it fires.** For rows of one station name, compared within one cruise or, without a cruise column, within one calendar year, when two positions differ in one of three ways. A typed digit: one coordinate differs by a whole number of degrees and the other keeps its whole degree; the shifted coordinate needs two written decimals (one inside a cruise, not .0 or .5) and there is no distance limit. Exchanged axes: each position is the other with latitude and longitude swapped. A sign: as written the positions are at least 100 km apart, and with one sign flipped they are within 50 km and at least ten times closer. Placeholder names such as unknown do not count.
+**When it fires.** For rows of one station name, compared within one cruise or, without a cruise column, within one calendar year, when two positions differ in one of three ways. A typed digit: one coordinate differs by a whole number of degrees and the other keeps its whole degree; the shifted coordinate needs two written decimals (one inside a cruise, not .0 or .5) and there is no distance limit. Exchanged axes: each position is the other with latitude and longitude swapped. A sign: as written the positions are at least 100 km apart, and with one sign flipped they are within 50 km and at least ten times closer. Placeholder names such as unknown do not count. Among rows with neither a cruise nor a date a typed digit is not looked for; such a station gets ROW-STATION-SPREAD instead.
 
 **Example.** Station A3 is at 76.9 N 15.5 E on 9 rows and at 76.9 N -15.5 E on 14 rows. The finding lists both positions and says that the longitude differs only by its sign.
 
@@ -883,7 +883,7 @@ Severity: info
 
 **What it checks.** One station name has positions more than 10 km apart. A station is usually one place, but a name that stands for an area, a transect or a cruise can legitimately span more.
 
-**When it fires.** When the largest distance between the positions of one station name, within one cruise or one calendar year, is above 10 km, and either it is not above 1000 km or the name is an expedition or cruise label, or a generic label such as Sta. 1 with no cruise or date to anchor it; those stay a note even above 1000 km. The finding gives the distance rounded to km and the positions. It is an information note.
+**When it fires.** When the largest distance between the positions of one station name, within one cruise or one calendar year, is above 10 km, and either it is not above 1000 km or the name is an expedition or cruise label, or a generic label such as Sta. 1 with no cruise or date to anchor it; those stay a note even above 1000 km. Not raised when a pair of positions matches ROW-STATION-MOVED (only that is raised); placeholder names such as unknown and positions with latitude equal to longitude are skipped. The finding gives the distance rounded to km and the positions. It is an information note.
 
 **Example.** Station T1 has positions 38 km apart, because the name was used for every point of a transect. The note gives 38 km.
 
@@ -984,9 +984,9 @@ Severity: info
 
 **What it checks.** Two consecutive events are so far apart in space compared to time that a ship would need more than 40 knots. It is not clear which of the two is wrong.
 
-**When it fires.** For a single pair of consecutive events of one cruise, for example the first or the last event or two wrong events in a row, when the speed exceeds 40 knots and neither event is already in a ship-speed finding (ROW-SHIP-SPEED or ROW-SHIP-SPEED-UNUSUAL).
+**When it fires.** For a single pair of consecutive events of one cruise, for example the first or the last event or two wrong events in a row, when the speed exceeds 40 knots and neither event is already in a ship-speed finding (ROW-SHIP-SPEED or ROW-SHIP-SPEED-UNUSUAL). A cruise (or declared single cruise) with fewer than three events is not judged at all, so a pair alone never fires.
 
-**Example.** The first station of a cruise is at 60.1 N 5.2 E on 3 May at 10:00 and the second at 54.0 N 8.0 E at 12:00. The pair is reported, because the speed is about 190 knots.
+**Example.** A cruise has three stations: the first at 60.1 N 5.2 E on 3 May at 10:00, the second at 54.0 N 8.0 E at 12:00 and the third at 54.1 N 8.1 E at 14:00. The first pair is reported, because the speed is about 190 knots.
 
 **What you can do.** Decide which of the two events has the wrong position or time and correct it. /check only: /convert passes no cruise to this check, so this finding never appears there.
 
@@ -1005,9 +1005,9 @@ Severity: warning
 
 **What it checks.** A date cell cannot be read as a date. Without a date the event cannot be placed in time, so it is lost from the output.
 
-**When it fires.** For a cell of the date column that is none of the accepted forms: ISO 8601, YYYY/MM/DD, DD.MM.YYYY, an unambiguous DD/MM/YYYY, YY-MM-DD, a four-digit year, YYYYMMDD in a column that is the date, or an Excel serial number. One finding per sheet lists the lines and an example.
+**When it fires.** For a cell of the date column that is none of the accepted forms: ISO 8601, YYYY/MM/DD, DD.MM.YYYY, an unambiguous DD/MM/YYYY, YY-MM-DD, a four-digit year, YYYYMMDD in a column that is the date, or an Excel serial number. Also raised for a time cell that cannot be read as a time of day, and for Year, Month and Day columns that do not make a date. One finding per sheet lists the lines and an example.
 
-**Example.** A date column holds 2021-06-14, summer 2021 and 14 Jun 2021. The text summer 2021 on line 3 is reported.
+**Example.** A date column holds 2021-06-14, summer 2021 and 2021-06-16. The text summer 2021 on line 3 is reported.
 
 **What you can do.** Write the date in ISO form, YYYY-MM-DD. In /convert this finding blocks the export, except for the cells you have declared by the date order question, which it removes.
 
@@ -1046,9 +1046,9 @@ Severity: warning
 
 **What it checks.** The dates include a year that the dataset itself does not claim. The label, the file name, the title or the temporal extent name other years, so either the claim or the row is wrong.
 
-**When it fires.** For rows whose year is not among the years found in the label, the file name, the record title or the temporal extent. A range such as 1994-2019 names every year in it; a number followed by a unit such as m is not read as a year. Only years between 1900 and 2100 count. It does nothing when the dataset names no year.
+**When it fires.** For rows whose year is not among the years found in the label, the file name, the record title or the temporal extent. A range such as 1994-2019 names every year in it; a number followed by a unit such as m is not read as a year. Only years between 1900 and 2100 count. It does nothing when the dataset names no year. A date later than today is ROW-DATE-FUTURE only, not here.
 
-**Example.** The title says Winter cruise 2018. Two rows are dated 2081-02-11, a swapped digit pair. The two lines are reported.
+**Example.** The title says Winter cruise 2018. Two rows are dated 2008-02-11, a mistyped digit. The two lines are reported.
 
 **What you can do.** Correct the date, or correct the title or the temporal extent if the data really span other years. In /convert this finding is only shown.
 
@@ -1108,7 +1108,7 @@ Severity: info
 
 **When it fires.** When rows with the same key and parameter differ and one or more other columns can tell them apart; the finding names the columns used. It is an information note.
 
-**Example.** Station S3 has two nitrate rows, 4.1 and 4.6, and a Depth column of 5 and 20. Depth is added to the key, and the note says so.
+**Example.** Station S3 has two nitrate rows, 4.1 and 4.6, and a Pressure \[dbar\] column of 5 and 20. Pressure is added to the key, and the note says so.
 
 **What you can do.** Check that the added columns really separate different samples and not replicates. /convert does not raise this rule; its own CONV-LONG-DUPLICATE covers duplicate values of a long sheet.
 
@@ -1118,9 +1118,9 @@ Severity: info
 
 **What it checks.** Columns you set to ignore differ between rows that are equal in every column that identifies them. Ignoring them may merge rows that are really different.
 
-**When it fires.** When rows equal in every written identifying column differ in an ignored column. Nothing is removed. A column that is ignored by default is still written.
+**When it fires.** When rows equal in every written identifying column differ in an ignored column. Nothing is removed. Only a column the tool would have written and you changed to ignore counts; a column it already proposes to ignore (for example Replicate) never raises this rule.
 
-**Example.** Two rows have the same station, date and depth but different values in a Replicate column that is set to ignore. The rows are reported.
+**Example.** Two rows have the same station, date and depth but different values in a Bottle column that you set to ignore. The rows are reported.
 
 **What you can do.** Stop ignoring the column if it separates real samples. /convert does not raise this rule.
 
@@ -1142,7 +1142,7 @@ Severity: info
 
 **What it checks.** A date written with two-digit parts, NN-NN-NN, was read with the century inferred. The century is a guess and can be wrong for old data.
 
-**When it fires.** Once per column, when the order of the cells is fixed, because some cell rules the other readings out or the order was declared. The century rule: a two-digit year up to the current year plus one is 20xx, any other is 19xx. The finding gives the interpreted date and the order read (ymd, dmy or mdy). One acceptance of the rule covers the century in every column it names.
+**When it fires.** Once per column, when the order of the cells is fixed, because some cell rules the other readings out or the order was declared. The century rule: a two-digit year up to the current year plus one is 20xx, any other is 19xx. The finding gives the interpreted date and the order read (ymd, dmy or mdy). Also raised when several orders fit but every cell gives the same date in each (12-12-12); the order then lists all of them. One acceptance of the rule covers the century in every column it names.
 
 **Example.** The column holds 98-07-25. 98 cannot be a day or a month, so it is read as year-month-day, 1998-07-25, with the century 19xx. If the cruise was in 2098 the century is wrong.
 
@@ -1206,9 +1206,9 @@ Severity: info
 
 **What it checks.** The direction of the depth, positive down or positive up, is not stated by the header or by your declaration. The same number can then mean opposite things.
 
-**When it fires.** When the depth column is known but its direction is unknown after the header and the declaration are read. It is not raised for a sheet already reported by ROW-DEPTH-MIXED-SIGN.
+**When it fires.** When the depth column is known but its direction is unknown after the header and the declaration are read. It is not raised for a sheet already reported by ROW-DEPTH-MIXED-SIGN. A column with a depth word in its header (Depth, Depth \[m\]) and no negative value is read as positive down, and one with only negative values as positive up; neither raises this rule.
 
-**Example.** A column called Depth holds 5, 20 and 50 with no unit or sign note. It is not known whether 50 is 50 m below or above the surface.
+**Example.** A column called z, which you map as the depth in the mapping editor and leave at the direction not stated, holds 5, 20 and 50. It is not known whether 50 is 50 m below or above the surface.
 
 **What you can do.** State the direction in the header, for example Depth (m, positive down), or declare it. /convert does not raise this rule: the depth it checks is its own Event table, in metres and positive down.
 
@@ -1232,7 +1232,7 @@ Severity: warning
 
 **When it fires.** Once per sheet and column, for a cell exactly equal to one of the three numbers, in the depth column (or the two Darwin Core depth bounds) and in every variable. The cell is kept as written and is left out of the depth direction, ROW-DEPTH-RANGE and CHEM-RANGE.
 
-**Example.** A salinity column holds 33.1, -999 and 33.4. The -999 on line 2 is kept as written, left out of the range checks, and reported.
+**Example.** A salinity column holds 33.1, -999 and 33.4 on lines 2 to 4, under a header on line 1. The -999 on line 3 is kept as written, left out of the range checks, and reported.
 
 **What you can do.** Empty such cells in the source if they mean missing. In /convert this finding blocks the export until you answer, per column, whether the code is missing or a real value; on missing the cells are left empty and listed.
 
@@ -1242,7 +1242,7 @@ Severity: info
 
 **What it checks.** A coordinate was written in degrees and minutes, or degrees, minutes and seconds, as text. The tool converted it to decimal degrees.
 
-**When it fires.** For each coordinate cell of that form; the finding lists the lines and the conversion. It is a note that a conversion took place.
+**When it fires.** Once for each coordinate column that holds a cell of that form; the finding names the column and one example cell and lists no lines. It is a note that a conversion took place.
 
 **Example.** The cell 54 30.5 N becomes 54.508333. The note shows both.
 
@@ -1405,7 +1405,7 @@ Severity: warning
 
 **What it checks.** Text shows the damage of a double encoding: letters such as accented names appear as two odd characters. The file was decoded with the wrong encoding at some stage.
 
-**When it fires.** When a cell contains the pair U+00C3 or U+00C2 followed by a character from U+0080 to U+00BF, as in the damaged form of an accented letter. A lone U+00C3 or U+00C2 is not matched, nor are other double-encoded forms. The finding gives the count of the pairs.
+**When it fires.** When a cell contains the pair U+00C3 or U+00C2 followed by a character from U+0080 to U+00BF, as in the damaged form of an accented letter. A lone U+00C3 or U+00C2 is not matched, nor are other double-encoded forms. The finding is one per sheet, reads the header row as well, names the columns and gives the count of cells, not pairs. Not raised for a file already reported as IN-ENCODING-FALLBACK or IN-ENCODING-AMBIGUOUS, because there the pair comes from the fallback decoding.
 
 **Example.** A station called Sao Joao appears as the damaged form of Sao Joao with accents, two odd characters in place of each accented letter. The cell is reported.
 
@@ -1417,7 +1417,7 @@ Severity: error
 
 **What it checks.** A Darwin Core table has no column for a term that OBIS requires. Without the required terms the records cannot be published in OBIS, so the file is not ready however good its other columns are.
 
-**When it fires.** Only on Darwin Core input: an Archive, or a table with at least three distinct Darwin Core terms in its header (spelled exactly, capitals count) plus one of occurrenceID, eventID, parentEventID, scientificName, scientificNameID, taxonID, basisOfRecord or occurrenceStatus. With eventID or parentEventID and no occurrence term it is an Event core, otherwise an Occurrence core. Always required: eventDate, decimalLatitude, decimalLongitude and an identifier (eventID for Event; occurrenceID or eventID for Occurrence; an Archive core id may stand for it). Occurrence also needs scientificName, occurrenceStatus and basisOfRecord. An occurrence table with an eventID column not blank in every row is the occurrence side of an event and occurrence pair, and then the date and coordinates are not required of it. Sources: obistools check_fields, OBIS Manual.
+**When it fires.** Only on Darwin Core input: an Archive, or a table with at least three distinct Darwin Core terms in its header (spelled exactly, capitals count) plus one of occurrenceID, eventID, parentEventID, scientificName, scientificNameID, taxonID, basisOfRecord or occurrenceStatus. With eventID or parentEventID and no occurrence term it is an Event core, otherwise an Occurrence core. Always required: eventDate, decimalLatitude, decimalLongitude and an identifier (eventID for Event; occurrenceID or eventID for Occurrence; an Archive core id may stand for it). Occurrence also needs scientificName, occurrenceStatus and basisOfRecord. An occurrence table with an eventID column with a value in at least one row is the occurrence side of an event and occurrence pair, and then the date and coordinates are not required of it. Sources: obistools check_fields, OBIS Manual.
 
 **Example.** A table with the columns occurrenceID, scientificName, eventDate, decimalLatitude and decimalLongitude but no occurrenceStatus and no basisOfRecord column is reported as missing occurrenceStatus and basisOfRecord.
 
@@ -1503,7 +1503,7 @@ Severity: error
 
 **What it checks.** A parentEventID points at an event that is not in the eventID column of the same table. The hierarchy of events then has a broken link, and a reader cannot rebuild the cruise, station and sample structure.
 
-**When it fires.** Only on Darwin Core input read as an Event core that has a parentEventID column. Every non-blank parentEventID that matches no eventID of the table is listed with its lines, and the finding counts the different missing parents. It does not run when the archive was read only in part (the first 200000 rows, see IN-DWCA-PARTIAL), because the parent may be in a row that was not read. Sources: obistools check_eventids and Biocheck.
+**When it fires.** Only on Darwin Core input read as an Event core that has a parentEventID column and an eventID column (in an archive the core id column); without one only DWC-TERM-MISSING is raised. Every non-blank parentEventID that matches no eventID of the table is listed with its lines, and the finding counts the different missing parents. It does not run when the archive was read only in part (the first 200000 rows, see IN-DWCA-PARTIAL), because the parent may be in a row that was not read. Sources: obistools check_eventids and Biocheck.
 
 **Example.** An event table whose parentEventID cells name CRUISE-A on three lines, while no eventID is CRUISE-A, is reported.
 
@@ -1520,7 +1520,7 @@ Severity: error
 
 **What it checks.** The eventID and parentEventID columns form a circle: an event is its own ancestor. A hierarchy that never reaches a top event cannot be read, and GBIF flags it as an infinite lineage.
 
-**When it fires.** Only on Darwin Core input read as an Event core that has a parentEventID column. Each eventID is followed to its parent, then to that parent, and so on; every row on a circle is listed and counted. A row whose parentEventID equals its own eventID is a circle of one. When an eventID repeats, its first non-blank parent is used. The search visits each event once. It does not run when the archive was read only in part (the first 200000 rows, see IN-DWCA-PARTIAL). Source: the GBIF issue PARENT_EVENT_INFINITE_LINEAGE.
+**When it fires.** Only on Darwin Core input read as an Event core that has a parentEventID column and an eventID column (in an archive the core id column); without one only DWC-TERM-MISSING is raised. Each eventID is followed to its parent, then to that parent, and so on; every row on a circle is listed and counted. A row whose parentEventID equals its own eventID is a circle of one. When an eventID repeats, its first non-blank parent is used. The search visits each event once. It does not run when the archive was read only in part (the first 200000 rows, see IN-DWCA-PARTIAL). Source: the GBIF issue PARENT_EVENT_INFINITE_LINEAGE.
 
 **Example.** Event A has parent B, B has parent C and C has parent A: all three rows are reported.
 
@@ -1588,7 +1588,7 @@ Severity: info
 
 **What it checks.** Two station names that differ only in spelling occur in the loaded tables, so they are probably the same station written in two ways. Left as they are, the station is split into two in any grouping by name and the other cross-file rules cannot match it.
 
-**When it fires.** Across all loaded tables, when two different station names become equal after normalisation: only the part after the last slash is kept, letters are made upper case and spaces are removed. A name that is the same in every table is not reported. One finding per pair of spellings; the first spelling is the one that is used by the most tables, then by the most rows. The finding names both spellings.
+**When it fires.** Needs at least two loaded tables; two spellings inside a single table that is the only one loaded are not reported. Across all loaded tables, when two different station names become equal after normalisation: only the part after the last slash is kept, letters are made upper case and spaces are removed. A name that is the same in every table is not reported. One finding per pair of spellings; the first spelling is the one that is used by the most tables, then by the most rows. The finding names both spellings.
 
 **Example.** One file calls a station "ST 7" and another calls it "st7"; "ST 7" and "st7" are reported as the same station.
 

@@ -16,7 +16,7 @@ abstract: >-
   dropped by a user are read in the user's browser and are never uploaded.
 type: software
 version: 1.1.0
-date-released: "2026-11-19"  # PLACEHOLDER: set to the real release date when tagging
+date-released: "2026-11-19"
 doi: "10.5281/zenodo.24366744"
 license: AGPL-3.0-or-later
 url: "https://tools.something-rare.com"
