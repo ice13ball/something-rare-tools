@@ -43,6 +43,7 @@ export type LedgerReason =
   | 'absent-mark'
   | 'bad-mark'
   | 'count-text'
+  | 'text-left-out'
   | 'text-cell'
   | 'no-station'
   | 'duplicate-level'
@@ -73,7 +74,7 @@ export type LedgerReason =
 
 export const LEDGER_REASONS: readonly LedgerReason[] = [
   'ragged', 'summary-row', 'no-code', 'no-replicate', 'no-taxon', 'value-no-taxon', 'taxon-no-quantity', 'quantity-blank', 'nothing-to-record', 'duplicate-event', 'repeat-total', 'copy-dropped', 'zero', 'zero-with-biomass',
-  'negative', 'not-integer', 'cover-range', 'class-value', 'na-cell', 'absent-mark', 'bad-mark', 'count-text', 'text-cell', 'no-station', 'duplicate-level', 'repeat-in-sample', 'absent-record', 'column-not-read', 'sheet-not-read', 'sheet-not-used',
+  'negative', 'not-integer', 'cover-range', 'class-value', 'na-cell', 'absent-mark', 'bad-mark', 'count-text', 'text-left-out', 'text-cell', 'no-station', 'duplicate-level', 'repeat-in-sample', 'absent-record', 'column-not-read', 'sheet-not-read', 'sheet-not-used',
   'empty-parameter', 'repeated-parameter', 'quality-flag', 'position-no-taxon', 'sample-no-taxon', 'not-in-event',
   'taxon-only-in-total', 'one-specimen-total', 'join-not-chosen', 'join-no-key', 'join-ambiguous', 'join-results-not-written', 'join-no-match', 'no-event-date',
   'turned-label', 'turn-no-name', 'turn-name-repeated', 'missing-code', 'summary-undecided',

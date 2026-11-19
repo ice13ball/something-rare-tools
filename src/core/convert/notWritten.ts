@@ -82,6 +82,8 @@ export const REASON_KIND: Record<LedgerReason, ReasonKind> = {
   'sheet-not-used': 'listed',
   'quality-flag': 'listed',
   'text-cell': 'listed',
+  // a text in a count cell the person answered "leave out" for: listed with the cell, never written
+  'text-left-out': 'listed',
   'position-no-taxon': 'listed',
   'sample-no-taxon': 'listed',
   // the cells of a turned sheet's label columns (left of the name column, or declared not samples): listed with the line, never written
@@ -142,8 +144,10 @@ export const LISTED_BY: Partial<Record<LedgerReason, readonly string[]>> = {
   // a sheet no sample or taxon column reads from: the ledger lists the sheet, no finding names it
   'sheet-not-used': [],
   'quality-flag': ['CONV-LONG-FLAG-PARAMETERS'],
-  // a text in a count cell the person answered "leave out" for (CONV-COUNT-TEXT-DECIDED says it), or a text a value column cannot hold (the question of a count column is CONV-TEXT-IN-TAXON-CELL)
-  'text-cell': ['CONV-TEXT-IN-TAXON-CELL', 'CONV-COUNT-TEXT-DECIDED'],
+  // a text a value column cannot hold
+  'text-cell': ['CONV-TEXT-IN-TAXON-CELL'],
+  // a text in a count cell the person answered "leave out" for: CONV-COUNT-TEXT-DECIDED says it
+  'text-left-out': ['CONV-COUNT-TEXT-DECIDED'],
   // wide-sheet rows with only a position or only a sample code: understood as spacers or headers and listed in the ledger (ConvertLedger "unplaced"); no finding is raised
   'position-no-taxon': [],
   'sample-no-taxon': [],

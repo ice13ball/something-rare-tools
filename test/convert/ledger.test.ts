@@ -506,11 +506,13 @@ describe('the reasons a cell can have fit the bits of a wide row', () => {
     const used = new Set<string>();
     for (const f of readdirSync(dir).filter((x) => x.endsWith('.ts'))) {
       const src = readFileSync(dir + f, 'utf8');
-      for (const m of src.matchAll(/(?:cellFate|\.cell)\([^;\n]*?'([a-z-]+)'\s*\)/g)) used.add(m[1]);
+      // every quoted reason inside the call, so both branches of a ternary count
+      for (const call of src.matchAll(/(?:cellFate|\.cell)\(([^;\n]*)\)/g)) for (const q of call[1].matchAll(/'([a-z]+(?:-[a-z]+)*)'/g)) used.add(q[1]);
     }
     expect(used.size).toBeGreaterThan(8);
     for (const reason of used) expect(LEDGER_REASONS.indexOf(reason as never), reason).toBeLessThan(31);
     expect(LEDGER_REASONS.indexOf('count-text')).toBeLessThan(31);
     expect(LEDGER_REASONS.indexOf('text-cell')).toBeLessThan(31);
+    expect(LEDGER_REASONS.indexOf('text-left-out')).toBeLessThan(31);
   });
 });

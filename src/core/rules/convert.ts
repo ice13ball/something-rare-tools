@@ -702,7 +702,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
       de: `{count} {+count:Zelle|Zellen} von {columns} {+count:enthält|enthalten} den Text „{value}“, wo eine Zahl erwartet wird. Sagen Sie, was er bedeutet: Abwesenheit, {+count:sie|sie} weglassen oder anwesend mit dem Text in den Bemerkungen. Auch eine Antwort für alle Texte einer Spalte ist möglich. Der Export wartet auf die Antwort.`,
       fr: `{count} {+count:cellule|cellules} de {columns} {+count:contient|contiennent} le texte « {value} » là où un nombre est attendu. Dites ce qu'il signifie : absence, {+count:la|les} laisser de côté, ou présence avec le texte dans les remarques. Une réponse pour toute une colonne est aussi possible. L'export attend la réponse.`,
     },
-    technical: `{file}, {sheet}:{lines} field {field}: {count} of the {held} cell(s) with the text "{value}" in a quantity or taxon column ({columns}; column indexes {indexes}) are not numbers (NA tokens and NA variants are NA cells, not asked). Nothing is written for them (each is in the list of rows not written with the reason count-text) until the person answers for the text: absence (the cell is read as 0: occurrenceStatus absent with the full-list tick, else left out as a zero), leave out (left out, reason text-cell) or present (an occurrence present with the text in occurrenceRemarks), or gives one answer for every text of a column (the cells of each whole column that hold a text: {columnTexts}). A text is the cell's trimmed text, case kept; no word is read as an absence by the tool. An answer holds for the number of cells it was given for.`,
+    technical: `{file}, {sheet}:{lines} field {field}: {count} of the {held} cell(s) with the text "{value}" in a quantity or taxon column ({columns}; column indexes {indexes}) are not numbers (NA tokens and NA variants are NA cells, not asked). Nothing is written for them (each is in the list of rows not written with the reason count-text) until the person answers for the text: absence (the cell is read as 0: occurrenceStatus absent with the full-list tick, else left out as a zero), leave out (left out, reason text-left-out) or present (an occurrence present with the text in occurrenceRemarks), or gives one answer for every text of a column (the cells of each whole column that hold a text: {columnTexts}). A text is the cell's trimmed text, case kept; no word is read as an absence by the tool. An answer holds for the number of cells it was given for.`,
   },
   {
     id: 'CONV-COUNT-TEXT-DECIDED',
@@ -718,6 +718,15 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     },
     plainIf: [
       {
+        param: 'via',
+        plain: {
+          pl: `To odpowiedź udzielona dla całej kolumny.`,
+          en: `This is the answer you gave for the whole column.`,
+          de: `Das ist die Antwort, die Sie für die ganze Spalte gegeben haben.`,
+          fr: `C'est la réponse que vous avez donnée pour toute la colonne.`,
+        },
+      },
+      {
         param: 'fromFile',
         plain: {
           pl: `Ta odpowiedź pochodzi z pliku towarzyszącego.`,
@@ -727,7 +736,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
         },
       },
     ],
-    technical: `{file}, {sheet}:{lines} field {field}: {count} of the {held} cell(s) with the text "{value}" in a quantity or taxon column ({columns}; column indexes {indexes}; text cells per column {columnTexts}) were answered "{answer}" (CONV-TEXT-IN-TAXON-CELL asked). absence: the cell is read as the number 0 (occurrenceStatus absent, individualCount 0, with the full-list tick; otherwise left out as a zero, reason zero). leave-out: the cell is left out and listed (reason text-cell). present: an occurrence present with the text in occurrenceRemarks (CONV-COUNT-TEXT-DECIDED:present). via=column: the answer is the one given for the whole column. The answer holds for this number of cells only.`,
+    technical: `{file}, {sheet}:{lines} field {field}: {count} of the {held} cell(s) with the text "{value}" in a quantity or taxon column ({columns}; column indexes {indexes}; text cells per column {columnTexts}) were answered "{answer}" (CONV-TEXT-IN-TAXON-CELL asked). absence: the cell is read as the number 0 (occurrenceStatus absent, individualCount 0, with the full-list tick; otherwise left out as a zero, reason zero). leave-out: the cell is left out and listed (reason text-left-out). present: an occurrence present with the text in occurrenceRemarks (CONV-COUNT-TEXT-DECIDED:present). via=column: the answer is the one given for the whole column. The answer holds for this number of cells only.`,
   },
   {
     id: 'CONV-TAXON-SAME-EVENT',
@@ -2700,12 +2709,12 @@ export const PROFILE_VARIANTS: Readonly<Record<string, { plain: Record<Lang, str
   // CONV-COUNT-TEXT-DECIDED when the person answered "leave out": the cells are left out and listed
   'CONV-COUNT-TEXT-DECIDED:leave-out': {
     plain: {
-      pl: `Jak powiedziano, tekst „{value}” w {count} {+count:komórce|komórkach|komórkach} z kolumn {columns} jest pominięty i {+count:jest|są|są} na liście niezapisanych komórek. „Zapytaj ponownie” cofa odpowiedź.`,
+      pl: `Jak powiedziano, tekst „{value}” w {count} {+count:komórce|komórkach|komórkach} z kolumn {columns} jest pominięty: {+count:komórka jest pominięta|komórki są pominięte|komórki są pominięte} i {+count:jest|są|są} na liście niezapisanych komórek. „Zapytaj ponownie” cofa odpowiedź.`,
       en: `As you said, the text "{value}" in {count} {+count:cell|cells} of {columns} is left out, and {+count:the cell is|the cells are} in the list of what was not written. "Ask again" takes the answer back.`,
       de: `Wie angegeben, wird der Text „{value}“ in {count} {+count:Zelle|Zellen} von {columns} weggelassen; {+count:die Zelle steht|die Zellen stehen} in der Liste des Nicht-Geschriebenen. „Erneut fragen“ nimmt die Antwort zurück.`,
       fr: `Comme indiqué, le texte « {value} » dans {count} {+count:cellule|cellules} de {columns} est laissé de côté et {+count:figure|figurent} dans la liste de ce qui n'est pas écrit. « Demander à nouveau » reprend la réponse.`,
     },
-    technical: `{file}, {sheet}:{lines} field {field}: {count} of the {held} cell(s) with the text "{value}" in a quantity or taxon column ({columns}) were answered "leave-out" (CONV-TEXT-IN-TAXON-CELL asked): nothing is written for them and each is in the list of rows not written with the reason text-cell. The answer holds for this number of cells only.`,
+    technical: `{file}, {sheet}:{lines} field {field}: {count} of the {held} cell(s) with the text "{value}" in a quantity or taxon column ({columns}) were answered "leave-out" (CONV-TEXT-IN-TAXON-CELL asked): nothing is written for them and each is in the list of rows not written with the reason text-left-out. The answer holds for this number of cells only.`,
   },
   // CONV-COUNT-TEXT-DECIDED when the person answered "present": an occurrence present, the text in the remarks
   'CONV-COUNT-TEXT-DECIDED:present': {

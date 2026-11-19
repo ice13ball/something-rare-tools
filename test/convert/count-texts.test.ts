@@ -82,11 +82,11 @@ describe('the answers', () => {
     expect(r.measurements.filter((m) => m.target.id === o.id)).toEqual([]);
   });
 
-  it('leave out: the cells are not written, listed with the reason text-cell, and the ledger balances', () => {
+  it('leave out: the cells are not written, listed with the reason text-left-out, and the ledger balances', () => {
     const sin = wide({ countTexts: answer('absent', 'leave-out', 2) });
     const r = run(sin);
     expect(find(r.findings, 'CONV-COUNT-TEXT-DECIDED')[0].params).toMatchObject({ answer: 'leave-out', count: 2, held: 2 });
-    expect(countOf(lost(sin, r), 'text-cell')).toBe(2);
+    expect(countOf(lost(sin, r), 'text-left-out')).toBe(2);
     expect(r.occurrences.filter((o) => o.occurrenceRemarks === 'absent')).toEqual([]);
     expect(r.ledger.every((l) => (l.cells?.unexplained ?? 0) === 0 && l.rows.unexplained === 0)).toBe(true);
   });
@@ -178,7 +178,7 @@ describe('a long sheet\'s quantity column', () => {
     expect(r.occurrences.find((o) => o.occurrenceRemarks === '<0.5')?.occurrenceStatus).toBe('present');
     const gone = long({ countTexts: { absent: { answer: 'leave-out', count: 2 } } });
     const g = run(gone);
-    expect(countOf(lost(gone, g), 'text-cell')).toBe(2);
+    expect(countOf(lost(gone, g), 'text-left-out')).toBe(2);
   });
 });
 
@@ -188,5 +188,67 @@ describe('presence-only is unchanged', () => {
     const r = run(sin);
     expect(find(r.findings, 'CONV-PRESENCE-VALUE')).toHaveLength(1);
     expect(find(r.findings, 'CONV-TEXT-IN-TAXON-CELL')).toEqual([]);
+  });
+});
+
+const balanced = (r: ReturnType<typeof convert>): boolean => r.ledger.every((l) => (l.cells?.unexplained ?? 0) === 0 && l.rows.unexplained === 0);
+
+describe('fix round 1', () => {
+  const answer = (text: string, a: 'absence' | 'leave-out' | 'present', count: number) => ({ [text]: { answer: a, count } });
+
+  it('I1: an absence is not judged by the class scale: under 1-5 it unblocks, with no CONV-CLASS-VALUE', () => {
+    const rows: Cell[][] = [['CR', 'S1', 'a', 50.2, 1.6, '2020-05-01', 'absent', 3], ['CR', 'S2', 'b', 50.3, 1.5, '2020-05-02', 2, 4]];
+    for (const fullList of [false, true]) {
+      const sin = wide({ countTexts: answer('absent', 'absence', 1), quantity: { kind: 'class', scale: { name: '', min: '1', max: '5' } } }, rows);
+      const r = run(sin, fullList);
+      expect(find(r.findings, 'CONV-CLASS-VALUE'), String(fullList)).toEqual([]);
+      expect(find(r.findings, 'CONV-COUNT-TEXT-DECIDED')).toHaveLength(1);
+      expect(judge(r.findings).blocking).toEqual([]);
+    }
+  });
+
+  it('M2: a file with answers that all hold is read once; a stale one adds a pass', async () => {
+    const mod = await import('../../src/core/convert/build');
+    mod.passCounter.count = 0;
+    mod.convert({ sheets: [wide({ countTexts: answer('nie stwierdzono', 'absence', 1) })], options: {} });
+    expect(mod.passCounter.count).toBe(1);
+    mod.passCounter.count = 0;
+    mod.convert({ sheets: [wide({ countTexts: answer('nie stwierdzono', 'absence', 5) })], options: {} });
+    expect(mod.passCounter.count).toBe(2);
+  });
+
+  it('M3: a per-text answer gone stale asks the text again; the column answer does not take it over', () => {
+    const r = run(wide({ countTexts: answer('absent', 'present', 1), countTextColumns: { 6: { answer: 'leave-out', count: 2 } } }));
+    expect(find(r.findings, 'CONV-TEXT-IN-TAXON-CELL').map((f) => f.value)).toContain('absent');
+    expect(find(r.findings, 'CONV-COUNT-TEXT-DECIDED').filter((f) => f.value === 'absent')).toEqual([]);
+  });
+
+  it('M3: the plain text says when the answer was the one for the whole column, in four languages', () => {
+    const r = run(wide({ countTextColumns: { 6: { answer: 'leave-out', count: 2 } } }));
+    const d = find(r.findings, 'CONV-COUNT-TEXT-DECIDED').find((f) => f.params.via === 'column')!;
+    const words = { en: 'whole column', pl: 'całej kolumny', de: 'ganze Spalte', fr: 'toute la colonne' };
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) expect(renderConvertPlain(d, lang), lang).toContain(words[lang]);
+  });
+
+  it('M5: the ledger balances for absence (both ticks) and present', () => {
+    for (const fullList of [false, true]) expect(balanced(run(wide({ countTexts: { ...answer('absent', 'absence', 2), ...answer('nie stwierdzono', 'absence', 1), ...answer('Absent', 'absence', 1) } }), fullList))).toBe(true);
+    expect(balanced(run(wide({ countTexts: { ...answer('absent', 'present', 2), ...answer('nie stwierdzono', 'present', 1), ...answer('Absent', 'present', 1) } })))).toBe(true);
+  });
+
+  it('M7: the Polish leave-out text agrees in number', () => {
+    const r = run(wide({ countTexts: answer('absent', 'leave-out', 2) }));
+    const d = find(r.findings, 'CONV-COUNT-TEXT-DECIDED')[0];
+    expect(renderConvertPlain(d, 'pl')).toContain('są pominięte');
+    const one = run(wide({ countTexts: answer('nie stwierdzono', 'leave-out', 1) }));
+    expect(renderConvertPlain(find(one.findings, 'CONV-COUNT-TEXT-DECIDED')[0], 'pl')).toContain('jest pominięta');
+  });
+
+  it('M4: the ledger names the texts the person left out in words of their own, in four languages', async () => {
+    const { UI } = await import('../../src/core/i18n/ui');
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
+      const left = UI[lang]['convert.ledger.reason.text-left-out' as never] as string | undefined;
+      expect(left, lang).toBeTruthy();
+      expect(left).not.toBe(UI[lang]['convert.ledger.reason.text-cell' as never]);
+    }
   });
 });
