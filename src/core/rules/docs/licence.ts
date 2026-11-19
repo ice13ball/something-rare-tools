@@ -92,7 +92,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'Whether OBIS and GBIF accept the one licence the record states. Information only, never a warning.',
     fires:
-      'Once per dataset in /check and /licence (not in the collection review), when exactly one recognised licence is stated. It says the licence is accepted (CC0, CC BY 4.0 or CC BY-NC 4.0, the list /convert takes) or not accepted, and names what is accepted. It does not appear when no licence is recognised (missing, free text, a statement in conflict) or when the record states several different licences.',
+      'Once per dataset in /licence only (not in /check or the collection review), when exactly one recognised licence is stated. It says the licence is accepted (CC0, CC BY 4.0 or CC BY-NC 4.0, the list /convert takes) or not accepted, and names what is accepted. It does not appear when no licence is recognised (missing, free text) or when the record contradicts itself, for example a restriction or a non-commercial condition next to the licence (the licence /convert would refuse) or when the record states several different licences.',
     example:
       'A rights list holds CC BY-SA 4.0 only.',
     action:

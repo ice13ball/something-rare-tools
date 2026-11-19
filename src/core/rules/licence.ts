@@ -298,7 +298,7 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
     },
     plainVariants: {
       'not-accepted': {
-        pl: `Licencja {licence} nie jest przyjmowana przez OBIS i GBIF (przyjmują: {accepts}). Samo zgłoszenie danych do nich wymaga jednej z tych licencji. Informacja, nie błąd: licencja jest poprawnie podana.`,
+        pl: `Licencja {licence} nie jest przyjmowana przez OBIS i GBIF (przyjmują: {accepts}). Zgłoszenie do nich danych wymaga jednej z tych licencji. Informacja, nie błąd: licencja jest poprawnie podana.`,
         en: `The licence {licence} is not accepted by OBIS and GBIF (they accept: {accepts}). Submitting the data to them needs one of these licences. Information, not a fault: the licence is stated correctly.`,
         de: `Die Lizenz {licence} wird von OBIS und GBIF nicht angenommen (sie nehmen an: {accepts}). Für die Einreichung der Daten dort ist eine dieser Lizenzen nötig. Hinweis, kein Fehler: die Lizenz ist korrekt angegeben.`,
         fr: `La licence {licence} n'est pas acceptée par OBIS et GBIF (ils acceptent : {accepts}). Pour leur soumettre les données, il faut l'une de ces licences. Information, pas une erreur : la licence est correctement indiquée.`,

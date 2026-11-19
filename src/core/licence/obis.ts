@@ -16,6 +16,8 @@ import type { LicenceAnalysis } from './analyse';
  */
 export function obisLicenceFinding(a: LicenceAnalysis, file: string): Finding | undefined {
   const ids = [...new Set(a.sources.flatMap((s) => s.statements.flatMap((x) => (x.classification.kind === 'spdx' ? [x.classification.id] : []))))];
+  // /convert refuses the licence of a record with any contradiction except dual licensing (prefill.ts licenceCaseOf: 'contradictory'); the line must not call such a licence accepted
+  if (a.contradictions.some((c) => c.kind !== 'several-licences')) return undefined;
   if (ids.length !== 1) return undefined;
   return makeFinding('LIC-OBIS-LICENCE', { file, params: { licence: ids[0], accepts: LICENCES.join(', '), kind: isLicence(ids[0]) ? 'accepted' : 'not-accepted' } });
 }

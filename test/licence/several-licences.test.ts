@@ -174,6 +174,19 @@ describe('L6: the information line on what OBIS and GBIF accept', () => {
     expect(obis([dc([{ rights: 'CC BY 4.0', rightsUri: U('licenses/by-nc/4.0') }])])).toEqual([]);
   });
 
+  it.each([
+    ['a restriction entry next to the licence', [BY, { rights: 'Access restricted to project partners' }], 'LIC-OTHER-RIGHTS-ENTRY'],
+    ['added conditions in a second entry', [BY, { rights: 'CC BY-NC 4.0, commercial use requires permission' }], 'LIC-ADDED-CONDITIONS'],
+    ['conditions in the licence text itself', [{ rights: 'CC BY 4.0, but not for commercial use' }], undefined],
+  ])('no line when /convert would refuse the licence as contradictory: %s', (_n, list, rule) => {
+    const records = [dc(list)];
+    const a = analyseLicences(records);
+    expect(a.contradictions.length).toBeGreaterThan(0);
+    expect(licenceCaseOf(records).kind).toBe('contradictory');
+    expect(obisLicenceFinding(a, 'rec')).toBeUndefined();
+    if (rule) expect(run(records).map((f) => f.ruleId)).toContain(rule);
+  });
+
   it('no line when the record states two different licences (the warning comes first)', () => {
     expect(obis([dc([BY, NCND])])).toEqual([]);
   });
