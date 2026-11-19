@@ -165,6 +165,16 @@ describe('LicencePage', () => {
     expect(text).not.toContain('No contradiction');
   });
 
+  it('a restricted record with no licence: the access notice stands, the heading does not claim "No source states a licence"', async () => {
+    const body = JSON.parse(zenodoJson('3000003', { doi: '10.5281/zenodo.3000003', title: 'T' }).body as string);
+    body.metadata.access_right = 'closed';
+    const f = new MapFetcher({ [ZEN + '3000003']: { body: JSON.stringify(body) }, [DC + '10.5281/zenodo.3000003']: dataciteJson({ doi: '10.5281/zenodo.3000003' }, []) });
+    const text = (await run(f, ['3000003'])).textContent ?? '';
+    expect(screen.queryByTestId('licence-access-held-back')).not.toBeNull();
+    expect(text).not.toContain('No source states a licence');
+    expect(text).toContain('No licence is stated');
+  });
+
   it('a reference that is not a reference is listed as such', async () => {
     const result = await run(new MapFetcher({}), ['hello world']);
     expect(result.textContent).toContain('hello world');

@@ -8,14 +8,14 @@ import type { LicenceAnalysis } from './analyse';
 
 /**
  * What OBIS and GBIF accept of the licence the record states: one information line (LIC-OBIS-LICENCE), once per dataset, only when exactly
- * one recognised licence is stated (nothing to say about a missing, free-text or contradicting statement). The accepted list is the one
+ * one recognised licence, stated in a machine-readable way (a licence only in free text gets LIC-FREE-TEXT instead) is stated (nothing to say about a missing, free-text or contradicting statement). The accepted list is the one
  * /convert uses (LICENCES), not a copy.
  *
  * Shown by /licence only. /check and /collection do not carry it: their tables hold warnings about the files, /collection would repeat the
  * line for every record, and /convert already says which licences it takes.
  */
 export function obisLicenceFinding(a: LicenceAnalysis, file: string): Finding | undefined {
-  const ids = [...new Set(a.sources.flatMap((s) => s.statements.flatMap((x) => (x.classification.kind === 'spdx' ? [x.classification.id] : []))))];
+  const ids = [...new Set(a.sources.flatMap((s) => s.statements.flatMap((x) => (x.classification.kind === 'spdx' && x.machineReadable ? [x.classification.id] : []))))];
   // /convert refuses the licence of a record with any contradiction except dual licensing (prefill.ts licenceCaseOf: 'contradictory'); the line must not call such a licence accepted
   if (a.contradictions.some((c) => c.kind !== 'several-licences')) return undefined;
   if (ids.length !== 1) return undefined;

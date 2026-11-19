@@ -10,8 +10,10 @@
 // are tried, one list per language; (3) a match does not count when it is negated: a negator in the matched words themselves ("not
 // restricted", "nicht beschränkt", "non restreint", "nie jest ograniczony") or in the two words before it ("no embargo", "not confidential").
 
+import { isAllRightsReserved } from '../metadata/licence';
+
 /** What the restriction takes away from the licence. */
-export type NarrowingKind = 'access' | 'non-commercial' | 'no-derivatives' | 'no-redistribution' | 'on-request' | 'contact-first';
+export type NarrowingKind = 'all-rights-reserved' | 'access' | 'non-commercial' | 'no-derivatives' | 'no-redistribution' | 'on-request' | 'contact-first';
 
 /** Up to `n` characters inside one clause (a clause has no full stop or semicolon). */
 const C = (n: number): string => String.raw`[^.;]{0,${n}}`;
@@ -212,6 +214,8 @@ const clauses = (text: string): string[] =>
 /** The first way the text narrows a licence, or undefined when it does not (attribution, citation, disclaimer, the licence repeated, neutral, negated). */
 export function narrowingOf(text: string | undefined): NarrowingKind | undefined {
   if (!text) return undefined;
+  // "All rights reserved" (with or without a copyright notice, in en/de/fr/pl) next to an open licence takes the licence back; T3's recogniser
+  if (isAllRightsReserved(text)) return 'all-rights-reserved';
   for (const raw of clauses(text)) {
     if (WITHOUT_ATTRIBUTION.test(raw)) continue;
     const clause = raw.replace(ATTRIBUTION_CONDITION, ' ');

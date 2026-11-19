@@ -262,7 +262,7 @@ function Summary({ r }: { r: Result }): React.ReactElement {
         <p>
           <strong>
             {a.statedGroups === 0
-              ? t(a.hasUnreadable ? 'licence.summary.nostatedUnread' : 'licence.summary.nostated')
+              ? t(access ? 'licence.summary.nostatedAccess' : a.hasUnreadable ? 'licence.summary.nostatedUnread' : 'licence.summary.nostated')
               : a.recognisedGroups === 0
                 ? t('licence.summary.uncompared')
                 : a.statedGroups > a.recognisedGroups
