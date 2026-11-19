@@ -445,7 +445,7 @@ export const INPUT_RULES: readonly RuleSpec[] = [
       pl: `{count} {+count:komórka|komórki|komórek} kolumny „{column}” {+count:ma|mają|mają} format procentowy i {+count:odczytano|odczytano|odczytano} tak, jak są widoczne ({stored} odczytano jako {shown}).`,
       en: `{count} {+count:cell|cells} of column "{column}" {+count:is|are} formatted as a percentage and {+count:was|were} read as shown ({stored} is read as {shown}).`,
       de: `{count} {+count:Zelle|Zellen} der Spalte „{column}“ {+count:ist|sind} als Prozent formatiert und {+count:wurde|wurden} so gelesen, wie sie angezeigt {+count:wird|werden} ({stored} wird als {shown} gelesen).`,
-      fr: `{count} {+count:cellule|cellules} de la colonne « {column} » {+count:est mise|sont mises} en forme de pourcentage et {+count:a été lue|ont été lues} telle qu'affichée ({stored} est lu comme {shown}).`,
+      fr: `{count} {+count:cellule|cellules} de la colonne « {column} » {+count:est mise|sont mises} en forme de pourcentage et {+count:a été lue|ont été lues} {+count:telle qu'affichée|telles qu'affichées} ({stored} est lu comme {shown}).`,
     },
     technical: `{file} sheet {sheet}: {count} numeric cells of column "{column}" have a number format with a percent sign; the stored number's decimal point was moved two places right (first: {stored} read as {shown}). The cell's formatted text (rounded) is not used.`,
   },

@@ -7,9 +7,21 @@ import { ParseError, foldStatisticSubheader, foldUnitsRow } from './shared';
 
 type Grid = Map<number, Map<number, XLSX.CellObject>>;
 
-/** A number format that shows a percent sign: `%` outside "quoted text", `\x` escapes and `[...]` brackets. `0%`, `0.00%`, `[Red]0.0%` are; `0"%"`, `0\%` and `General` are not. */
-export function isPercentFormat(z: string): boolean {
-  return z.replace(/"[^"]*"/g, '').replace(/\\./g, '').replace(/\[[^\]]*\]/g, '').includes('%');
+/**
+ * A number format that shows a percent sign: `%` outside "quoted text", `\x` escapes, `_x` spacing and `[...]` brackets. `0%`, `0.00%`, `[Red]0.0%` are; `0"%"`, `0\%`, `0_%` and `General` are not.
+ * With a value, a multi-section format is judged by the section its sign selects (positive; negative; zero; a missing section falls back to the first): `0;-0%` scales negatives only.
+ */
+export function isPercentFormat(z: string, v?: number): boolean {
+  const f = z.replace(/"[^"]*"/g, '').replace(/\\./g, '').replace(/_./g, '').replace(/\[[^\]]*\]/g, '');
+  if (v === undefined) return f.includes('%');
+  const sections = f.split(';');
+  const section = v < 0 ? (sections[1] ?? sections[0]) : v === 0 ? (sections[2] ?? sections[0]) : sections[0];
+  return section.includes('%');
+}
+
+/** The cell is a number whose own format shows a percent (and is not also a date format, as `yy%`). */
+function isPercentCell(cell: XLSX.CellObject): cell is XLSX.CellObject & { v: number; z: string } {
+  return cell.t === 'n' && typeof cell.v === 'number' && typeof cell.z === 'string' && !XLSX.SSF.is_date(cell.z) && isPercentFormat(cell.z, cell.v);
 }
 
 /** The number a percent format shows: the decimal point of String(v) moved two places right, exactly (never v * 100: 0.07 * 100 is 7.000000000000001; never the cell's rounded `.w`). */
@@ -33,7 +45,7 @@ function cellValue(cell: XLSX.CellObject | undefined): RawCell {
   switch (cell.t) {
     case 'n':
       if (typeof cell.v !== 'number') return null;
-      return typeof cell.z === 'string' && isPercentFormat(cell.z) ? percentValue(cell.v) : cell.v;
+      return isPercentCell(cell) ? percentValue(cell.v) : cell.v;
     case 'b':
       return cell.v ? 'TRUE' : 'FALSE';
     case 'e':
@@ -111,10 +123,12 @@ function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, finding
       out[c] = v;
       if (typeof v === 'number' && c < width) {
         numeric[c]++;
-        if (cell.t === 'n' && typeof cell.v === 'number' && typeof cell.z === 'string' && !XLSX.SSF.is_date(cell.z) && isPercentFormat(cell.z)) {
-          const p = percent.get(c);
-          if (p) p.count++;
-          else percent.set(c, { count: 1, line: r + 1, stored: String(cell.v), shown: String(v) });
+        if (isPercentCell(cell)) {
+          // the note names the first cell the reading changed; a column of zeros changes nothing and gets none
+          const p = percent.get(c) ?? { count: 0, line: 0, stored: '', shown: '' };
+          p.count++;
+          if (p.line === 0 && percentValue(cell.v) !== cell.v) Object.assign(p, { line: r + 1, stored: String(cell.v), shown: String(v) });
+          percent.set(c, p);
         }
         if (typeof cell.z === 'string' && XLSX.SSF.is_date(cell.z)) {
           dated[c]++;
@@ -165,7 +179,7 @@ function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, finding
     }
   }
   for (const [c, p] of [...percent].sort((a, b) => a[0] - b[0])) {
-    if (c < header.length) findings.push(makeFinding('IN-PERCENT-READ', { file: fileName, sheet: name, lines: [p.line], params: { column: header[c], count: p.count, stored: p.stored, shown: p.shown } }));
+    if (c < header.length && p.line > 0) findings.push(makeFinding('IN-PERCENT-READ', { file: fileName, sheet: name, lines: [p.line], params: { column: header[c], count: p.count, stored: p.stored, shown: p.shown } }));
   }
   const dateFormatted = header.map((_, c) => numeric[c] > 0 && dated[c] * 2 > numeric[c]);
   // columns whose date formats are TIME-ONLY (hh:mm, [h]:mm, h:mm:ss) in the majority of their date cells; set only when there is one

@@ -103,7 +103,7 @@ describe('parseXlsx', () => {
 
 describe('a percent number format is read as displayed', () => {
   it('percentValue moves the decimal point exactly', () => {
-    const cases: [number, number][] = [[0.95, 95], [0.123, 12.3], [1.005, 100.5], [0.07, 7], [-0.5, -50], [1e-7, 0.00001], [0, 0], [0.955, 95.5], [1, 100]];
+    const cases: [number, number][] = [[0.95, 95], [0.123, 12.3], [1.005, 100.5], [0.07, 7], [-0.5, -50], [1e-7, 0.00001], [0, 0], [0.955, 95.5], [1, 100], [1.5e-10, 1.5e-8], [12345678.9, 1234567890], [-1e-7, -0.00001]];
     for (const [v, want] of cases) expect(percentValue(v), String(v)).toBe(want);
   });
   it('isPercentFormat ignores quoted and escaped percent signs', () => {
@@ -119,5 +119,28 @@ describe('a percent number format is read as displayed', () => {
     const n = f.findings.filter((x) => x.ruleId === 'IN-PERCENT-READ');
     expect(n).toHaveLength(1);
     expect(n[0].params).toMatchObject({ column: 'O2 sat [%]', count: 2, stored: '0.95', shown: '95' });
+  });
+  it('a spacing _% and a quoted or escaped % are not percent; a date-and-percent format is not scaled', () => {
+    expect(isPercentFormat('0_%')).toBe(false);
+    expect(isPercentFormat('0_%;0%')).toBe(true);
+    const ws = aoa([['a', 'b'], [{ t: 'n', v: 0.5, z: 'yy%' }, { t: 'n', v: 0.5, z: '0_%' }]]);
+    const f = parseXlsx(wbOf({ S: ws }), 'q.xlsx');
+    expect(f.sheets[0].rows[0].cells[1]).toBe(0.5);
+    expect(f.findings.map((x) => x.ruleId)).not.toContain('IN-PERCENT-READ');
+  });
+  it('in a multi-section format the section of the value sign decides', () => {
+    expect(isPercentFormat('0;-0%', 0.5)).toBe(false);
+    expect(isPercentFormat('0;-0%', -0.5)).toBe(true);
+    expect(isPercentFormat('0%;0;"-"', 0)).toBe(false);
+    expect(isPercentFormat('0%;0;"-"', 0.5)).toBe(true);
+    const ws = aoa([['x'], [{ t: 'n', v: 0.5, z: '0;-0%' }], [{ t: 'n', v: -0.5, z: '0;-0%' }]]);
+    const f = parseXlsx(wbOf({ S: ws }), 'm.xlsx');
+    expect(f.sheets[0].rows.map((r) => r.cells[0])).toEqual([0.5, -50]);
+  });
+  it('no note when every percent cell is 0; the note shows the first cell that changed', () => {
+    const zero = parseXlsx(wbOf({ S: aoa([['x'], [{ t: 'n', v: 0, z: '0%' }], [{ t: 'n', v: 0, z: '0%' }]]) }), 'z.xlsx');
+    expect(zero.findings.map((x) => x.ruleId)).not.toContain('IN-PERCENT-READ');
+    const mixed = parseXlsx(wbOf({ S: aoa([['x'], [{ t: 'n', v: 0, z: '0%' }], [{ t: 'n', v: 0.25, z: '0%' }]]) }), 'z2.xlsx');
+    expect(mixed.findings.find((x) => x.ruleId === 'IN-PERCENT-READ')?.params).toMatchObject({ stored: '0.25', shown: '25' });
   });
 });
