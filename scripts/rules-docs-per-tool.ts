@@ -75,6 +75,7 @@ export const EXCLUDED: Record<Tool, Readonly<Record<string, string>>> = {
     'IN-HOST-NOT-ALLOWED': 'raised only by the record loaders (licence/load.ts, sources/*); /convert fetches nothing (convert/validate.ts:77)',
     'IN-FETCH-BLOCKED': 'raised only through fetchErrorFinding (sources/fetcher.ts:266), called by loaders /convert does not use',
     'IN-FETCH-TIMEOUT': 'raised only through fetchErrorFinding (sources/fetcher.ts:266), called by loaders /convert does not use',
+    'CONV-TAXON-EMPTY-ROW': 'always superseded: build.ts:2530-2531 raises it together with the fate no-taxon, and notWritten.ts:306 suppresses it in favour of CONV-ROW-NOT-UNDERSTOOD (notWritten.ts:167)',
     'ROW-SHIP-SPEED': 'checkShipSpeed groups by a cruise column or the singleCruise tick (checks/speed.ts:381-396); the Event table has no cruise column (convert/dwca.ts:57-80) and validate.ts:77 passes no singleCruise',
     'ROW-SHIP-SPEED-UNUSUAL': 'same as ROW-SHIP-SPEED (checks/speed.ts:381-396, convert/validate.ts:77)',
     'ROW-SHIP-SPEED-PAIR': 'same as ROW-SHIP-SPEED (checks/speed.ts:381-396, convert/validate.ts:77)',
