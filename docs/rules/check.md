@@ -27,11 +27,11 @@ Severity: error
 
 **What it checks.** The record behind a link could not be opened, so its metadata and files were not read. The reason is a failed request to the host, and the finding names the host and the HTTP status code.
 
-**When it fires.** When a request for the record or one of its files gets an error status such as 403, 404 or 500, or a proxy error (429, 504, a 413 on a file that is not an archive), or when the answer is not JSON or not Dataverse metadata, or when a Dataverse version is not released. The wording differs for a server fault (status 500 and above, usually temporary) and for other statuses (the record may be private or unpublished). Whatever the other sources of the same run gave is still used.
+**When it fires.** When a request for the record or one of its files gets an error status such as 403, 404 or 500, or a proxy error (429, 504, a 413 on a file that is not an archive), or when the answer is not JSON or not Dataverse metadata, or when a Dataverse version is not released. The wording has three forms: a server fault for status 500 to 599 (usually temporary), a record that may be private or unpublished for 403 and 404, and a neutral "try again later" for any other status, with no guess about the reason. Whatever the other sources of the same run gave is still used.
 
 **Example.** A link to a repository record returns status 404; the finding reads that the record on that host could not be opened (error 404).
 
-**What you can do.** Check the link. For a server fault try again later. For a private or unpublished record download its files or metadata and add them to the tool yourself. In /convert this finding blocks the export.
+**What you can do.** Check the link. For a server fault or another status try again later. For a private or unpublished record (403, 404) download its files or metadata and add them to the tool yourself. In /convert this finding blocks the export.
 
 ## IN-HOST-NOT-ALLOWED — A link points to a host the tool is not allowed to open, so nothing was fetched from it
 
@@ -895,9 +895,9 @@ Severity: warning
 
 **What it checks.** One station name has positions more than 1000 km apart. A station is one place, so this is almost certainly a wrong position, not an area.
 
-**When it fires.** When the largest distance between the positions of one station name, within one cruise or one calendar year, is above 1000 km (a limit chosen by this tool, not a published threshold). A name that is an expedition or cruise label, or a generic label with no cruise or date to anchor it, gives ROW-STATION-SPREAD instead. Generic placeholder names and positions with latitude equal to longitude are skipped. It is a warning.
+**When it fires.** When the largest distance between the positions of one station name, within one cruise or one calendar year, is above 1000 km (a limit chosen by this tool, not a published threshold). A name that is an expedition or cruise label, or a generic label with no cruise or date to anchor it, gives ROW-STATION-SPREAD instead. Generic placeholder names and positions with latitude equal to longitude are skipped. The spread is measured only when no pair of positions of the station matches a pattern of ROW-STATION-MOVED (a typed digit, exchanged axes, a sign flip); when one does, only ROW-STATION-MOVED is raised, whatever the distance, so 18.55 E against 118.55 E in one year gives ROW-STATION-MOVED, not this rule. It is a warning.
 
-**Example.** Station K7 is at 54.5 N 18.6 E on 12 rows and at 54.5 N 118.6 E on one row. The distance is about 5900 km, and both positions are listed.
+**Example.** In one cruise, station K7 is at 54.5 N 18.6 E on 12 rows and at 47.2 N 35.9 E on one row. No digit, axis or sign explains the difference, the distance is about 1450 km, and both positions are listed.
 
 **What you can do.** Find which position is wrong, a sign, a digit or swapped axes, and correct it. In /convert this finding does not block the export, but it needs your acceptance, one tick for the rule.
 
@@ -1307,7 +1307,7 @@ Severity: warning
 
 **What it checks.** A row has no latitude or no longitude although other rows of the sheet have a position. It cannot be placed on a map.
 
-**When it fires.** For a row with a blank latitude or longitude on a sheet where other rows have a position. Not counted: blank trailing rows, summary rows, rows that inherit a position from a parent event, and continuation rows of a station block. A row with both blank is exempt when its station, date or cruise has a position elsewhere; a row with one blank coordinate is always reported. A sheet with no position at all says nothing. In /convert it is raised only for an event with no positioned parent.
+**When it fires.** For a row with a blank latitude or longitude on a sheet where other rows have a position. Not counted: blank trailing rows, summary rows, rows that inherit a position from a parent event, and continuation rows of a station block. A row with both blank is exempt when its station has a position on another row (on a sheet with no station column: its date), the cruise being part of that key when the sheet has a cruise column, so a cruise alone never exempts a row; it is also exempt when its station (or date) cell is blank and it follows a positioned row of the block. A row with one blank coordinate is always reported. A sheet with no position at all says nothing. In /convert it is raised only for an event with no positioned parent.
 
 **Example.** Line 12 has a longitude of 18.6 and an empty latitude. Line 12 is reported.
 

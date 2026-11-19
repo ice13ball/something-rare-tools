@@ -574,7 +574,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A long sheet gives almost one sample event for each occurrence, and many events share station, date and depth. It may be one sample cut into rows by a different code on each.',
     fires:
-      'For a long sheet without a profile when the output has at least 30 occurrences, the events are at least 80 percent of them, and at least half of the events share a place (station, date, time text, depth and position) with another event. The shared events count only when at least 90 percent of the events have exactly one taxon row and the places do not repeat a taxon of an earlier event; alternatively the finding rests on strong evidence, more events than occurrences. Checked on the output, whoever wrote the codes.',
+      'For a long sheet without a profile when the output has at least 30 occurrences, the events are at least 80 percent of them, and at least 90 percent of the events have exactly one taxon row; without all three it never fires. Then one of two things is enough. Either at least half of the events share a place (cruise, station, date, time text, depth and position) with another event, where a place counts only when at most half of its events after the first repeat a taxon of an earlier event there; or there is strong evidence: more events than occurrences, on a sheet of at least two taxa, with the events at least 80 percent of the taxon rows. Checked on the output, whoever wrote the codes.',
     example:
       '100 occurrences with 95 events, each event with one taxon row, 60 of which share station, date and depth with another event and do not repeat a taxon.',
     action:

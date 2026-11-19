@@ -353,9 +353,9 @@ Severity: warning · Export policy: accept
 
 **What it checks.** One station name has positions more than 1000 km apart. A station is one place, so this is almost certainly a wrong position, not an area.
 
-**When it fires.** When the largest distance between the positions of one station name, within one cruise or one calendar year, is above 1000 km (a limit chosen by this tool, not a published threshold). A name that is an expedition or cruise label, or a generic label with no cruise or date to anchor it, gives ROW-STATION-SPREAD instead. Generic placeholder names and positions with latitude equal to longitude are skipped. It is a warning.
+**When it fires.** When the largest distance between the positions of one station name, within one cruise or one calendar year, is above 1000 km (a limit chosen by this tool, not a published threshold). A name that is an expedition or cruise label, or a generic label with no cruise or date to anchor it, gives ROW-STATION-SPREAD instead. Generic placeholder names and positions with latitude equal to longitude are skipped. The spread is measured only when no pair of positions of the station matches a pattern of ROW-STATION-MOVED (a typed digit, exchanged axes, a sign flip); when one does, only ROW-STATION-MOVED is raised, whatever the distance, so 18.55 E against 118.55 E in one year gives ROW-STATION-MOVED, not this rule. It is a warning.
 
-**Example.** Station K7 is at 54.5 N 18.6 E on 12 rows and at 54.5 N 118.6 E on one row. The distance is about 5900 km, and both positions are listed.
+**Example.** In one cruise, station K7 is at 54.5 N 18.6 E on 12 rows and at 47.2 N 35.9 E on one row. No digit, axis or sign explains the difference, the distance is about 1450 km, and both positions are listed.
 
 **What you can do.** Find which position is wrong, a sign, a digit or swapped axes, and correct it. In /convert this finding does not block the export, but it needs your acceptance, one tick for the rule.
 
@@ -567,7 +567,7 @@ Severity: warning · Export policy: block
 
 **What it checks.** A row has no latitude or no longitude although other rows of the sheet have a position. It cannot be placed on a map.
 
-**When it fires.** For a row with a blank latitude or longitude on a sheet where other rows have a position. Not counted: blank trailing rows, summary rows, rows that inherit a position from a parent event, and continuation rows of a station block. A row with both blank is exempt when its station, date or cruise has a position elsewhere; a row with one blank coordinate is always reported. A sheet with no position at all says nothing. In /convert it is raised only for an event with no positioned parent.
+**When it fires.** For a row with a blank latitude or longitude on a sheet where other rows have a position. Not counted: blank trailing rows, summary rows, rows that inherit a position from a parent event, and continuation rows of a station block. A row with both blank is exempt when its station has a position on another row (on a sheet with no station column: its date), the cruise being part of that key when the sheet has a cruise column, so a cruise alone never exempts a row; it is also exempt when its station (or date) cell is blank and it follows a positioned row of the block. A row with one blank coordinate is always reported. A sheet with no position at all says nothing. In /convert it is raised only for an event with no positioned parent.
 
 **Example.** Line 12 has a longitude of 18.6 and an empty latitude. Line 12 is reported.
 
@@ -1509,7 +1509,7 @@ Severity: warning · Export policy: accept
 
 **What it checks.** A long sheet gives almost one sample event for each occurrence, and many events share station, date and depth. It may be one sample cut into rows by a different code on each.
 
-**When it fires.** For a long sheet without a profile when the output has at least 30 occurrences, the events are at least 80 percent of them, and at least half of the events share a place (station, date, time text, depth and position) with another event. The shared events count only when at least 90 percent of the events have exactly one taxon row and the places do not repeat a taxon of an earlier event; alternatively the finding rests on strong evidence, more events than occurrences. Checked on the output, whoever wrote the codes.
+**When it fires.** For a long sheet without a profile when the output has at least 30 occurrences, the events are at least 80 percent of them, and at least 90 percent of the events have exactly one taxon row; without all three it never fires. Then one of two things is enough. Either at least half of the events share a place (cruise, station, date, time text, depth and position) with another event, where a place counts only when at most half of its events after the first repeat a taxon of an earlier event there; or there is strong evidence: more events than occurrences, on a sheet of at least two taxa, with the events at least 80 percent of the taxon rows. Checked on the output, whoever wrote the codes.
 
 **Example.** 100 occurrences with 95 events, each event with one taxon row, 60 of which share station, date and depth with another event and do not repeat a taxon.
 

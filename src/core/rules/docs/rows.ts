@@ -124,9 +124,9 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'One station name has positions more than 1000 km apart. A station is one place, so this is almost certainly a wrong position, not an area.',
     fires:
-      'When the largest distance between the positions of one station name, within one cruise or one calendar year, is above 1000 km (a limit chosen by this tool, not a published threshold). A name that is an expedition or cruise label, or a generic label with no cruise or date to anchor it, gives ROW-STATION-SPREAD instead. Generic placeholder names and positions with latitude equal to longitude are skipped. It is a warning.',
+      'When the largest distance between the positions of one station name, within one cruise or one calendar year, is above 1000 km (a limit chosen by this tool, not a published threshold). A name that is an expedition or cruise label, or a generic label with no cruise or date to anchor it, gives ROW-STATION-SPREAD instead. Generic placeholder names and positions with latitude equal to longitude are skipped. The spread is measured only when no pair of positions of the station matches a pattern of ROW-STATION-MOVED (a typed digit, exchanged axes, a sign flip); when one does, only ROW-STATION-MOVED is raised, whatever the distance, so 18.55 E against 118.55 E in one year gives ROW-STATION-MOVED, not this rule. It is a warning.',
     example:
-      'Station K7 is at 54.5 N 18.6 E on 12 rows and at 54.5 N 118.6 E on one row. The distance is about 5900 km, and both positions are listed.',
+      'In one cruise, station K7 is at 54.5 N 18.6 E on 12 rows and at 47.2 N 35.9 E on one row. No digit, axis or sign explains the difference, the distance is about 1450 km, and both positions are listed.',
     action:
       'Find which position is wrong, a sign, a digit or swapped axes, and correct it. In /convert this finding does not block the export, but it needs your acceptance, one tick for the rule.',
   },
@@ -424,7 +424,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A row has no latitude or no longitude although other rows of the sheet have a position. It cannot be placed on a map.',
     fires:
-      'For a row with a blank latitude or longitude on a sheet where other rows have a position. Not counted: blank trailing rows, summary rows, rows that inherit a position from a parent event, and continuation rows of a station block. A row with both blank is exempt when its station, date or cruise has a position elsewhere; a row with one blank coordinate is always reported. A sheet with no position at all says nothing. In /convert it is raised only for an event with no positioned parent.',
+      'For a row with a blank latitude or longitude on a sheet where other rows have a position. Not counted: blank trailing rows, summary rows, rows that inherit a position from a parent event, and continuation rows of a station block. A row with both blank is exempt when its station has a position on another row (on a sheet with no station column: its date), the cruise being part of that key when the sheet has a cruise column, so a cruise alone never exempts a row; it is also exempt when its station (or date) cell is blank and it follows a positioned row of the block. A row with one blank coordinate is always reported. A sheet with no position at all says nothing. In /convert it is raised only for an event with no positioned parent.',
     example:
       'Line 12 has a longitude of 18.6 and an empty latitude. Line 12 is reported.',
     action:

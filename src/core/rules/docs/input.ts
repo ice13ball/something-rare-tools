@@ -21,11 +21,11 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'The record behind a link could not be opened, so its metadata and files were not read. The reason is a failed request to the host, and the finding names the host and the HTTP status code.',
     fires:
-      'When a request for the record or one of its files gets an error status such as 403, 404 or 500, or a proxy error (429, 504, a 413 on a file that is not an archive), or when the answer is not JSON or not Dataverse metadata, or when a Dataverse version is not released. The wording differs for a server fault (status 500 and above, usually temporary) and for other statuses (the record may be private or unpublished). Whatever the other sources of the same run gave is still used.',
+      'When a request for the record or one of its files gets an error status such as 403, 404 or 500, or a proxy error (429, 504, a 413 on a file that is not an archive), or when the answer is not JSON or not Dataverse metadata, or when a Dataverse version is not released. The wording has three forms: a server fault for status 500 to 599 (usually temporary), a record that may be private or unpublished for 403 and 404, and a neutral "try again later" for any other status, with no guess about the reason. Whatever the other sources of the same run gave is still used.',
     example:
       'A link to a repository record returns status 404; the finding reads that the record on that host could not be opened (error 404).',
     action:
-      'Check the link. For a server fault try again later. For a private or unpublished record download its files or metadata and add them to the tool yourself. In /convert this finding blocks the export.',
+      'Check the link. For a server fault or another status try again later. For a private or unpublished record (403, 404) download its files or metadata and add them to the tool yourself. In /convert this finding blocks the export.',
   },
   'IN-HOST-NOT-ALLOWED': {
     checks:
