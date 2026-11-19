@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
-import type { ParsedDate, RawCell, RawSheet } from '../types';
+import type { ParsedDate, RawCell, RawRow, RawSheet } from '../types';
 
 export interface TimeOfDay {
   hh: number;
@@ -500,6 +500,16 @@ export function columnYYOrder(sheet: RawSheet, index: number, declared?: TwoDigi
   const yy = twoDigitReadings(sheet.rows.map((r) => r.cells[index] ?? null));
   if (yy.length === 1) return yy[0];
   return yy.length > 1 && declared !== undefined && yy.includes(declared) ? declared : 'unknown';
+}
+
+/** Is this cell read as a date-formatted one: the column is date-formatted and the cell itself has a date format (a General number among dates is not). */
+export function dateFormattedAt(sheet: Pick<RawSheet, 'dateFormatted'>, row: Pick<RawRow, 'plainNumbers'>, index: number): boolean {
+  return sheet.dateFormatted?.[index] === true && row.plainNumbers?.includes(index) !== true;
+}
+
+/** A number the workbook shows in a date-formatted column without a date format: it is no serial date and no year, it is a cell that cannot be read as a date. */
+export function plainInDateColumn(sheet: Pick<RawSheet, 'dateFormatted'>, row: Pick<RawRow, 'plainNumbers'>, index: number): boolean {
+  return sheet.dateFormatted?.[index] === true && row.plainNumbers?.includes(index) === true;
 }
 
 /**

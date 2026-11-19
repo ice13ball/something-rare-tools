@@ -31,7 +31,7 @@ import { pairHemisphere, parseCoordinate } from './values/coords';
 import type { KeepMillis } from './values/dates';
 import { columnFractions } from './values/fractionEvidence';
 import { isRealFraction, secondOffsetMs } from './values/dates';
-import { columnOrder, columnYYOrder, combineDateTime, cellsAreYearRanges, fullDatetimeOfTimeCell, isAmbiguousTwoDigit, isPlausibleSerial, parseDate, twoDigitReadings, parseTimeColumnCell, parseTimeOfDay, type DeclaredOrder, type TwoDigitOrder } from './values/dates';
+import { columnOrder, columnYYOrder, combineDateTime, dateFormattedAt, cellsAreYearRanges, fullDatetimeOfTimeCell, isAmbiguousTwoDigit, isPlausibleSerial, parseDate, twoDigitReadings, parseTimeColumnCell, parseTimeOfDay, type DeclaredOrder, type TwoDigitOrder } from './values/dates';
 import type { DateError } from './values/dates';
 import { parseNumber } from './values/numbers';
 import { pushAll } from './util/arrays';
@@ -448,13 +448,16 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
       }
       if (!isBlankCell(cell)) {
         m.dateRaw = cell;
-        const cacheKey = typeof cell === 'number' ? `n${cell}` : `s${cell}`;
+        // a number the workbook shows without a date format among dates is no serial (and no year): its own cache entry
+        const whenFormatted = dateFormattedAt(sheet, row, specs.when.index);
+        const whenPlain = !whenFormatted && sheet.dateFormatted?.[specs.when.index] === true;
+        const cacheKey = typeof cell === 'number' ? `${whenPlain ? 'p' : 'n'}${cell}` : `s${cell}`;
         let d = dateCache.get(cacheKey);
         if (d === undefined) {
           d = parseDate(cell, {
             date1904: file.date1904,
-            dateFormatted: sheet.dateFormatted?.[specs.when.index] === true,
-            datumColumn: true,
+            dateFormatted: whenFormatted,
+            datumColumn: !whenPlain,
             keepMillis: millisOf(specs.when),
             ...(whenOrder === 'unknown' ? {} : { order: whenOrder }),
             ...(yyRead === undefined ? {} : { yyOrder: yyRead }),
@@ -481,7 +484,7 @@ export function metaParser(file: ParsedFile, sheet: RawSheet, specsIn: Specs, c:
             const tField = specs.time.header;
             // the time column holds a full datetime (a text one, or the serial of a date-formatted column): a zone-stated one is the instant of the event and wins over a date (or a local datetime) that states no zone
             // (a local date beside a UTC time on the next day); one without a zone gives its time of day when it falls on the day of the row
-            const full = timeIsYears ? undefined : fullDatetimeOfTimeCell(timeCell, { date1904: file.date1904, dateFormatted: sheet.dateFormatted?.[specs.time.index] === true && sheet.timeFormatted?.[specs.time.index] !== true, ...(tOrder === undefined ? {} : { order: tOrder }), keepMillis: millisOf(specs.time) });
+            const full = timeIsYears ? undefined : fullDatetimeOfTimeCell(timeCell, { date1904: file.date1904, dateFormatted: dateFormattedAt(sheet, row, specs.time.index) && sheet.timeFormatted?.[specs.time.index] !== true, ...(tOrder === undefined ? {} : { order: tOrder }), keepMillis: millisOf(specs.time) });
             const dayGap = (a: string, b: string): number => Math.abs(Date.parse(`${a.slice(0, 10)}T00:00:00Z`) - Date.parse(`${b.slice(0, 10)}T00:00:00Z`)) / 86_400_000;
             // compared at the date's own precision: a year-only or month-only date is contradicted by another year or month, a day by more than a day
             const own = date.precision === 'year' ? 4 : date.precision === 'month' ? 7 : 10;

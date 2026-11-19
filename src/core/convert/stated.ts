@@ -4,7 +4,7 @@ import { unitFromHeader } from '../recognize/columns';
 import { geocodeOfKey } from '../recognize/geocodes';
 import { CANONICAL_VARIABLES, foldDiacritics, headerKey, normaliseUnit, unitDimension } from '../recognize/vocab';
 import type { ColumnProposal, ColumnRole, RawSheet } from '../types';
-import { dateReadOptions, parseDate, parseTimeCell, type DeclaredOrder, type TwoDigitOrder } from '../values/dates';
+import { dateFormattedAt, dateReadOptions, parseDate, parseTimeCell, type DeclaredOrder, type TwoDigitOrder } from '../values/dates';
 import { parseNumber } from '../values/numbers';
 import { EFFORT_AREA, EFFORT_VOLUME, PLAIN_AREA, QUANTITY_PHRASE_COUNT, QUANTITY_PHRASE_DENSITY, QUANTITY_STANDALONE, QUANTITY_WORD, SAMPLE_CODE_NAME, STAGE_NAME, TAXON_NAME } from './recognize';
 
@@ -295,8 +295,14 @@ function veto(sheet: RawSheet, index: number, kind: string, ctx: StatedContext):
     return ok / cells.length < SHARE ? 'not-time-of-day' : undefined;
   }
   if (kind === 'date' || kind === 'datetime') {
-    const opts = { date1904: ctx.date1904 === true, dateFormatted: sheet.dateFormatted?.[index] === true, datumColumn: true, ...dateReadOptions(sheet, index, ctx.dayMonthOrder?.[index], ctx.yyOrder?.[index]) };
-    const ok = cells.filter((c) => !('error' in parseDate(c, opts))).length;
+    const read = dateReadOptions(sheet, index, ctx.dayMonthOrder?.[index], ctx.yyOrder?.[index]);
+    // a number the workbook shows without a date format among dates is no date (cellsOf drops the blanks, so the rows are walked the same way)
+    const ok = sheet.rows.filter((r) => {
+      const c = r.cells[index] ?? null;
+      if (c === null || (typeof c === 'string' && c.trim() === '')) return false;
+      const formatted = dateFormattedAt(sheet, r, index);
+      return !('error' in parseDate(c, { date1904: ctx.date1904 === true, dateFormatted: formatted, datumColumn: formatted || sheet.dateFormatted?.[index] !== true, ...read }));
+    }).length;
     return ok / cells.length < SHARE ? 'not-date' : undefined;
   }
   return undefined;

@@ -110,6 +110,8 @@ function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, finding
   const dated = new Array<number>(width).fill(0);
   const timed = new Array<number>(width).fill(0);
   const fractional = new Array<boolean>(width).fill(false);
+  // per row, the columns of its numeric cells that have no date format (kept only for the columns that end up date-formatted)
+  const plainOf = new Map<RawRow, number[]>();
   const percent = new Map<number, { count: number; line: number; stored: string; shown: string }>();
   for (const r of rowsAsc) {
     if (r <= headerRow) continue;
@@ -117,6 +119,7 @@ function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, finding
     const last = lastCol(cells, true);
     if (last < 0) continue; // fully empty row (formatting only)
     const out: RawCell[] = new Array<RawCell>(Math.max(width, last + 1)).fill(null);
+    const plain: number[] = [];
     for (const [c, cell] of cells) {
       const v = cellValue(cell);
       if (v === null) continue;
@@ -130,6 +133,7 @@ function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, finding
           if (p.line === 0 && percentValue(cell.v) !== cell.v) Object.assign(p, { line: r + 1, stored: String(cell.v), shown: String(v) });
           percent.set(c, p);
         }
+        if (!(typeof cell.z === 'string' && XLSX.SSF.is_date(cell.z))) plain.push(c);
         if (typeof cell.z === 'string' && XLSX.SSF.is_date(cell.z)) {
           dated[c]++;
           if (isTimeOnlyFormat(cell.z)) timed[c]++;
@@ -137,7 +141,9 @@ function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, finding
         }
       }
     }
-    rows.push({ line: r + 1, cells: out, fieldCount: out.length });
+    const row: RawRow = { line: r + 1, cells: out, fieldCount: out.length };
+    if (plain.length > 0) plainOf.set(row, plain);
+    rows.push(row);
   }
   // a second header row of statistic labels (mean, st.dev.) is part of the header; a header cell that is merged with the one to its left reads as that cell's text
   const merges = ws['!merges'] ?? [];
@@ -182,6 +188,11 @@ function parseSheet(name: string, ws: XLSX.WorkSheet, date1904: boolean, finding
     if (c < header.length && p.line > 0) findings.push(makeFinding('IN-PERCENT-READ', { file: fileName, sheet: name, lines: [p.line], params: { column: header[c], count: p.count, stored: p.stored, shown: p.shown } }));
   }
   const dateFormatted = header.map((_, c) => numeric[c] > 0 && dated[c] * 2 > numeric[c]);
+  // a number without a date format in a column that is date-formatted is no serial date: its row says so (a row has the list only when it has one)
+  for (const [row, plain] of plainOf) {
+    const own = plain.filter((c) => dateFormatted[c] === true);
+    if (own.length > 0) row.plainNumbers = own;
+  }
   // columns whose date formats are TIME-ONLY (hh:mm, [h]:mm, h:mm:ss) in the majority of their date cells; set only when there is one
   const timeFormatted = header.map((_, c) => dateFormatted[c] && timed[c] * 2 > dated[c]);
   // the same, for EVERY numeric cell of the column (not the majority): a conversion that could lose a cell that is not date-formatted (a General 5 among dates) may only be made when all of them are. Set only when there is one.

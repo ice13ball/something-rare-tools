@@ -232,7 +232,9 @@ function pivotSheet(sheet: RawSheet, c: LongColumns, ragged: ReadonlySet<number>
     const cells: RawCell[] = new Array<RawCell>(width).fill(null);
     keyAt.forEach((at, j) => (cells[j] = g.first.cells[at] ?? null));
     for (const [pi, e] of g.entries) cells[keyAt.length + pi] = e.cell;
-    return { line: g.first.line, cells, fieldCount: width };
+    // a key cell that is a plain number in a date-formatted column stays one (the pivot maps the column indexes as it maps dateFormatted)
+    const plain = keyAt.flatMap((at, j) => (g.first.plainNumbers?.includes(at) === true ? [j] : []));
+    return { line: g.first.line, cells, fieldCount: width, ...(plain.length > 0 ? { plainNumbers: plain } : {}) };
   });
   const cellLines: Record<number, number[]> = Object.create(null) as Record<number, number[]>;
   const entryAbsent: Record<number, number[]> = Object.create(null) as Record<number, number[]>;

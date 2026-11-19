@@ -8,7 +8,7 @@ import type { KeySide } from '../recognize/layout';
 import { makeConvertFinding } from '../rules/convert';
 import { makeFinding } from '../rules/registry';
 import type { ColumnRole, Finding, ParsedFile, RawCell, RawRow, RawSheet, SheetMapping } from '../types';
-import { excelSerialToDate, type DeclaredOrder, type TwoDigitOrder } from '../values/dates';
+import { dateFormattedAt, excelSerialToDate, type DeclaredOrder, type TwoDigitOrder } from '../values/dates';
 import { parseNumber } from '../values/numbers';
 import { colsOf, depthReader, isUtcBySource } from './build';
 import type { ConvertSheetInput } from './build';
@@ -284,12 +284,12 @@ const isTimeOnly = (sheet: RawSheet, column: number): boolean => sheet.timeForma
  * F2: a description cell in the results file's convention. Only a cell the two files read differently is changed: a text that reads as a number in its own file gets the results file's decimal
  * separator (the digits as written), and a date serial of a 1900/1904 workbook that differs from the results file's becomes the date it means. Anything else is lent verbatim (a time of day, and a text its own file did not read as a number: mergeSampleSheets lends that one blank and reports it when the results file would read it as one).
  */
-export function lendCell(cell: RawCell, from: { file: ParsedFile; sheet: RawSheet; column: number }, to: ParsedFile): { cell: RawCell; rewritten: boolean } {
+export function lendCell(cell: RawCell, from: { file: ParsedFile; sheet: RawSheet; column: number; row?: RawRow }, to: ParsedFile): { cell: RawCell; rewritten: boolean } {
   const verbatim = { cell, rewritten: false };
   if (cell === null) return verbatim;
   if (typeof cell === 'number') {
     // a time of day (a fraction of a day) does not depend on the epoch: it is lent as it is
-    if (from.file.date1904 !== to.date1904 && from.sheet.dateFormatted?.[from.column] === true && !isTimeOnly(from.sheet, from.column)) {
+    if (from.file.date1904 !== to.date1904 && (from.row === undefined ? from.sheet.dateFormatted?.[from.column] === true : dateFormattedAt(from.sheet, from.row, from.column)) && !isTimeOnly(from.sheet, from.column)) {
       try {
         return { cell: eventDateText(excelSerialToDate(cell, from.file.date1904, from.sheet.fractionShown?.[from.column] === true ? 'shown' : false)), rewritten: true };
       } catch {
@@ -336,9 +336,9 @@ function pairColumns(results: QuantityColumns, description: QuantityColumns): [n
 }
 
 /** One value of a cell for comparing two sides: the date a serial means, the number a text reads as, otherwise the trimmed text. */
-function comparable(cell: RawCell, file: ParsedFile, sheet: RawSheet, column: number): string {
+function comparable(cell: RawCell, file: ParsedFile, sheet: RawSheet, column: number, row?: RawRow): string {
   if (typeof cell === 'number') {
-    if (sheet.dateFormatted?.[column] === true && !isTimeOnly(sheet, column)) {
+    if ((row === undefined ? sheet.dateFormatted?.[column] === true : dateFormattedAt(sheet, row, column)) && !isTimeOnly(sheet, column)) {
       try {
         return eventDateText(excelSerialToDate(cell, file.date1904, sheet.fractionShown?.[column] === true ? 'shown' : false));
       } catch {
@@ -352,7 +352,7 @@ function comparable(cell: RawCell, file: ParsedFile, sheet: RawSheet, column: nu
   return n.status === 'ok' ? String(n.value) : t;
 }
 /** The same cell as the person sees it in the file, for the examples of a finding. */
-const shown = (cell: RawCell, file: ParsedFile, sheet: RawSheet, column: number): string => (typeof cell === 'number' ? comparable(cell, file, sheet, column) : cellText(cell));
+const shown = (cell: RawCell, file: ParsedFile, sheet: RawSheet, column: number, row?: RawRow): string => (typeof cell === 'number' ? comparable(cell, file, sheet, column, row) : cellText(cell));
 
 interface DescriptionGroup {
   parts: string[];
@@ -421,7 +421,7 @@ const contradicts = (a: Reading, b: Reading): boolean => a.parts.some((x, i) => 
  */
 function makeReader(kind: ReaderKind, columns: readonly number[], mapping: SheetMapping, sheet: RawSheet, readFile: ParsedFile, showFile: ParsedFile, utcFile: ParsedFile, dayMonthOrder?: Readonly<Record<number, DeclaredOrder>>, yyOrder?: Readonly<Record<number, TwoDigitOrder>>): Reader {
   const own: SheetMapping = { sheet: mapping.sheet, columns: mapping.columns.filter((c) => columns.includes(c.index)) };
-  const textOf = (row: RawRow): string => columns.map((c) => shown(row.cells[c] ?? null, showFile, sheet, c)).filter((t) => t !== '').join(' ');
+  const textOf = (row: RawRow): string => columns.map((c) => shown(row.cells[c] ?? null, showFile, sheet, c, row)).filter((t) => t !== '').join(' ');
   const rawOf = (row: RawRow): string => columns.map((c) => cellText(row.cells[c])).filter((t) => t !== '').join(' ');
   const collector = new Collector(readFile.fileName);
   // a number written into a resolved cell as the source wrote its digits, in the results file's decimal separator
@@ -484,7 +484,7 @@ function makeReader(kind: ReaderKind, columns: readonly number[], mapping: Sheet
     const c = columns[0];
     return (rd, sh) => {
       const cell = rd.cells[c] ?? null;
-      return { parts: [isBlankCell(cell) ? '' : comparable(cell, readFile, sheet, c)], text: textOf(sh), cells: [cell], originals: [cell], partCols: [[c]] };
+      return { parts: [isBlankCell(cell) ? '' : comparable(cell, readFile, sheet, c, rd)], text: textOf(sh), cells: [cell], originals: [cell], partCols: [[c]] };
     };
   }
   return (rd, sh) => {
@@ -703,7 +703,7 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
     Array.from({ length: dw }, (_, k) => {
       const descLine = descRow.line;
       const original = descRow.cells[k] ?? null;
-      const got = lendCell(original, { file: description.file, sheet: desSheet, column: k }, results.file);
+      const got = lendCell(original, { file: description.file, sheet: desSheet, column: k, row: descRow }, results.file);
       if (got.rewritten) rewritten.set(`${line}:${rw + k}`, original);
       else if (typeof original === 'string' && description.file.decimalComma !== results.file.decimalComma && parseNumber(original, description.file.decimalComma).status !== 'ok' && parseNumber(original, results.file.decimalComma).status === 'ok') {
         // its own file did not read this text as a number, the results file would: it would be written as a number here, so it is not lent (below) and the person hears of it (the finding their own file would have given)
@@ -731,6 +731,8 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
     }
   };
 
+  /** The merged row keeps which of its numbers have no date format (the description's columns sit right of the results' width). */
+  const withPlain = (r: RawRow, plain: readonly number[]): RawRow => (plain.length === 0 ? r : { ...r, plainNumbers: [...new Set(plain)] });
   const rows: RawRow[] = resSheet.rows.map((row) => {
     resultsLines.add(row.line);
     if (row.line > lastLine) lastLine = row.line;
@@ -753,12 +755,13 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
     if (lent === undefined) {
       cells.push(...Array.from({ length: dw }, () => null));
       for (const q of resolvedQuantities) q.rows.push({ cells, line: row.line, rr: q.readRes(row, row) });
-      return { line: row.line, cells, fieldCount: cells.length };
+      return withPlain({ line: row.line, cells, fieldCount: cells.length }, row.plainNumbers ?? []);
     }
     lentFrom.set(row.line, lent.line);
+    const filledPlain: number[] = [];
     const lentCells = lend(lent, row.line);
     cells.push(...lentCells);
-    const lentRow: RawRow = { line: lent.line, cells: lentCells, fieldCount: dw };
+    const lentRow: RawRow = { line: lent.line, cells: lentCells, fieldCount: dw, ...(lent.plainNumbers === undefined ? {} : { plainNumbers: lent.plainNumbers }) };
     for (const q of quantities) {
       const rr = q.readRes(row, row);
       const dr = q.readDes(lentRow, lent);
@@ -786,6 +789,7 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
           const offered = lent.cells[dc] ?? null;
           if (emptyCell(offered) || lentCells[dc] === null || !emptyCell(have)) continue; // nothing offered, or not lent (reported above), or the results sheet has its own
           cells[rc] = lentCells[dc];
+          if (lent.plainNumbers?.includes(dc) === true) filledPlain.push(rc);
           takenFromDescription.set(`${row.line}:${rc}`, lent.line);
           const original = rewritten.get(`${row.line}:${rw + dc}`);
           if (original !== undefined) rewritten.set(`${row.line}:${rc}`, original);
@@ -796,7 +800,7 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
     }
     // a quantity both sheets have in a column structure that cannot be compared: what the description holds in it cannot reach the archive until the columns agree
     markUnmerged(row.line, lent);
-    return { line: row.line, cells, fieldCount: cells.length };
+    return withPlain({ line: row.line, cells, fieldCount: cells.length }, [...(row.plainNumbers ?? []), ...(lent.plainNumbers ?? []).map((k) => rw + k), ...filledPlain]);
   });
 
   /* --- description-only samples --- */
@@ -816,6 +820,7 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
       const row = g.rows[0];
       const cells: RawCell[] = Array.from({ length: rw }, () => null);
       const lentCells = lend(row, line);
+      const onlyPlain: number[] = (row.plainNumbers ?? []).map((k) => rw + k);
       keys.forEach((pair, i) => {
         // the key cell is written as the key reads it (an ISO date for a serial or a date text), so that the ID of this sample is the one a results row of the same sample would get
         const lentCell = lentCells[pair.description];
@@ -826,11 +831,12 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
           return;
         }
         cells[pair.results] = lentCell;
+        if (row.plainNumbers?.includes(pair.description) === true) onlyPlain.push(pair.results);
         const original = rewritten.get(`${line}:${rw + pair.description}`);
         if (original !== undefined) rewritten.set(`${line}:${pair.results}`, original);
       });
       markUnmerged(line, row);
-      const lentRow: RawRow = { line: row.line, cells: lentCells, fieldCount: dw };
+      const lentRow: RawRow = { line: row.line, cells: lentCells, fieldCount: dw, ...(row.plainNumbers === undefined ? {} : { plainNumbers: row.plainNumbers }) };
       const full: RawCell[] = [];
       for (const q of quantities) {
         if (q.resolved !== undefined) {
@@ -843,11 +849,12 @@ export function mergeSampleSheets(decl: SampleJoinDecl): MergeResult {
         for (const [rc, dc] of q.pairs) {
           if (!emptyCell(cells[rc])) continue;
           cells[rc] = lentCells[dc];
+          if (row.plainNumbers?.includes(dc) === true) onlyPlain.push(rc);
           if (!emptyCell(row.cells[dc]) && lentCells[dc] !== null) countFilled('c', rc, header(resSheet, rc), line, true);
         }
       }
       full.push(...cells, ...lentCells);
-      rows.push({ line, cells: full, fieldCount: full.length });
+      rows.push(withPlain({ line, cells: full, fieldCount: full.length }, onlyPlain));
       descriptionOnly.set(line, row.line);
       addedKeys.push(keyShown(g.parts));
     }

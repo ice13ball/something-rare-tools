@@ -6,7 +6,13 @@ export const LANGS: readonly Lang[] = ['pl', 'en', 'de', 'fr'];
 
 /* ---------- raw input ---------- */
 export type RawCell = string | number | null;          // number only for xlsx numeric cells
-export interface RawRow { line: number; cells: RawCell[]; fieldCount: number }
+export interface RawRow {
+  line: number;
+  cells: RawCell[];
+  fieldCount: number;
+  /** xlsx: the column indexes of this row whose numeric cell has NO date format while the column is date-formatted (a General 2021 among dates): not a serial date (values/dates.ts dateFormattedAt). Set only on rows that have one. */
+  plainNumbers?: readonly number[];
+}
 export interface RawSheet {
   name: string;                 // sheet name; for CSV/PANGAEA the file name
   header: string[];             // original header text, OPeNDAP suffixes kept

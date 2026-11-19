@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { checkStationRows } from '../checks/rows';
-import { columnOrder, isEpochPlaceholder, looksLikeUnreadDate, parseDate } from '../values/dates';
+import { columnOrder, dateFormattedAt, isEpochPlaceholder, looksLikeUnreadDate, parseDate } from '../values/dates';
 import type { DeclaredOrder, TwoDigitOrder } from '../values/dates';
 import { dateOrderRead, onceDateOrder } from './dateOrder';
 import { Collector, metaParser, specsOf } from '../dataset';
@@ -1024,7 +1024,7 @@ function timeColumnWithDates(sheet: RawSheet, specs: ReturnType<typeof specsOf>,
     filled++;
     if (typeof c === 'number') {
       // a serial with a date part, in a column the workbook formats as a date; a plain number (63000, HHMMSS, seconds of the day) is a time
-      if (formatted && c >= 1) lines.push(r.line);
+      if (formatted && dateFormattedAt(sheet, r, index) && c >= 1) lines.push(r.line);
       return;
     }
     if (isEpochPlaceholder(c)) return;
