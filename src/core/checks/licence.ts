@@ -42,6 +42,8 @@ export function contradictionFinding(c: Contradiction, file: string): Finding {
       });
     case 'other-rights-entry':
       return makeFinding('LIC-OTHER-RIGHTS-ENTRY', { file, field: c.statement.statement.field, params: { licence: c.licence, text: c.statement.statement.text ?? c.statement.statement.uri ?? '' } });
+    case 'separate-restriction':
+      return makeFinding('LIC-SEPARATE-RESTRICTION', { file, field: c.statement.statement.field, params: { licence: c.licence, licenceField: c.licenceField, text: c.statement.statement.text ?? '' } });
     case 'restriction-code':
       return makeFinding('LIC-RESTRICTION-CONFLICT', { file, params: { codes: c.codes.join(', '), licence: c.licence } });
     case 'datacite-empty':

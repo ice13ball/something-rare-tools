@@ -2,6 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 // The ONE place that compares what the metadata sources of a dataset say about its licence. Pure, no I/O.
 // /check maps the result to findings (checks/licence.ts); the licence page renders it directly.
+import { narrowingOf, narrowsLicence } from './narrowing';
 import { classifyStatement, isOpenLicence, isRestrictiveCode, openLicenceNamed, spdxFromUri, spdxInfo, isNeutralEntry, type SpdxInfo } from '../metadata/licence';
 import type { LicenceClass, LicenceStatement, MetadataRecord, MetadataSource } from '../types';
 
@@ -63,6 +64,8 @@ export type Contradiction =
   | { kind: 'ambiguous'; source: AnalysedSource; statement: AnalysedStatement }
   /** A repeated rights entry (DataCite rightsList, Zenodo rights[]) that is no recognised licence and no neutral access value, next to a recognised licence of the same record. */
   | { kind: 'other-rights-entry'; source: AnalysedSource; statement: AnalysedStatement; licence: string }
+  /** A restriction written in a field of its own (ISO otherConstraints / useLimitation, Dataverse termsOfUse) next to a recognised licence of the same source, narrowing it: access for partners only, non-commercial, on request, contact first. */
+  | { kind: 'separate-restriction'; source: AnalysedSource; statement: AnalysedStatement; licence: string; licenceField: string }
   | { kind: 'restriction-code'; codes: string[]; licence: string }
   | { kind: 'datacite-empty'; licence: string };
 
@@ -253,6 +256,21 @@ export function analyseLicences(records: readonly MetadataRecord[], opts: Analys
     if (statement) {
       const id = licence.classification.kind === 'spdx' ? licence.classification.id : '';
       contradictions.push({ kind: 'other-rights-entry', source, statement, licence: licence.info ? `${licence.info.name} (${id})` : shownOf(licence) });
+    }
+  }
+
+  // A restriction in a field of its own next to a recognised licence of the same source ("Data access restricted to project partners" as
+  // the second otherConstraints). Not looked at: statements that are a licence, a conflict of their own (the rules for those exist),
+  // repeated rights entries (LIC-OTHER-RIGHTS-ENTRY) and restriction codes (LIC-RESTRICTION-CONFLICT). One finding per restriction.
+  for (const source of sources) {
+    const licence = source.statements.find((a) => a.classification.kind === 'spdx');
+    if (!licence || licence.classification.kind !== 'spdx') continue;
+    const id = licence.classification.id;
+    for (const a of source.statements) {
+      if (a === licence || a.conflict || a.classification.kind === 'spdx' || isRepeatedEntry(a.statement)) continue;
+      const kind = narrowingOf(a.statement.text);
+      if (!kind || !narrowsLicence(kind, id)) continue;
+      contradictions.push({ kind: 'separate-restriction', source, statement: a, licence: licence.info ? `${licence.info.name} (${id})` : id, licenceField: licence.statement.field });
     }
   }
 

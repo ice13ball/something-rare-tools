@@ -7,7 +7,7 @@ Regenerate with `UPDATE_RULES_DOC=1 npx vitest run test/rules/rules-docs-per-too
 
 The list is the rules the tool can raise, found by a static scan of its code, so a few may never fire in practice. Severity is error, warning or info. Every number a rule compares against is listed with its source. Each rule has four short parts: what it checks, when it fires, an invented example, and what the person can do.
 
-13 rules.
+14 rules.
 
 ## IN-RECORD-INACCESSIBLE — The record behind a link could not be opened, so its metadata and files were not read
 
@@ -118,6 +118,22 @@ Severity: warning
 **Example.** A rights list holds CC BY 4.0 and a second entry, Data may not be redistributed without consent.
 
 **What you can do.** Remove the second entry or move it to the description, or state clearly how it relates to the licence.
+
+**Citations.**
+
+- [Creative Commons FAQ](https://creativecommons.org/faq/), Alterations and additions to the license, "Can I change the license terms or conditions?": "if you change the terms and conditions of any Creative Commons license, you must no longer call, label, or describe the license as a “Creative Commons” or “CC” license"
+
+## LIC-SEPARATE-RESTRICTION — A restriction written in a field of its own stands next to a recognised licence of the same source
+
+Severity: warning
+
+**What it checks.** A restriction written in a field of its own stands next to a recognised licence of the same source. An open licence and a restriction on who may use the data exclude each other, so a reader cannot tell what is allowed.
+
+**When it fires.** Once per restriction, for free text in a field next to a recognised licence of the same source (ISO otherConstraints or useLimitation, in any element; Dataverse terms of use) that narrows it: access limited to partners or a project, confidential or embargoed, non-commercial or research use only, no derivatives or redistribution, on request only, or contact or permission needed first. A NonCommercial text next to a NonCommercial licence (and NoDerivatives next to NoDerivatives) only repeats it. Attribution and citation requests, disclaimers such as "provided as is", the licence name repeated and "no restrictions" do not fire it. Left to other rules: a restriction inside the licence string (LIC-ADDED-CONDITIONS), a repeated rights entry (LIC-OTHER-RIGHTS-ENTRY), a restriction code (LIC-RESTRICTION-CONFLICT). The finding names both fields and quotes the restriction.
+
+**Example.** An ISO record holds CC BY 4.0 in one otherConstraints element and Data access restricted to project partners in another.
+
+**What you can do.** Decide which statement is true. Remove the restriction if the data are open, or replace the licence with the real conditions of use.
 
 **Citations.**
 

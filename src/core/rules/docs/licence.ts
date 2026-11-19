@@ -4,7 +4,7 @@ import type { RuleDoc } from './types';
 
 /*
  * Licence rules. Each text was checked against src/core/checks/licence.ts (where the findings are made), src/core/licence/analyse.ts (which decides
- * what is a contradiction) and src/core/metadata/licence.ts (which reads one statement: text, link, identifier). All eleven have export policy
+ * what is a contradiction) and src/core/metadata/licence.ts (which reads one statement: text, link, identifier). All twelve have export policy
  * show: they are judgements about a metadata record, never a reason to stop an export.
  */
 export const DOCS: Readonly<Record<string, RuleDoc>> = {
@@ -67,6 +67,16 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
       'A rights list holds CC BY 4.0 and a second entry, Data may not be redistributed without consent.',
     action:
       'Remove the second entry or move it to the description, or state clearly how it relates to the licence.',
+  },
+  'LIC-SEPARATE-RESTRICTION': {
+    checks:
+      'A restriction written in a field of its own stands next to a recognised licence of the same source. An open licence and a restriction on who may use the data exclude each other, so a reader cannot tell what is allowed.',
+    fires:
+      'Once per restriction, for free text in a field next to a recognised licence of the same source (ISO otherConstraints or useLimitation, in any element; Dataverse terms of use) that narrows it: access limited to partners or a project, confidential or embargoed, non-commercial or research use only, no derivatives or redistribution, on request only, or contact or permission needed first. A NonCommercial text next to a NonCommercial licence (and NoDerivatives next to NoDerivatives) only repeats it. Attribution and citation requests, disclaimers such as "provided as is", the licence name repeated and "no restrictions" do not fire it. Left to other rules: a restriction inside the licence string (LIC-ADDED-CONDITIONS), a repeated rights entry (LIC-OTHER-RIGHTS-ENTRY), a restriction code (LIC-RESTRICTION-CONFLICT). The finding names both fields and quotes the restriction.',
+    example:
+      'An ISO record holds CC BY 4.0 in one otherConstraints element and Data access restricted to project partners in another.',
+    action:
+      'Decide which statement is true. Remove the restriction if the data are open, or replace the licence with the real conditions of use.',
   },
   'LIC-AMBIGUOUS': {
     checks:

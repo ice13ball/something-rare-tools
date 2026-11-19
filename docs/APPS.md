@@ -944,7 +944,9 @@ read** on this page: nothing is fetched and the page lists it as an unread sourc
    - **not classified, check by hand**: text and link differ (`LIC-TEXT-URI-CONFLICT`); the text
      names a licence but adds or negates conditions (`LIC-ADDED-CONDITIONS`) or says something
      else (`LIC-EXTRA-TEXT`); no link and more than one reading (`LIC-AMBIGUOUS`); a repeated
-     rights entry that is no recognised licence next to a recognised one (`LIC-OTHER-RIGHTS-ENTRY`).
+     rights entry that is no recognised licence next to a recognised one (`LIC-OTHER-RIGHTS-ENTRY`); a
+     restriction in a field of its own (ISO otherConstraints / useLimitation, Dataverse terms of use)
+     that narrows the recognised licence next to it (`LIC-SEPARATE-RESTRICTION`).
 
    Reading a link: host and scheme are irrelevant; what may follow the version is an optional port
    segment (below 4.0 only), `legalcode` or `deed` with a language tag, and a closing slash;

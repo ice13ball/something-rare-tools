@@ -20,6 +20,10 @@ import type { RuleSpec } from './spec';
  *                                                    rest = exactly that something else, as written
  *   LIC-OTHER-RIGHTS-ENTRY    licence, text          a repeated rights entry (DataCite rightsList, Zenodo rights[]) that is no recognised licence and no plain access value / holder-only notice
  *                                                    (text = what it says, or its link), next to the recognised licence {licence} (name and id) of the same record; once per record; never ISO fields
+ *   LIC-SEPARATE-RESTRICTION  licence, licenceField, text   a restriction written in a field of its own (ISO otherConstraints / useLimitation, Dataverse termsOfUse) next to the recognised
+ *                                                    licence {licence} (name and id) of the same source, which narrows it: access for partners or a project only, non-commercial, no
+ *                                                    derivatives, on request only, contact first; licenceField = the field the licence is in; text = the restriction as written;
+ *                                                    one per restriction; never a repeated rights entry (LIC-OTHER-RIGHTS-ENTRY) or a restriction code (LIC-RESTRICTION-CONFLICT)
  *   LIC-AMBIGUOUS             text, readings         one statement WITHOUT a link that reads as more than one licence (rights text against
  *                                                    identifier, "CC BY 4.0 (CC BY-NC)", a recognised name next to one that is not);
  *                                                    readings = what it reads as, separated by " / " ("—" = a name no SPDX id exists for)
@@ -138,6 +142,21 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
       fr: `À côté de la licence {licence}, une autre mention de droits indique : « {text} ». Vérifiez si elle restreint ou modifie la licence.`,
     },
     technical: `{file} field {field}: a rights entry '{text}' is no recognised licence and no plain access value, next to the recognised licence {licence}. Check manually whether it restricts or changes the licence.`,
+  },
+  {
+    id: 'LIC-SEPARATE-RESTRICTION',
+    category: 'A',
+    severity: 'warning',
+    exportPolicy: 'show',
+    citations: [CITE.ccModified],
+    params: ['licence', 'licenceField', 'text'],
+    plain: {
+      pl: `Pole licencji ({licenceField}) podaje {licence}, ale osobne pole ({field}) ogranicza użycie: „{text}”. Licencja otwarta i takie ograniczenie wzajemnie się wykluczają. Sprawdź, co obowiązuje, i zostaw jedno z nich.`,
+      en: `The licence field ({licenceField}) gives {licence}, but a separate field ({field}) restricts use: "{text}". An open licence and such a restriction exclude each other. Check which one applies and keep only that one.`,
+      de: `Das Lizenzfeld ({licenceField}) nennt {licence}, aber ein eigenes Feld ({field}) schränkt die Nutzung ein: „{text}“. Eine offene Lizenz und eine solche Einschränkung schließen sich aus. Prüfen Sie, was gilt, und behalten Sie nur das eine.`,
+      fr: `Le champ de licence ({licenceField}) indique {licence}, mais un champ distinct ({field}) restreint l'usage : « {text} ». Une licence ouverte et une telle restriction s'excluent. Vérifiez laquelle s'applique et ne gardez que celle-là.`,
+    },
+    technical: `{file} field {field}: '{text}' narrows the licence {licence} stated in field {licenceField} (access limited, non-commercial, no derivatives, on request or contact first). Check manually which one applies.`,
   },
   {
     id: 'LIC-AMBIGUOUS',
