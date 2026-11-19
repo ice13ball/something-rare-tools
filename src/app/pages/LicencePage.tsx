@@ -2,6 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import React, { useId, useState } from 'react';
 import { contradictionFinding, heldBackFinding } from '../../core/checks/licence';
+import { obisLicenceFinding } from '../../core/licence/obis';
 import { analyseLicences, type AnalysedSource, type AnalysedStatement, type Contradiction, type LicenceAnalysis, type SourceGroup } from '../../core/licence/analyse';
 import { buildAttribution, type Attribution } from '../../core/licence/attribution';
 import { notReadReasonKey } from '../../core/licence/failure';
@@ -235,6 +236,7 @@ function Summary({ r }: { r: Result }): React.ReactElement {
   const a = r.analysis;
   const unrecognised = a.sources.some((s) => s.statements.some((x) => x.classification.kind !== 'spdx'));
   const held = heldBackFinding(a.sources.flatMap((s) => (s.record ? [s.record] : [])), 'dataset');
+  const obis = obisLicenceFinding(a, 'dataset');
   return (
     <section className="licence-summary" aria-labelledby="licence-summary-title">
       <HeadingTip tip="licenceOneDeposit">
@@ -274,6 +276,11 @@ function Summary({ r }: { r: Result }): React.ReactElement {
       {held && (
         <p className="notice" data-testid="licence-held-back">
           {renderPlain(held, lang)}
+        </p>
+      )}
+      {obis && (
+        <p className="notice" data-testid="licence-obis">
+          {renderPlain(obis, lang)}
         </p>
       )}
     </section>

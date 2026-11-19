@@ -48,6 +48,8 @@ export function contradictionFinding(c: Contradiction, file: string): Finding {
       return makeFinding('LIC-RESTRICTION-CONFLICT', { file, params: { codes: c.codes.join(', '), licence: c.licence } });
     case 'datacite-empty':
       return makeFinding('LIC-DATACITE-EMPTY', { file, params: { licence: c.licence } });
+    case 'several-licences':
+      return makeFinding('LIC-SEVERAL-LICENCES', { file, field: c.fields.join(', '), params: { licences: c.licences.join(', '), fields: c.fields.join(', ') } });
     case 'mismatch':
       return makeFinding('LIC-MISMATCH', { file, params: { licenceA: c.licenceA, licenceB: c.licenceB } });
   }

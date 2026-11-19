@@ -66,6 +66,13 @@ export type Contradiction =
   | { kind: 'other-rights-entry'; source: AnalysedSource; statement: AnalysedStatement; licence: string }
   /** A restriction written in a field of its own (ISO otherConstraints / useLimitation, Dataverse termsOfUse) next to a recognised licence of the same source, narrowing it: access for partners only, non-commercial, on request, contact first. */
   | { kind: 'separate-restriction'; source: AnalysedSource; statement: AnalysedStatement; licence: string; licenceField: string; fields: string[] }
+  /**
+   * One source states two or more DIFFERENT recognised licences in repeated entries (DataCite rightsList, Zenodo rights[] next to licence).
+   * Relation to the rest: between sources one shared licence still suffices (no mismatch); different licences in non-repeated fields stay
+   * `mismatch`; a second entry that is no licence is `other-rights-entry`, a restriction is `separate-restriction`; the same licence given as
+   * identifier, URI and name is one licence. Per-file Dataverse licences are labelled by the file and never count.
+   */
+  | { kind: 'several-licences'; source: AnalysedSource; licences: string[]; fields: string[] }
   | { kind: 'restriction-code'; codes: string[]; licence: string }
   | { kind: 'datacite-empty'; licence: string };
 
@@ -319,6 +326,19 @@ export function analyseLicences(records: readonly MetadataRecord[], opts: Analys
   for (const src of sources) {
     const own = ownLicences(src);
     if (own.length > 1) contradictions.push({ kind: 'mismatch', sourceA: src, sourceB: src, licenceA: own[0], licenceB: own[1], sameGroup: true });
+  }
+
+  // Several different licences in repeated entries of one source: once per set of licences, however many sources repeat it.
+  const severalSeen = new Set<string>();
+  for (const src of sources) {
+    const own = src.statements.filter((a) => !a.statement.field.startsWith('files.license'));
+    const licences = [...new Set(own.flatMap((a) => (a.classification.kind === 'spdx' ? [a.classification.id] : [])))];
+    if (licences.length < 2 || ownLicences(src).length > 1) continue;
+    const key = [...licences].sort().join('|');
+    if (severalSeen.has(key)) continue;
+    severalSeen.add(key);
+    const fields = [...new Set(own.filter((a) => a.classification.kind === 'spdx').map((a) => a.statement.field))];
+    contradictions.push({ kind: 'several-licences', source: src, licences, fields });
   }
 
   // Mismatch = two sources whose recognised sets are disjoint.

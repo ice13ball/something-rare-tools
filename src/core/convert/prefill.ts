@@ -212,7 +212,8 @@ export function licenceCaseOf(records: readonly MetadataRecord[]): LicenceCase {
   const all = analysis.sources.flatMap((s) => s.statements.map((a) => ({ file: s.label, a })));
   const says = all.map(({ file, a }) => said(file, a));
   // contradictory exactly when the shared analysis says so, never otherwise
-  if (analysis.contradictions.length > 0) {
+  // (dual licensing in repeated entries is not a contradiction here: /convert reads it as before, by its own rule for several licences)
+  if (analysis.contradictions.some((c) => c.kind !== 'several-licences')) {
     // a restriction code that contradicts an open licence is part of what the files say
     const codes = analysis.contradictions.flatMap((c) => (c.kind === 'restriction-code' ? c.codes : []));
     const rec = records.find((r) => r.restrictionCodes.length > 0);

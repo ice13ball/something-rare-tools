@@ -95,11 +95,11 @@ describe('the licence matrix', () => {
     expect(prefillValues(p).licence).toBeUndefined();
   });
 
-  it('several licences side by side in one record (dual licensing) are no contradiction for /check, so the case is "other", never "contradictory"', () => {
+  it('several licences side by side in one record (dual licensing) are a /check finding of their own (several-licences), but for /convert the case is "other", never "contradictory"', () => {
     const rec = recordOf('dc.xml', dataciteXml({ licence: 'CC-BY-4.0' }));
     const second = { ...rec.licences[0], field: 'rightsList[1]', spdx: 'CC0-1.0', text: 'CC0-1.0', uri: undefined, uriSpdx: undefined, textSpdx: 'CC0-1.0' };
     const two = { ...rec, licences: [...rec.licences, second] };
-    expect(analyseLicences([two]).contradictions).toEqual([]);
+    expect(analyseLicences([two]).contradictions.map((x) => x.kind)).toEqual(['several-licences']);
     const c = licenceCaseOf([two]);
     expect(c.kind).toBe('other');
     if (c.kind === 'other') expect(c.ids.sort()).toEqual(['CC-BY-4.0', 'CC0-1.0']);

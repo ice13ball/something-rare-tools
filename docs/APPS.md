@@ -961,9 +961,15 @@ read** on this page: nothing is fetched and the page lists it as an unread sourc
    when the DataCite record names them with `IsVersionOf` or `HasVersion`), a PANGAEA record and
    the DataCite record of its DOI. A GeoNetwork record is its own deposit even with a DOI.
 4. **Contradictions.** Different licences inside one source outside repeated entries (two ISO
-   fields) contradict each other; entries the publisher repeated on purpose (DataCite
+   fields) contradict each other (`LIC-MISMATCH`); entries the publisher repeated on purpose (DataCite
    `rightsList`, Zenodo `rights`, a Dataverse's per-file licences) are dual licensing, not a
-   conflict. `MD_RestrictionCode` `license` is the normal ISO way to say a licence applies and
+   conflict. Two or more **different** recognised licences in such repeated entries of one record
+   still get one warning naming all of them (`LIC-SEVERAL-LICENCES`): the record does not say which
+   covers the data and which only the description. The same licence as identifier, link and name
+   is one licence; per-file Dataverse licences and the labelled ISO metadata constraints are left
+   out; a second entry that is no licence stays `LIC-OTHER-RIGHTS-ENTRY` and a restriction stays
+   `LIC-SEPARATE-RESTRICTION`; between sources one shared licence still suffices. /convert reads
+   such a record as before. `MD_RestrictionCode` `license` is the normal ISO way to say a licence applies and
    cannot contradict a CC licence, but other restriction codes next to an **open** licence are
    flagged (`LIC-RESTRICTION-CONFLICT`). **Mismatch** is two sources whose sets of recognised
    licences are **disjoint** (`LIC-MISMATCH`). A DataCite record read but silent while another
@@ -974,6 +980,10 @@ read** on this page: nothing is fetched and the page lists it as an unread sourc
 5. **Verdicts shown**: stated / missing (no source states one and none was unreadable:
    `LIC-MISSING`) / unreadable (absence then says nothing) / free text only; restricted or
    embargoed Dataverse files (`LIC-FILES-HELD-BACK`: the verdict covers the open files only).
+   When exactly one recognised licence is stated, one information line (`LIC-OBIS-LICENCE`, never a
+   warning, `src/core/licence/obis.ts`) says whether OBIS and GBIF accept it: CC0, CC BY and CC BY-NC
+   4.0, the list `/convert` takes. Shown on this page only, once per dataset; `/check` and
+   `/collection` do not carry it.
 6. **Attribution** (`buildAttribution`): built only from what the sources state.
 
 ### Outputs

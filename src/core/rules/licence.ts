@@ -34,6 +34,11 @@ import type { RuleSpec } from './spec';
  *                                                    statement that is not recognised; NC/ND never count
  *   LIC-DATACITE-EMPTY        licence                the licence another record states; "—" = no other record states one (or the main record could not be read)
  *   LIC-MISMATCH              licenceA, licenceB     the two different SPDX ids
+ *   LIC-SEVERAL-LICENCES      licences, fields       two or more DIFFERENT recognised licences (SPDX ids, comma-separated) in the repeated entries of one record (DataCite rightsList, Zenodo
+ *                                                    licence next to rights[]); fields = where they stand; one per set of licences; the same licence as identifier, link and name is one licence;
+ *                                                    never per-file Dataverse licences, ISO metadata constraints, or different licences in non-repeated fields (LIC-MISMATCH)
+ *   LIC-OBIS-LICENCE          licence, accepts, kind information only: the one recognised licence of the dataset (SPDX id) against accepts (the list /convert takes, comma-separated);
+ *                                                    kind = 'accepted' | 'not-accepted'; never when no or several licences are recognised; not in the collection review
  *   LIC-FILES-HELD-BACK       files                  files of a Dataverse dataset under restricted access or an embargo (names)
  */
 /** Appended to LIC-ADDED-CONDITIONS / LIC-EXTRA-TEXT when another string of the statement (identifier, Zenodo title) leaves something too (param otherRest). */
@@ -263,5 +268,42 @@ export const LICENCE_RULES: readonly RuleSpec[] = [
       fr: `Deux notices indiquent des licences différentes ({licenceA} et {licenceB}). Harmonisez-les.`,
     },
     technical: `{file}: licence mismatch between records: {licenceA} vs {licenceB}.`,
+  },
+  {
+    id: 'LIC-SEVERAL-LICENCES',
+    category: 'A',
+    severity: 'warning',
+    exportPolicy: 'show',
+    citations: [CITE.dataciteRepeat, CITE.ccDualLicensing, CITE.ccDualChoice, CITE.fairDifferent],
+    params: ['licences', 'fields'],
+    plain: {
+      pl: `Rekord podaje kilka różnych licencji naraz: {licences} (pola: {fields}). Nie wynika z niego, która dotyczy danych, a która tylko opisu. Zostaw licencję danych; przy celowym podwójnym licencjonowaniu albo licencji metadanych napisz to w opisie.`,
+      en: `The record states several different licences at once: {licences} (fields: {fields}). It does not say which covers the data and which only the description. Keep the licence of the data; for deliberate dual licensing, or a licence of the metadata, say so in the description.`,
+      de: `Der Eintrag nennt mehrere verschiedene Lizenzen zugleich: {licences} (Felder: {fields}). Er sagt nicht, welche für die Daten und welche nur für die Beschreibung gilt. Behalten Sie die Lizenz der Daten; bei bewusster Doppellizenzierung oder einer Metadatenlizenz schreiben Sie das in die Beschreibung.`,
+      fr: `La notice indique plusieurs licences différentes à la fois : {licences} (champs : {fields}). Elle ne dit pas laquelle couvre les données et laquelle seulement la description. Gardez la licence des données ; pour une double licence voulue ou une licence des métadonnées, écrivez-le dans la description.`,
+    },
+    technical: `{file} fields {fields}: several different recognised licences in one record ({licences}); the record does not say which covers the data. Check manually: dual licensing to choose from, or a licence of the metadata next to the licence of the data.`,
+  },
+  {
+    id: 'LIC-OBIS-LICENCE',
+    category: 'A',
+    severity: 'info',
+    exportPolicy: 'show',
+    params: ['licence', 'accepts', 'kind'],
+    plain: {
+      pl: `Licencja {licence} jest przyjmowana przez OBIS i GBIF (przyjmują: {accepts}). Informacja, nie błąd.`,
+      en: `The licence {licence} is accepted by OBIS and GBIF (they accept: {accepts}). Information, not a fault.`,
+      de: `Die Lizenz {licence} wird von OBIS und GBIF angenommen (sie nehmen an: {accepts}). Hinweis, kein Fehler.`,
+      fr: `La licence {licence} est acceptée par OBIS et GBIF (ils acceptent : {accepts}). Information, pas une erreur.`,
+    },
+    plainVariants: {
+      'not-accepted': {
+        pl: `Licencja {licence} nie jest przyjmowana przez OBIS i GBIF (przyjmują: {accepts}). Samo zgłoszenie danych do nich wymaga jednej z tych licencji. Informacja, nie błąd: licencja jest poprawnie podana.`,
+        en: `The licence {licence} is not accepted by OBIS and GBIF (they accept: {accepts}). Submitting the data to them needs one of these licences. Information, not a fault: the licence is stated correctly.`,
+        de: `Die Lizenz {licence} wird von OBIS und GBIF nicht angenommen (sie nehmen an: {accepts}). Für die Einreichung der Daten dort ist eine dieser Lizenzen nötig. Hinweis, kein Fehler: die Lizenz ist korrekt angegeben.`,
+        fr: `La licence {licence} n'est pas acceptée par OBIS et GBIF (ils acceptent : {accepts}). Pour leur soumettre les données, il faut l'une de ces licences. Information, pas une erreur : la licence est correctement indiquée.`,
+      },
+    },
+    technical: `{file}: licence {licence}; OBIS and GBIF accept {accepts} ({kind}).`,
   },
 ];

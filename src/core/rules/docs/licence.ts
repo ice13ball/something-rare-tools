@@ -78,6 +78,26 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     action:
       'Decide which statement is true. Remove the restriction if the data are open, or replace the licence with the real conditions of use.',
   },
+  'LIC-SEVERAL-LICENCES': {
+    checks:
+      'One record states two or more different licences at once. It does not say which one covers the data and which one only the description or a part of it.',
+    fires:
+      'Once per set of licences, when the repeated entries of a record (DataCite rightsList, Zenodo licence next to rights) hold two or more different recognised licences. The same licence given as identifier, link and name, in one entry or in several, is one licence and does not fire it; two versions of one family are two licences. It does not fire for the licences a Dataverse states per file, for the metadata constraints of an ISO record (labelled as the licence of the metadata), or for a second entry that is no licence (LIC-OTHER-RIGHTS-ENTRY) or only a restriction (LIC-SEPARATE-RESTRICTION). Different licences in non-repeated fields of one record stay LIC-MISMATCH. Between records one shared licence still suffices. DataCite and Zenodo do not label a licence of the metadata, so the finding asks the authors to say it in the description. /convert reads such a record as before.',
+    example:
+      'A DataCite rights list holds CC BY 4.0 and, as a second entry, CC BY-NC-ND 4.0.',
+    action:
+      'Keep the licence of the data in the record. If the dual licensing is deliberate, say in the description that the user chooses one; if one licence is for the metadata, say that in the description.',
+  },
+  'LIC-OBIS-LICENCE': {
+    checks:
+      'Whether OBIS and GBIF accept the one licence the record states. Information only, never a warning.',
+    fires:
+      'Once per dataset in /check and /licence (not in the collection review), when exactly one recognised licence is stated. It says the licence is accepted (CC0, CC BY 4.0 or CC BY-NC 4.0, the list /convert takes) or not accepted, and names what is accepted. It does not appear when no licence is recognised (missing, free text, a statement in conflict) or when the record states several different licences.',
+    example:
+      'A rights list holds CC BY-SA 4.0 only.',
+    action:
+      'Nothing to fix. If you plan to submit the data to OBIS or GBIF, choose one of the accepted licences.',
+  },
   'LIC-AMBIGUOUS': {
     checks:
       'A licence statement without a link reads as more than one licence. It cannot be assigned to one licence, so a harvester cannot tell what is allowed.',

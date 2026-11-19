@@ -176,15 +176,16 @@ describe('review 9 — ordinary texts are not "added conditions"', () => {
 
 describe('review 2 — only explicitly repeated entries are dual licensing', () => {
   const CC0 = 'https://creativecommons.org/publicdomain/zero/1.0/';
-  it('DataCite rightsList entries and Zenodo rights[] entries are dual licensing', () => {
-    expect(analyseLicences([rec('datacite', [['CC BY 4.0', BY], ['CC0 1.0', CC0]])]).contradictions).toEqual([]);
+  // Dual licensing is no MISMATCH; since the /licence round (T2) two different recognised licences in repeated entries are their own warning, LIC-SEVERAL-LICENCES.
+  it('DataCite rightsList entries and Zenodo rights[] entries are dual licensing, not a mismatch', () => {
+    expect(analyseLicences([rec('datacite', [['CC BY 4.0', BY], ['CC0 1.0', CC0]])]).contradictions).toMatchObject([{ kind: 'several-licences', licences: ['CC-BY-4.0', 'CC0-1.0'] }]);
     const z = makeRecord('zenodo', {
       licences: [
         buildStatement({ source: 'zenodo', field: 'rights[0]', text: 'cc-by-4.0' })!,
         buildStatement({ source: 'zenodo', field: 'rights[1]', text: 'cc-zero' })!,
       ],
     });
-    expect(analyseLicences([z]).contradictions).toEqual([]);
+    expect(analyseLicences([z]).contradictions).toMatchObject([{ kind: 'several-licences' }]);
   });
   it('two different licences in two ISO fields are LIC-MISMATCH, in the analysis and in /check', () => {
     const iso = rec('iso19139', [['CC BY 4.0', BY, 'otherConstraints'], ['CC0 1.0', CC0, 'useLimitation']]);

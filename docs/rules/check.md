@@ -7,7 +7,7 @@ Regenerate with `UPDATE_RULES_DOC=1 npx vitest run test/rules/rules-docs-per-too
 
 The list is the rules the tool can raise, found by a static scan of its code, so a few may never fire in practice. Severity is error, warning or info. Every number a rule compares against is listed with its source. Each rule has four short parts: what it checks, when it fires, an invented example, and what the person can do.
 
-122 rules.
+123 rules.
 
 ## IN-NO-DATA-FILE — A record that was opened holds no file the tool can read as a data table, only other files such as PDFs, images or text documents
 
@@ -643,6 +643,25 @@ Severity: warning
 **Example.** The catalogue record says CC BY 4.0 and the DataCite record says CC BY-SA 4.0.
 
 **What you can do.** Make the licence the same in every record of the dataset.
+
+**Citations.**
+
+- [DataCite Metadata Schema 4.6, 16. Rights](https://datacite-metadata-schema.readthedocs.io/en/4.6/properties/rights/), 16. Rights, definition: "The property may be repeated to record complex rights characteristics."
+- [Creative Commons FAQ](https://creativecommons.org/faq/), separate agreements: "You may offer the licensed material under other licenses in addition to the CC license (a practice commonly referred to as “dual licensing”)."
+- [Creative Commons FAQ](https://creativecommons.org/faq/), separate agreements: "A reuser may then choose which set of terms to comply with."
+- [GO FAIR, FAIR Principle R1.1](https://www.go-fair.org/fair-principles/r1-1-metadata-released-clear-accessible-data-usage-license/), heading "Interpretation of R1.1": "Furthermore, the license may be different for a data resource and the metadata that describes it"
+
+## LIC-SEVERAL-LICENCES — One record states two or more different licences at once
+
+Severity: warning
+
+**What it checks.** One record states two or more different licences at once. It does not say which one covers the data and which one only the description or a part of it.
+
+**When it fires.** Once per set of licences, when the repeated entries of a record (DataCite rightsList, Zenodo licence next to rights) hold two or more different recognised licences. The same licence given as identifier, link and name, in one entry or in several, is one licence and does not fire it; two versions of one family are two licences. It does not fire for the licences a Dataverse states per file, for the metadata constraints of an ISO record (labelled as the licence of the metadata), or for a second entry that is no licence (LIC-OTHER-RIGHTS-ENTRY) or only a restriction (LIC-SEPARATE-RESTRICTION). Different licences in non-repeated fields of one record stay LIC-MISMATCH. Between records one shared licence still suffices. DataCite and Zenodo do not label a licence of the metadata, so the finding asks the authors to say it in the description. /convert reads such a record as before.
+
+**Example.** A DataCite rights list holds CC BY 4.0 and, as a second entry, CC BY-NC-ND 4.0.
+
+**What you can do.** Keep the licence of the data in the record. If the dual licensing is deliberate, say in the description that the user chooses one; if one licence is for the metadata, say that in the description.
 
 **Citations.**
 

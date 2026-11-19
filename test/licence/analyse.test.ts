@@ -86,11 +86,11 @@ describe('contradictions', () => {
     const a = analyseLicences([rec('zenodo', [['cc-by-4.0']], { doi: '10.5281/zenodo.999999911' }), rec('datacite', [['CC BY-SA 4.0', BYSA]], { doi: '10.5281/zenodo.999999911' })]);
     expect(a.contradictions).toMatchObject([{ kind: 'mismatch', sameGroup: true }]);
   });
-  it('dual licensing inside one record, with or without a second source naming one of them, is no mismatch', () => {
+  it('dual licensing inside one record, with or without a second source naming one of them, is no mismatch (it is its own finding, several-licences)', () => {
     const dual = rec('datacite', [['CC BY 4.0', BY], ['CC BY-SA 4.0', BYSA]]);
-    expect(kinds(analyseLicences([dual]))).toEqual([]);
-    expect(kinds(analyseLicences([dual, rec('iso19139', [['CC BY-SA 4.0', BYSA]])]))).toEqual([]);
-    expect(kinds(analyseLicences([dual, rec('iso19139', [['CC0 1.0', 'https://creativecommons.org/publicdomain/zero/1.0/']])]))).toEqual(['mismatch']);
+    expect(kinds(analyseLicences([dual]))).toEqual(['several-licences']);
+    expect(kinds(analyseLicences([dual, rec('iso19139', [['CC BY-SA 4.0', BYSA]])]))).toEqual(['several-licences']);
+    expect(kinds(analyseLicences([dual, rec('iso19139', [['CC0 1.0', 'https://creativecommons.org/publicdomain/zero/1.0/']])])).sort()).toEqual(['mismatch', 'several-licences']);
   });
   it('unrecognised statements never mismatch', () => {
     expect(kinds(analyseLicences([rec('iso19139', [['CC BY 4.0', BY]]), rec('datacite', [['Open Access']])]))).toEqual([]);

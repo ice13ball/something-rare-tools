@@ -182,17 +182,41 @@ describe('LicencePage', () => {
     expect((screen.getByLabelText('Via the Abyssal Claims server') as HTMLInputElement).checked).toBe(true);
   });
 
-  it('dual licensing in one source is not a contradiction; the attribution leaves the licence out', async () => {
+  it('dual licensing in one source is no mismatch but one warning naming both licences; the attribution leaves the licence out, as before', async () => {
     const c = { doi: '10.0000/dual', title: 'Dual', creators: ['A, B'], year: 2021, publisher: 'P' };
     const f = new MapFetcher({
       [DC + c.doi]: dataciteJson({ ...c, url: 'https://repository.example.org/d' }, [{ rightsIdentifier: 'cc-by-4.0' }, { rightsIdentifier: 'cc0-1.0' }]),
     });
     const result = await run(f, [c.doi]);
     const text = result.textContent ?? '';
-    expect(text).not.toContain('Contradictions found');
-    expect(text).toContain('Single source — nothing to compare');
+    expect(text).not.toContain('Two records state different licences');
+    expect(text).toContain('The record states several different licences at once: CC-BY-4.0, CC0-1.0');
     expect(text).toContain('The licence is left out: more than one licence is recognised across the sources.');
     expect(screen.getByTestId('attribution').textContent).not.toContain('Licence:');
+    // two licences: no OBIS line
+    expect(screen.queryByTestId('licence-obis')).toBeNull();
+  });
+
+  it('one recognised licence: one information line on what OBIS and GBIF accept, in the summary', async () => {
+    const c = { doi: '10.0000/obis1', title: 'One', creators: ['A, B'], year: 2021, publisher: 'P' };
+    const f = new MapFetcher({ [DC + c.doi]: dataciteJson({ ...c, url: 'https://repository.example.org/d' }, [{ rightsIdentifier: 'cc-by-4.0' }]) });
+    await run(f, [c.doi]);
+    const line = screen.getByTestId('licence-obis').textContent ?? '';
+    expect(line).toContain('The licence CC-BY-4.0 is accepted by OBIS and GBIF');
+    expect(screen.getAllByTestId('licence-obis')).toHaveLength(1);
+  });
+
+  it('a licence OBIS and GBIF do not take is said as information naming what they take; no line when no licence is recognised', async () => {
+    const c = { doi: '10.0000/obis2', title: 'Two', creators: ['A, B'], year: 2021, publisher: 'P' };
+    const f = new MapFetcher({ [DC + c.doi]: dataciteJson({ ...c, url: 'https://repository.example.org/d' }, [{ rightsIdentifier: 'cc-by-sa-4.0' }]) });
+    await run(f, [c.doi]);
+    const line = screen.getByTestId('licence-obis').textContent ?? '';
+    expect(line).toContain('is not accepted by OBIS and GBIF');
+    expect(line).toContain('CC0-1.0, CC-BY-4.0, CC-BY-NC-4.0');
+    cleanup();
+    const d = { doi: '10.0000/obis3', title: 'Three', creators: ['A, B'], year: 2021, publisher: 'P' };
+    await run(new MapFetcher({ [DC + d.doi]: dataciteJson({ ...d, url: 'https://repository.example.org/d' }, [{ rights: 'All rights reserved' }]) }), [d.doi]);
+    expect(screen.queryByTestId('licence-obis')).toBeNull();
   });
 
   it('Zenodo and its DataCite record are one deposit: agreement counts once and the page says so; a DOI and a Zenodo link give each source once', async () => {

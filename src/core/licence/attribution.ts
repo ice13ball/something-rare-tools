@@ -40,7 +40,8 @@ export function buildAttribution(a: LicenceAnalysis): Attribution {
   const ids = [...new Set(statements.flatMap((s) => (s.classification.kind === 'spdx' ? [s.classification.id] : [])))];
   let omitted: LicenceOmitted | undefined;
   // DataCite saying nothing is not a contrary statement (it is not among the contradictions): the licence another record states stays.
-  if (a.contradictions.length > 0) omitted = 'contradiction';
+  // Dual licensing in repeated entries (several-licences) is no contradiction here: the omission stays 'several'.
+  if (a.contradictions.some((c) => c.kind !== 'several-licences')) omitted = 'contradiction';
   // Nothing recognised while a source could not be read: the licence could not be looked up, which is not "no source states one".
   else if (ids.length === 0) omitted = a.hasUnreadable ? 'unreadable' : 'none';
   else if (ids.length > 1) omitted = 'several';
