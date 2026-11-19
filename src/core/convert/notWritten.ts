@@ -5,7 +5,7 @@ import { makeConvertFinding } from '../rules/convert';
 import type { Finding, RawCell, RawRow, RawSheet } from '../types';
 import type { ConvertSheetInput } from './build';
 import type { LedgerReason, LineFate, SheetLedger } from './ledger';
-import { parseDate } from '../values/dates';
+import { dateFormattedAt, parseDate } from '../values/dates';
 import { policyOf } from './policy';
 
 /*
@@ -354,12 +354,14 @@ export function* notWrittenRows(ledger: readonly SheetLedger[], sheets: readonly
     const source = sourceOf(l, sheets);
     const rows = rowsAt(source, wanted.map((f) => f.line));
     const input = l.inputIndex === undefined ? undefined : sheets[l.inputIndex];
-    const dated = (cells: readonly RawCell[]): string => {
+    const dated = (row: RawRow | undefined): string => {
       const flags = source?.dateFormatted;
-      if (flags === undefined || input === undefined) return '';
+      if (flags === undefined || input === undefined || row === undefined) return '';
+      const cells = row.cells;
       const out: string[] = [];
       cells.forEach((c, i) => {
-        if (typeof c !== 'number' || flags[i] !== true) return;
+        // a number with no date format among dates is no serial: it is shown as the number it is
+        if (typeof c !== 'number' || flags[i] !== true || source === undefined || !dateFormattedAt(source, row, i)) return;
         const d = parseDate(c, { date1904: (l.kind === 'description' ? input.sampleJoin?.description.file.date1904 : input.file.date1904) ?? input.file.date1904, dateFormatted: true });
         if (!('error' in d)) out.push(`${(source?.header[i] ?? '').trim() || `#${i + 1}`}: ${d.iso}`);
       });
@@ -372,7 +374,7 @@ export function* notWrittenRows(ledger: readonly SheetLedger[], sheets: readonly
       if (isUnwritten(f)) {
         const others = (f.chain ?? []).filter((c) => c !== f.fate);
         const lentTo = (f.lentTo ?? []).map((t) => `lent to ${t.sheet} line ${t.lines.join(', ')}`).join('; ');
-        yield { file: l.file, sheet: l.sheet, line: f.line, reason: f.fate, status: statusOf(f.fate, l, left), detail: join(join(others.join(' '), lentTo), dated(cells)), cells, kind: 'line' };
+        yield { file: l.file, sheet: l.sheet, line: f.line, reason: f.fate, status: statusOf(f.fate, l, left), detail: join(join(others.join(' '), lentTo), dated(rows.get(f.line))), cells, kind: 'line' };
       } else {
         const header = source?.header ?? [];
         const named = (f.lostCells ?? []).map((c) => {
@@ -380,7 +382,7 @@ export function* notWrittenRows(ledger: readonly SheetLedger[], sheets: readonly
           return c.reason === 'join-not-chosen' && c.taken !== undefined && c.other !== undefined ? `${column} (${c.reason}: ${c.taken} taken from ${c.other.sheet} line ${c.other.line})` : `${column} (${c.reason})`;
         });
         const status: NotWrittenStatus = (f.lostCells ?? []).some((c) => c.reason === 'unexplained') ? statusOf('unexplained', l, left) : 'understood';
-        yield { file: l.file, sheet: l.sheet, line: f.line, reason: 'cells-not-written', status, detail: join(named.join('; '), dated(cells)), cells, kind: 'lost-cells' };
+        yield { file: l.file, sheet: l.sheet, line: f.line, reason: 'cells-not-written', status, detail: join(named.join('; '), dated(rows.get(f.line))), cells, kind: 'lost-cells' };
       }
     }
   }

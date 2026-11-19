@@ -4,7 +4,7 @@ import type { ParsedFile, RawCell, RawRow, RawSheet, SheetMapping } from '../typ
 import { isBlankCell } from '../recognize/columns';
 import { AMBIGUOUS_STATISTIC, STATISTIC_LABEL } from '../summaryLabels';
 import { guardTextReversible } from '../output/csv';
-import { excelSerialToDate, parseTimeOfDay } from '../values/dates';
+import { dateFormattedAt, excelSerialToDate, parseTimeOfDay } from '../values/dates';
 import { parseNumber } from '../values/numbers';
 import { groupLongSheet } from './sampleGroups';
 import type { AddedColumn, GroupPart } from './sampleGroups';
@@ -280,7 +280,7 @@ export function proposeSampleCodes(file: Pick<ParsedFile, 'decimalComma'> & { da
   const date1904 = file.date1904 === true;
   const lines = [
     line([...sheet.header.map((h) => guardCell(h, dc)), header]),
-    ...sheet.rows.map((row, i) => line([...Array.from({ length: width }, (_, k) => cellText(row.cells[k], sheet.timeFormatted?.[k] === true ? 'time' : sheet.dateFormatted?.[k] === true ? 'date' : 'plain', date1904, dc)), guardCell(codes[i], dc)])),
+    ...sheet.rows.map((row, i) => line([...Array.from({ length: width }, (_, k) => cellText(row.cells[k], sheet.timeFormatted?.[k] === true ? 'time' : dateFormattedAt(sheet, row, k) ? 'date' : 'plain', date1904, dc)), guardCell(codes[i], dc)])),
   ];
   return {
     header,

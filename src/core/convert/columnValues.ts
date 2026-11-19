@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import type { RawCell, RawSheet } from '../types';
-import { parseDate } from '../values/dates';
+import { parseDate, plainInDateColumn } from '../values/dates';
 import { parseNumber } from '../values/numbers';
 
 /*
@@ -75,7 +75,7 @@ export function holdsYearOfDate(sheet: RawSheet, index: number, dateCols: readon
       if (blank(y) || blank(c)) continue;
       const p = parseNumber(y as RawCell, decimalComma);
       if (p.status !== 'ok' || !Number.isInteger(p.value) || p.value < 1800 || p.value > 2100) return false;
-      const date = parseDate(c as RawCell, { date1904, dateFormatted: typeof c === 'number' });
+      const date = parseDate(c as RawCell, { date1904, dateFormatted: typeof c === 'number' && !plainInDateColumn(sheet, r, d) });
       if ('error' in date || date.year !== p.value) return false;
       both++;
     }
