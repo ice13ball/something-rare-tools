@@ -5,331 +5,169 @@ Regenerate with `UPDATE_RULES_DOC=1 npx vitest run test/rules/rules-docs-per-too
 
 /check reads data files (CSV, TSV, Excel, Darwin Core Archive) and the metadata records of a repository, and checks them against the rules below. It reads a file; it never changes it. A finding names a rule, the file, the rows and the value it concerns.
 
-The list is the rules the tool can raise, found by a static scan of its code, so a few may never fire in practice. Severity is error, warning or info. Every number a rule compares against is listed with its source. A text in guillemets, «name», stands for a value the tool fills in from the finding; N stands for a number; a plural form is written in the plural. The texts are the ones the tool shows (English), unchanged.
+The list is the rules the tool can raise, found by a static scan of its code, so a few may never fire in practice. Severity is error, warning or info. Every number a rule compares against is listed with its source. Each rule has four short parts: what it checks, when it fires, an invented example, and what the person can do.
 
 121 rules.
 
-## Reading the file or record
-
-### IN-NO-DATA-FILE
+## IN-NO-DATA-FILE
 
 Severity: error
 
-**What the user sees.** This record contains no data file, only other files (such as PDFs). Add the table as CSV or Excel, or drop your own file here.
-
-**What triggers it.** «file»: no data file (csv, tsv, txt, tab, xlsx, xls, ods) among the record files: «files».
-
-### IN-RECORD-INACCESSIBLE
+## IN-RECORD-INACCESSIBLE
 
 Severity: error
 
-**What the user sees.** The record on «host» could not be opened (error «status»); it may be private or unpublished. Download its files or metadata and drop them here.
-
-**Wording when the server fails (status 500 to 599).** The server «host» returned an error («status»), so the record could not be opened. This is usually a temporary fault on the server's side: try again later, or download its files or metadata and drop them here.
-
-**Wording when the status is neither 403, 404 nor a server failure.** The record on «host» could not be opened (error «status»). Try again later, or download its files or metadata and drop them here.
-
-**What triggers it.** «file»: HTTP «status» from «host»; record metadata not readable, continuing with what the other sources provided.
-
-### IN-HOST-NOT-ALLOWED
+## IN-HOST-NOT-ALLOWED
 
 Severity: warning
 
-**What the user sees.** A link points to «host», which this tool is not allowed to open. Download the file yourself and drop it here.
-
-**What triggers it.** «file»: host «host» is not on the allowlist (DATA_HOSTS); not fetched.
-
-### IN-FETCH-BLOCKED
+## IN-FETCH-BLOCKED
 
 Severity: warning
 
-**What the user sees.** Your browser could not download from «host». Download the file yourself and drop it here.
-
-**What triggers it.** «file»: fetch from «host» blocked in browser mode (CORS, CSP or network error).
-
-### IN-FETCH-TIMEOUT
+## IN-FETCH-TIMEOUT
 
 Severity: warning
 
-**What the user sees.** «host» did not start to answer within 30 seconds, so the browser stopped waiting. Try again later or switch to server mode.
-
-**What triggers it.** «file»: no response from «host» within 30 s in browser mode; the request was abandoned.
-
-### IN-FETCH-INTERRUPTED
+## IN-FETCH-INTERRUPTED
 
 Severity: error
 
-**What the user sees.** The download from «host» was cut off or took too long, so the archive was not checked. Such servers can be slow: try again in a few minutes, or download the archive (.zip) yourself and drop it here.
-
-**What triggers it.** «file»: download from «host» timed out (server mode: proxy limit) or the connection was cut before the body was complete; nothing was read.
-
-### IN-ARCHIVE-TOO-LARGE
+## IN-ARCHIVE-TOO-LARGE
 
 Severity: error
 
-**What the user sees.** The archive on «host» is larger than «mb» MB, so the server did not pass it on to be checked. Download it yourself, unpack it and drop the core file (for example occurrence.txt) here; a dropped archive has the same limit.
-
-**What triggers it.** «file»: archive from «host» above the proxy limit of «mb» MB (HTTP 413); not read.
-
-### IN-ARCHIVE-DAILY-BUDGET
+## IN-ARCHIVE-DAILY-BUDGET
 
 Severity: error
 
-**What the user sees.** The daily budget for archive downloads through the server (from «host») is used up for this IP address, so the archive was not checked. It starts again within 24 hours; you can also download the archive (.zip) yourself and drop it here.
-
-**What triggers it.** «file»: the proxy answered 429 archive_daily_budget for «host»: this client used its daily archive requests or bytes; not read.
-
-### IN-ARCHIVE-BUSY
+## IN-ARCHIVE-BUSY
 
 Severity: error
 
-**What the user sees.** Two archive downloads through the server are in progress from this IP address, so the archive from «host» was not checked. Wait for them to finish and check again (one archive at a time).
-
-**What triggers it.** «file»: the proxy answered 429 archive_busy for «host»: this client already has the maximum of 2 archive downloads in flight; not read.
-
-### IN-IPT-HOST-NOT-LISTED
+## IN-IPT-HOST-NOT-LISTED
 
 Severity: warning
 
-**What the user sees.** The archive of this dataset is on «host», a server this tool does not read from yet (it knows only a fixed list of IPT servers). Download the archive (.zip) yourself and drop it here.
-
-**What triggers it.** «file»: archive host «host» (or its scheme, port or credentials) is not on the static IPT list (config/ipt.ts); not fetched.
-
-### IN-NO-DWC-ARCHIVE
+## IN-NO-DWC-ARCHIVE
 
 Severity: error
 
-**What the user sees.** «registry» knows this dataset but lists no downloadable Darwin Core Archive (.zip) for it, so there is nothing to check. Get the data from the publisher and drop it here.
-
-**What triggers it.** «file»: «registry» lists no DWC_ARCHIVE endpoint (GBIF) or no archive URL (OBIS) for this dataset.
-
-### IN-FILE-HELD-BACK
+## IN-FILE-HELD-BACK
 
 Severity: warning
 
-**What the user sees.** This file was not checked: «host» holds it back (restricted access or an embargo). That is not an error in the data, but the absence of remarks says nothing about it. Ask the data owner for access, then drop the file here.
-
-**What triggers it.** «file»: held back by «host» (restricted access or embargo); not downloaded, not checked.
-
-### IN-FILE-TOO-LARGE
+## IN-FILE-TOO-LARGE
 
 Severity: warning
 
-**What the user sees.** This file was not read: it is larger than «mb» MB, the most that is read from a link. It was not checked, so the absence of remarks says nothing about it. Download it and drop it here.
-
-**What triggers it.** «file»: larger than «mb» MB; not downloaded, not checked.
-
-### IN-FILES-NOT-READ
+## IN-FILES-NOT-READ
 
 Severity: warning
 
-**What the user sees.** These files of the dataset were not checked because the tool does not read their format (such as zip or NetCDF): «files». The absence of remarks says nothing about them. If they hold data, unpack them or save them as CSV or Excel and drop them here.
-
-**What triggers it.** «file»: not read (format not supported): «files».
-
-### IN-DATAVERSE-FILES
+## IN-DATAVERSE-FILES
 
 Severity: info
 
-**What the user sees.** Read version «version» of this dataset, the latest published one, from «host».
-
-**Sentence added when the finding has the parameter original.** Tables read as the author uploaded them (the original): «original».
-
-**Sentence added when the finding has the parameter converted.** Tables read as the .tab copy Dataverse made, because the original cannot be read: «converted».
-
-**Sentence added when the finding has the parameter none.** No data file was read, so the data were not checked.
-
-**What triggers it.** «file»: read version «version» (latest published) from «host». «value»
-
-### IN-FILE-UNREADABLE
+## IN-FILE-UNREADABLE
 
 Severity: error
 
-**What the user sees.** None of the files could be read («files»); a file may be damaged or in an unsupported format. Nothing was checked, so the absence of other remarks does not mean the data are fine. Save the file again (for example as CSV or Excel) and add it once more.
-
-**What triggers it.** «file»: no input file could be parsed («files»); nothing was checked.
-
-### IN-LAYOUT-UNSUPPORTED
+## IN-LAYOUT-UNSUPPORTED
 
 Severity: error
 
-**What the user sees.** The tool cannot read the layout of this table («reason»). Reshape it into one header row with one row per sample and try again.
-
-**What triggers it.** «file» sheet «sheet»: layout not supported: «reason».
-
-### IN-ENCODING-FALLBACK
+## IN-ENCODING-FALLBACK
 
 Severity: info
 
-**What the user sees.** The file is not saved as UTF-8, so it was read as «encoding». Check that accented letters look right.
-
-**What triggers it.** «file»: bytes are not valid UTF-8; decoded as «encoding». The 8-bit pick is the reader's decision when the bytes are not UTF-8, so the outcome is accepted once before the export.
-
-### IN-ENCODING-AMBIGUOUS
+## IN-ENCODING-AMBIGUOUS
 
 Severity: warning
 
-**What the user sees.** This file is not UTF-8, and its letters read N different ways: «readings». It was read as «encoding». Check which reading is right and save the file again as UTF-8.
-
-**What triggers it.** «file»: bytes are not valid UTF-8 and read N different ways across windows-1250, ISO-8859-2 and windows-1252 («readings»); decoded as «encoding». Code pages that decode the bytes alike count as one reading, so a file all three read alike raises IN-ENCODING-FALLBACK instead. The checker reports and keeps its pick; the converter blocks until the person names the encoding.
-
-### IN-DECIMAL-COMMA
+## IN-DECIMAL-COMMA
 
 Severity: info
 
-**What the user sees.** This file writes numbers with a decimal comma (3,14). They were read that way; use a decimal point when you publish.
-
-**What triggers it.** «file»: decimal comma detected (semicolon or tab delimiter, most numeric cells look like 3,14); values parsed with ',' as the decimal separator. The decimal comma is the reader's decision (50 rows, 80 %), so the outcome is accepted once before the export.
-
-### IN-DECIMAL-AMBIGUOUS
+## IN-DECIMAL-AMBIGUOUS
 
 Severity: warning
 
-**What the user sees.** In column "«column»" every number with a comma has three digits after it (N cells), so "«value»" can be «asDecimal» or «asThousands». They were read with a decimal comma («asDecimal»). Check which one the file means.
-
-**Sentence added when the finding has the parameter thousandsSeen.** The column also holds "«thousandsSeen»", written with commas as thousands separators, so these numbers may be thousands; the tool still read the others as decimals.
-
-**What triggers it.** «file» sheet «sheet»: column «index» "«column»": every cell with a comma (N) has exactly three digits after it, so the comma may be a decimal comma («asDecimal») or a thousands separator («asThousands») for "«value»". Read as decimal; the file does not say which. Judged per column over all rows: one value with 1, 2 or 4 or more decimals settles it.
-
-### IN-HEADER-SHORT
+## IN-HEADER-SHORT
 
 Severity: warning
 
-**What the user sees.** The header has «header» names, but N of «rows» rows have «width» values, so «extra» names are missing. The tool cannot tell where: it shows the extra values at the end as Columns «range». If names are missing earlier in the header, the columns from that point on carry the values of their neighbour: check the first values of the last named columns too, and give each column the meaning of its values.
-
-**What triggers it.** «file»: the header has «header» names; N of «rows» data rows have «width» fields; «extra» names missing, position unknown; the extra values are shown as Column «range» (internal names "Column N").
-
-### IN-HEADER-UNITS-READ
+## IN-HEADER-UNITS-READ
 
 Severity: info
 
-**What the user sees.** Line «lines» holds units, not data: N columns got the unit in the name (for example "«example»"). That line is not counted as a data row, and the line numbers in this report stay the file's own.
-
-**What triggers it.** «file» sheet «sheet»: line «lines» is a second header row in which every filled cell is a unit; N column names now carry their unit as "name \[unit\]", the first being "«example»". Cells are not changed; the row is not a data row.
-
-### IN-HEADER-UNITS-NAMED
+## IN-HEADER-UNITS-NAMED
 
 Severity: info
 
-**What the user sees.** Line «lines» holds units, not data: the column names carry them as well. That line is not counted as a data row, and the line numbers in this report stay the file's own.
-
-**What triggers it.** «file» sheet «sheet»: line «lines» is a second header row in which every filled cell is a unit, and every column it names carries the same unit in its header too. No name is changed; the row is not a data row.
-
-### IN-PERCENT-READ
+## IN-PERCENT-READ
 
 Severity: info
 
-**What the user sees.** N cells of column "«column»" are formatted as a percentage and were read as shown («stored» is read as «shown»).
-
-**What triggers it.** «file» sheet «sheet»: N numeric cells of column "«column»" have a number format with a percent sign; the stored number's decimal point was moved two places right (first: «stored» read as «shown»). The cell's formatted text (rounded) is not used.
-
-### IN-COLUMN-NO-HEADER
+## IN-COLUMN-NO-HEADER
 
 Severity: warning
 
-**What the user sees.** Column «column» has values in N rows but no name in the header (lines «lines»). It is read as a column without a name; give it a name in the file, or say on /convert what it holds.
-
-**What triggers it.** «file» sheet «sheet»: column «column» holds a value in N data rows (lines «lines») but the header row has no name there or to its right; read as an unnamed column ("Column N"), every cell kept where it is.
-
-### IN-DATE1904
+## IN-DATE1904
 
 Severity: info
-
-**What the user sees.** This Excel file uses the older 1904 date system (dates differ by 1462 days from the usual one). Dates were converted accordingly; check a few of them.
-
-**What triggers it.** «file»: workbook date1904 flag is set; serial dates converted with epoch 1904-01-01 (1462 days offset from the 1900 system).
 
 **Citations.**
 
 - [Microsoft Support, Date systems in Excel](https://support.microsoft.com/en-us/office/date-systems-in-excel-e7fe7167-48a9-4b96-bb53-5612a800b487), 1900 and 1904 date systems; "The difference between the two date systems is 1,462 days."
 
-### IN-PANGAEA-EVENT-USED
+## IN-PANGAEA-EVENT-USED
 
 Severity: info
 
-**What the user sees.** The table has no position or date of its own for these rows, so the Event(s) block of the file header was used: columns «columns» were added (N rows). One event applies to every row; with several, each row takes the event named in its Event column. Check the values.
-
-**What triggers it.** «file» sheet «sheet»: columns «columns» added from the Event(s) header block («events» event(s)) for N row(s) that had no position or date of their own.
-
-### IN-PANGAEA-EVENT-NOT-USED
+## IN-PANGAEA-EVENT-NOT-USED
 
 Severity: warning
 
-**What the user sees.** The Event(s) block in the file header gives a position or date, but none was copied into the table, and the table has none of its own.
-
-**Sentence added when the finding has the parameter several.** The block lists «several» events and the table has no Event column, so it is unknown which row belongs to which. Add an Event column, or position and date columns.
-
-**Sentence added when the finding has the parameter track.** The position of the event is a track (the start and the end differ), not a point, so it is not the position of a sample. Add position columns to the table.
-
-**What triggers it.** «file» sheet «sheet»: Event(s) header block with «events» event(s) not copied into the table (no Event column for several events, or the position is a track).
-
-### IN-PANGAEA-EVENT-UNMATCHED
+## IN-PANGAEA-EVENT-UNMATCHED
 
 Severity: warning
 
-**What the user sees.** N rows have no event in the Event(s) block of the file header: the Event cell is empty, names an event that is not listed there, or the event has no position or date. Nothing was taken from the block for these rows. Fill them in the table.
-
-**What triggers it.** «file» sheet «sheet»:«lines» N row(s) whose Event cell matches no event of the Event(s) header block that has a position or date; nothing was borrowed for them.
-
-### IN-DWCA-NOT-ARCHIVE
+## IN-DWCA-NOT-ARCHIVE
 
 Severity: error
 
-**What the user sees.** This .zip file is not a Darwin Core Archive (it has no meta.xml; it may not even be a ZIP, for example a saved error page), so nothing was checked. Add a DwC-A downloaded from an IPT, OBIS or GBIF, or the table itself as CSV or Excel.
-
-**What triggers it.** «file»: file named .zip without a meta.xml at its root or in its single top-level folder (or not a zip at all); not a Darwin Core Archive, nothing read.
-
-### IN-DWCA-UNSUPPORTED-CORE
+## IN-DWCA-UNSUPPORTED-CORE
 
 Severity: error
 
-**What the user sees.** This is a Darwin Core Archive whose core table is «core». The tool only checks Occurrence or Event archives, so this archive was not checked. That does not mean it is fine.
-
-**What triggers it.** «file»: Darwin Core Archive with core rowType «core»; only Occurrence and Event cores are checked. Not checked.
-
-### IN-DWCA-UNREADABLE
+## IN-DWCA-UNREADABLE
 
 Severity: error
 
-**What the user sees.** This archive could not be read safely («reason»), so nothing was checked. The file may be damaged, encrypted or too large. Download it again, or add the table itself (for example occurrence.txt).
-
-**What triggers it.** «file»: archive rejected or unreadable: «reason». Nothing was checked.
-
-### IN-DWCA-PARTIAL
+## IN-DWCA-PARTIAL
 
 Severity: warning
 
-**What the user sees.** PARTIAL CHECK: the table in this archive is large, so only the first «read» of «total» rows were read. The remaining rows were not checked; a clean result does not cover the whole file.
-
-**What triggers it.** «file»: only the first «read» of «total» rows of the core file were read (row cap); the rest is unchecked. PARTIAL run.
-
-### IN-DWCA-VERSION
+## IN-DWCA-VERSION
 
 Severity: info
 
-**What the user sees.** Read the Darwin Core Archive "«title»", version: «version». Its core table («core») was checked. If the archive has been updated since, this result covers the older version.
-
-**What triggers it.** «file»: Darwin Core Archive "«title»", version «version» (eml.xml packageId / pubDate); core rowType «core».
-
-### IN-DWCA-EVENT-CORE
+## IN-DWCA-EVENT-CORE
 
 Severity: info
 
-**What the user sees.** The archive's core is Event; its Occurrence extension has «occurrences» rows. Positions and dates belong to the events, so the event table was checked, not the occurrence rows one by one.
-
-**What triggers it.** «file»: Event core with an Occurrence extension of «occurrences» rows; positions and dates are the events', the event table was checked.
-
-## Licence and metadata
-
-### LIC-MISSING
+## LIC-MISSING — No licence is stated anywhere in the record
 
 Severity: error
 
-**What the user sees.** No licence was found in the metadata. State the licence name with its version and a link, e.g. CC BY 4.0.
+**What it checks.** No licence is stated anywhere in the record. Without a licence nobody knows whether the data may be reused, so by default they may not.
 
-**Wording when the DataCite comparison could not be made.** No licence was found in the metadata. State the licence name with its version and a link, e.g. CC BY 4.0. Note: the DOI record at DataCite could not be compared, so this finding rests on the catalogue record alone.
+**When it fires.** Once per record, when the record (or all the records read for it) holds no statement about the data in any licence field (ISO useLimitation and otherConstraints, DataCite rightsList, Zenodo license and the like; statements about the metadata record itself do not count), and no source of the record failed to load. A record that could not be read says nothing about a licence, and IN-RECORD-INACCESSIBLE reports it instead. When the DataCite record could not be compared, the finding says it rests on the catalogue record alone.
 
-**What triggers it.** «file»: no licence statement (useLimitation, otherConstraints, rightsList, license) in any record.
+**Example.** A catalogue record has title, abstract and contact, but its rights and constraints sections are empty.
+
+**What you can do.** State the licence by name and version with a link to its official text, for example CC BY 4.0, in the repository record.
 
 **Citations.**
 
@@ -338,13 +176,17 @@ Severity: error
 - [GO FAIR, FAIR Principle R1.1](https://www.go-fair.org/fair-principles/r1-1-metadata-released-clear-accessible-data-usage-license/), heading "Interpretation of R1.1": "Digital resources and their metadata must always, without exception, include a license that describes under which conditions the resource can be used, even if that is “unconditional”."
 - [OpenAIRE Guidelines for Data Archives, 16. Rights (MA)](https://guidelines.openaire.eu/en/latest/data/field_rights.html), 16. Rights (MA), note: "In particular OpenAIRE also recommends including license information if available."
 
-### LIC-FREE-TEXT
+## LIC-FREE-TEXT — The licence is written only as free text that a program cannot read
 
 Severity: warning
 
-**What the user sees.** The licence is written only as free text ("«text»"), which programs cannot read. State the licence by its identifier (e.g. «hint») and a link to its official text.
+**What it checks.** The licence is written only as free text that a program cannot read. A person understands it, but a harvester cannot tell whether the data are open.
 
-**What triggers it.** «file» field «field»: licence given as free text '«text»' (version missing: «versionMissing»); no recognised SPDX id or licence URI. Suggested identifier: «hint».
+**When it fires.** Once per record, when the record has licence statements, none of them is machine-readable (a recognised identifier, a link to a recognised licence, or the identifier itself as the text) and none is flagged by another licence rule. The finding quotes the first statement with text and says whether the text carries no version number. The suggested identifier is the licence the tool recognised in the record, or the example CC BY 4.0 when it recognised none.
+
+**Example.** The rights field reads: Creative Commons Attribution licence, with no version and no link.
+
+**What you can do.** Give the identifier and the link to the official text, so that the licence is stated by both.
 
 **Citations.**
 
@@ -355,13 +197,17 @@ Severity: warning
 - [INSPIRE Technical Guidelines for metadata based on ISO 19139, v2.2.1 (published 2025-01-31)](https://inspire-mif.github.io/technical-guidelines/metadata/metadata-iso19139/metadata-iso19139.html), TG Recommendation C.10, section 2.3.7: "For detailed information about the licensing of the resource it is recommended to provide a link to a license type (e.g. http://creativecommons.org/licenses/by/3.0 ), a website or to a document containing the necessary information."
 - [SPDX, Handling license info](https://spdx.dev/learn/handling-license-info/), "SPDX License List" paragraph: "The SPDX License List includes a standardized short identifier, the full name, the license text, and a canonical permanent URL for each license and exception."
 
-### LIC-TEXT-URI-CONFLICT
+## LIC-TEXT-URI-CONFLICT — A licence statement has both a text and a link, and they do not agree
 
 Severity: warning
 
-**What the user sees.** The licence text ("«text»") and its link point to different licences, the link is not recognised, or the text does not name this licence and says something else. From the text: «textLicence»; from the link: «uriLicence» ("—" = not recognised). Check by hand and state one licence with its own link.
+**What it checks.** A licence statement has both a text and a link, and they do not agree. Either one is wrong, or the text is not about the licence at all.
 
-**What triggers it.** «file» field «field»: text '«text»' reads as «textLicence», link '«uri»' as «uriLicence»; the statement is not classified (text and link differ, the link is not recognised, or the text names no licence and says something else). Check manually.
+**When it fires.** For one statement that has a link, when the text itself offers several licences, or the text and the link read as different licences, or a text with no version names only a licence family against the link of another family, or the link is a licence link the tool has no identifier for while the text names one, or the text names no licence and says more than plain Open Access next to a licence link. For DataCite and Zenodo it also fires when the text is an exact licence name but the link is no licence link and no access value. A text that is empty, plain Open Access or Public Domain next to a CC0 link is neutral and does not fire it. One finding per statement, with the licence read from the text and from the link, a dash meaning not recognised.
+
+**Example.** The text says CC BY 4.0 and the link points to the page of the CC BY-NC 4.0 licence.
+
+**What you can do.** Decide which licence applies and write it once, with its own link and with a text that names the same licence.
 
 **Citations.**
 
@@ -369,66 +215,82 @@ Severity: warning
 - [DataCite Metadata Schema 4.6, 16. Rights](https://datacite-metadata-schema.readthedocs.io/en/4.6/properties/rights/), 16.a rightsURI: "The URI of the license."
 - [Creative Commons wiki, Best practices for attribution](https://wiki.creativecommons.org/wiki/Best_practices_for_attribution), section on licence attribution: "We recommend that you name and provide a link to the license, e.g., CC BY 4.0 ( http://creativecommons.org/licenses/by/4.0 ) for a work licensed under CC BY 4.0."
 
-### LIC-ADDED-CONDITIONS
+## LIC-ADDED-CONDITIONS — A licence text names a licence and then adds conditions to it
 
 Severity: warning
 
-**What the user sees.** The text ("«text»") names the licence «textLicence» but adds conditions to it ("«rest»"), so as written it is no longer that standard licence. Check it by hand and state the licence and any extra conditions clearly.
+**What it checks.** A licence text names a licence and then adds conditions to it. With extra conditions it is no longer the standard licence and cannot be treated as one.
 
-**Sentence added when another source of the statement also leaves something out.** Another string of the same statement (the identifier or the title) also leaves: "«otherRest»".
+**When it fires.** For a statement whose text names a licence, when nothing else contradicts it (the readings of text and link agree) and what is left of the text after the licence name and the neutral wording are taken away contains a restriction marker, such as a limit on commercial use or a duty to ask for permission (words in Polish, English, German and French are looked for). The finding quotes the leftover. When the identifier or the Zenodo title leaves something too, that is added to the finding. A leftover with no restriction marker is LIC-EXTRA-TEXT instead.
 
-**What triggers it.** «file» field «field»: text '«text»' names «textLicence» but the rest '«rest»' adds or negates conditions; the statement is not classified as that licence. Check manually.
+**Example.** The text reads CC BY 4.0, commercial use only with written permission of the authors.
+
+**What you can do.** State the licence alone, or name the extra conditions explicitly as such and say that the data are not under the plain licence.
 
 **Citations.**
 
 - [Creative Commons FAQ](https://creativecommons.org/faq/), Alterations and additions to the license, "Can I change the license terms or conditions?": "if you change the terms and conditions of any Creative Commons license, you must no longer call, label, or describe the license as a “Creative Commons” or “CC” license"
 
-### LIC-EXTRA-TEXT
+## LIC-EXTRA-TEXT — A licence text names a licence and also says something else
 
 Severity: warning
 
-**What the user sees.** The text ("«text»") contains something besides the licence name ("«rest»"). Check by hand whether it changes the licence; until that is clear, do not treat this as the standard licence.
+**What it checks.** A licence text names a licence and also says something else. The extra words may change the licence, so the statement is not read as the standard licence until a person has looked.
 
-**Sentence added when another source of the statement also leaves something out.** Another string of the same statement (the identifier or the title) also leaves: "«otherRest»".
+**When it fires.** For a statement whose text names a licence, when the readings of text and link agree and something is left over after the licence name and the neutral wording are removed, and the leftover has no restriction marker. A leftover with a restriction marker is LIC-ADDED-CONDITIONS instead. The finding quotes the leftover, and the leftover of another string of the same statement (identifier or Zenodo title) is added when there is one.
 
-**What triggers it.** «file» field «field»: text '«text»' contains '«rest»' besides the licence name; the statement is not classified. Check manually whether it changes the licence.
+**Example.** The text reads CC BY 4.0, please contact the data manager.
+
+**What you can do.** Move the extra sentence to the description of the data and leave the licence field with the licence only.
 
 **Citations.**
 
 - [Creative Commons FAQ](https://creativecommons.org/faq/), Alterations and additions to the license, "Can I change the license terms or conditions?": "if you change the terms and conditions of any Creative Commons license, you must no longer call, label, or describe the license as a “Creative Commons” or “CC” license"
 
-### LIC-OTHER-RIGHTS-ENTRY
+## LIC-OTHER-RIGHTS-ENTRY — A repeated rights entry that is no recognised licence stands next to a licence the same record does recognise
 
 Severity: warning
 
-**What the user sees.** Next to the licence «licence», another rights entry says: "«text»". Check whether it restricts or changes the licence.
+**What it checks.** A repeated rights entry that is no recognised licence stands next to a licence the same record does recognise. The other entry may restrict or change the licence.
 
-**What triggers it.** «file» field «field»: a rights entry '«text»' is no recognised licence and no plain access value, next to the recognised licence «licence». Check manually whether it restricts or changes the licence.
+**When it fires.** Once per record, only for the repeated entries of DataCite rightsList and Zenodo rights (never for the fields of an ISO record), when the record has a recognised licence and another repeated entry that is no recognised licence, has no conflict of its own and is not a neutral value: a plain access word, or a notice that only names the creators, the organisations or the publisher of the record. Repeated recognised licences are read as dual licensing and do not fire it. The finding quotes the entry, or its link, and names the recognised licence.
+
+**Example.** A rights list holds CC BY 4.0 and a second entry, Data may not be redistributed without consent.
+
+**What you can do.** Remove the second entry or move it to the description, or state clearly how it relates to the licence.
 
 **Citations.**
 
 - [Creative Commons FAQ](https://creativecommons.org/faq/), Alterations and additions to the license, "Can I change the license terms or conditions?": "if you change the terms and conditions of any Creative Commons license, you must no longer call, label, or describe the license as a “Creative Commons” or “CC” license"
 
-### LIC-AMBIGUOUS
+## LIC-AMBIGUOUS — A licence statement without a link reads as more than one licence
 
 Severity: warning
 
-**What the user sees.** The licence statement ("«text»") can be read as more than one licence («readings»; "—" = a name no identifier exists for), so it cannot be assigned to one licence. Check it by hand and state one licence.
+**What it checks.** A licence statement without a link reads as more than one licence. It cannot be assigned to one licence, so a harvester cannot tell what is allowed.
 
-**What triggers it.** «file» field «field»: statement '«text»' reads as «readings»; it is not classified as one licence. Check manually.
+**When it fires.** For one statement with no link, when its strings (the rights text, the identifier, the title) name different licences, when it names two licences or a licence family and a licence, when a versionless family such as CC BY is read against a named version of another family, or when a recognised name stands next to one the tool has no identifier for. One finding per statement, which lists what it reads as, separated by a slash, a dash meaning a name with no identifier. The same text with a link is LIC-TEXT-URI-CONFLICT.
+
+**Example.** The text reads CC BY 4.0 (CC BY-NC) and no link is given.
+
+**What you can do.** State one licence, with its identifier and link. If both licences really apply, list them as separate entries and say so in the description.
 
 **Citations.**
 
 - [DataCite Metadata Schema 4.6, 16. Rights](https://datacite-metadata-schema.readthedocs.io/en/4.6/properties/rights/), 16. Rights, allowed values, examples, other constraints: "Use the complete title of a license and include version information if applicable."
 - [DataCite Metadata Schema 4.6, 16. Rights](https://datacite-metadata-schema.readthedocs.io/en/4.6/properties/rights/), 16.b rightsIdentifier: "A short, standardized version of the license name."
 
-### LIC-RESTRICTION-CONFLICT
+## LIC-RESTRICTION-CONFLICT — The record names an open licence and also carries a restriction code that says the data are restricted
 
 Severity: warning
 
-**What the user sees.** The metadata names an open licence («licence») together with the restriction code «codes». INSPIRE expects the code "otherRestrictions" with a description of the conditions; check whether «codes» is meant as a real restriction and, if not, replace it.
+**What it checks.** The record names an open licence and also carries a restriction code that says the data are restricted. The two cannot both describe the data.
 
-**What triggers it.** «file»: restriction code(s) «codes» (MD_RestrictionCode) together with the open licence statement '«licence»'; INSPIRE TG Req. C.18 expects otherRestrictions plus otherConstraints describing the conditions. Check whether the code is a real restriction.
+**When it fires.** Once per record, when a record carries a restrictive ISO restriction code (copyright, patent, patentPending, trademark, intellectualPropertyRights or restricted) and the record names an open licence: a recognised open identifier, or an open licence family as written, even without a version. The codes license and otherRestrictions never count, the first because it is the normal way to say that a licence applies and the second because it only points to the constraints text. A non-commercial or no-derivatives licence is not open here. The finding lists the codes and the licence.
+
+**Example.** A record states CC BY 4.0 in otherConstraints and the code copyright in its restriction code.
+
+**What you can do.** Replace the code with license, or with otherRestrictions and a description of the conditions as INSPIRE expects, if the data are in fact restricted, state the restriction instead of the open licence.
 
 **Citations.**
 
@@ -437,34 +299,46 @@ Severity: warning
 - [ISO/TS 19139 code lists (gmxCodelists.xml), MD_RestrictionCode](https://standards.iso.org/iso/19139/resources/gmxCodelists.xml), MD_RestrictionCode "restricted": "withheld from general circulation or disclosure"
 - [Creative Commons FAQ](https://creativecommons.org/faq/), How do CC licenses operate?: "CC licenses are operative only when applied to material in which a copyright exists, and even then only when a particular use would otherwise not be permitted by copyright."
 
-### LIC-FILES-HELD-BACK
+## LIC-FILES-HELD-BACK — Some files of the dataset are under restricted access or an embargo
 
 Severity: warning
 
-**What the user sees.** Some files of this dataset are restricted or under embargo: «files». Access to them is decided by the repository, not by the licence in the metadata, so the licence verdict covers only the open files. If these are the data, state in the description how they can be obtained.
+**What it checks.** Some files of the dataset are under restricted access or an embargo. Whatever licence the metadata states, the repository decides who may get these files.
 
-**What triggers it.** «file»: restricted or embargoed files («files»); the stated licence does not open them, so the licence result covers the open files only.
+**When it fires.** Once per record, when a Dataverse record lists files that are restricted or embargoed. The finding names up to ten of the files and counts the rest. The licence verdict of the tool covers only the open files, and the page says so.
 
-### LIC-DATACITE-EMPTY
+**Example.** A Dataverse dataset has four files, and two of them are marked restricted.
+
+**What you can do.** If the held files are the data, say in the description how and when they can be obtained, or open them.
+
+## LIC-DATACITE-EMPTY — The DOI registration record at DataCite states no licence
 
 Severity: warning
 
-**What the user sees.** The DOI registration record (DataCite) states no licence. Other records: «licence» ("—" = none states one, or the record could not be read). Add the licence to the DOI record.
+**What it checks.** The DOI registration record at DataCite states no licence. Harvesters read that record first, so the data look unlicensed to them.
 
-**What triggers it.** «file»: DataCite rightsList is empty; other records state '«licence»' ('—' = none states one, or the main record could not be read).
+**When it fires.** Once per record, when the DataCite record was read and has no licence statement, and either another source of the record states a licence or some source could not be read. The finding names the licence of the other record, and a dash when none states one or the main record could not be read. It is not counted as a contradiction between records, because silence contradicts nothing.
+
+**Example.** The Zenodo record of a dataset says CC BY 4.0, and the DataCite record of its DOI has an empty rights list.
+
+**What you can do.** Add the licence to the DOI record at the registration agency.
 
 **Citations.**
 
 - [OpenAIRE Guidelines for Data Archives, 16. Rights (MA)](https://guidelines.openaire.eu/en/latest/data/field_rights.html), 16. Rights (MA), note: "In particular OpenAIRE also recommends including license information if available."
 - [OpenAIRE Guidelines for Data Archives, 16. Rights (MA)](https://guidelines.openaire.eu/en/latest/data/field_rights.html), 16. Rights (MA), note: "Mandatory when applicable property in OpenAIRE instead of optional in DataCite."
 
-### LIC-MISMATCH
+## LIC-MISMATCH — Two records, or two fields of one record, state different licences
 
 Severity: warning
 
-**What the user sees.** Two records state different licences («licenceA» and «licenceB»). Make them the same.
+**What it checks.** Two records, or two fields of one record, state different licences. A reader cannot tell which one applies.
 
-**What triggers it.** «file»: licence mismatch between records: «licenceA» vs «licenceB».
+**When it fires.** Once per record (only the first disagreeing pair is reported), when two sources that each have a recognised licence share none of them, or when different recognised licences stand in different fields of one source, outside the repeated rights entries a publisher offers on purpose. Records of one deposit, such as a Zenodo record and the DataCite record of its DOI, are compared to each other. Statements that are not recognised do not take part. The finding names the two identifiers.
+
+**Example.** The catalogue record says CC BY 4.0 and the DataCite record says CC BY-SA 4.0.
+
+**What you can do.** Make the licence the same in every record of the dataset.
 
 **Citations.**
 
@@ -473,93 +347,109 @@ Severity: warning
 - [Creative Commons FAQ](https://creativecommons.org/faq/), separate agreements: "A reuser may then choose which set of terms to comply with."
 - [GO FAIR, FAIR Principle R1.1](https://www.go-fair.org/fair-principles/r1-1-metadata-released-clear-accessible-data-usage-license/), heading "Interpretation of R1.1": "Furthermore, the license may be different for a data resource and the metadata that describes it"
 
-### META-EMPTY-LINK
+## META-EMPTY-LINK — A download link of the record has an empty address
 
 Severity: warning
 
-**What the user sees.** The metadata contains N download link(s) with an empty address. Fill in the address or remove the link.
+**What it checks.** A download link of the record has an empty address. A link that goes nowhere cannot be followed by a person or by a harvester, and it suggests that a file was left out of the record.
 
-**What triggers it.** «file»: N online resource link(s) with an empty or missing URL (CI_OnlineResource linkage).
+**When it fires.** Once per record, when at least one distribution link (a CI_OnlineResource linkage in an ISO record, or the same kind of link in the other record types) is present with an empty address. The finding counts the empty links of all the sources read for the record. A record that could not be read is not judged.
 
-### META-NO-VERSION
+**Example.** A metadata record lists three download links, one of which has the address field present but blank.
+
+**What you can do.** Fill in the address or delete the link in the repository record.
+
+## META-NO-VERSION — The record gives no version or edition of the data
 
 Severity: info
 
-**What the user sees.** No version is stated. Add a version number so people can tell which release of the data they have.
+**What it checks.** The record gives no version or edition of the data. Without it nobody can tell which release of a dataset they hold, and a corrected release looks like the old one.
 
-**What triggers it.** «file»: no version or edition in any record.
+**When it fires.** Once per record, when records were read and none of them carries a version or edition, and the data did not come as a Darwin Core Archive whose eml.xml states a version (see IN-DWCA-VERSION). A record that could not be read is not judged, because its absence of a version says nothing.
 
-### META-NO-EXTENT
+**Example.** A DataCite record with title, creators and licence but no version field.
+
+**What you can do.** Add a version number or edition to the record, and change it when the data change.
+
+## META-NO-EXTENT — The record states neither a time span nor an area for the data
 
 Severity: info
 
-**What the user sees.** The metadata gives neither a time span nor an area for the data, so they could not be compared with the table. Add both.
+**What it checks.** The record states neither a time span nor an area for the data. A reader cannot tell when and where the data were collected, and the tool cannot compare the table with the record.
 
-**What triggers it.** «file»: no temporal extent and no geographic bounding box in any record.
+**When it fires.** Once per record, when records were read and none of them has a temporal extent or a geographic bounding box. A record with only one of the two does not fire this rule. In Collection review, which has no table to compare, the wording does not mention a /check table.
 
-### META-DATE-OUTSIDE-EXTENT
+**Example.** A record with a title and an abstract but no temporal coverage and no bounding box.
 
-Severity: warning
+**What you can do.** Add the period and the bounding box of the data to the record.
 
-**What the user sees.** N rows have a date outside the time span in the metadata («start» to «end»), e.g. «value». Correct the dates or the time span.
-
-**What triggers it.** «file»:«lines» N row(s) dated outside the temporal extent «start»..«end» (e.g. «value»).
-
-### META-POINT-OUTSIDE-BBOX
+## META-DATE-OUTSIDE-EXTENT — Some rows of the table are dated outside the time span the record states
 
 Severity: warning
 
-**What the user sees.** N rows lie outside the area given in the metadata. Correct the coordinates or enlarge the area in the metadata.
+**What it checks.** Some rows of the table are dated outside the time span the record states. Either the dates in the table are wrong or the span in the record is, and the two cannot both be right.
 
-**What triggers it.** «file»:«lines» N row(s) outside the bounding box W «west», E «east», S «south», N «north» (e.g. «value»).
+**When it fires.** When a record gives a temporal extent (with a start, an end or both) and at least one row has a parsed date outside it. Where several records give an extent, one is used, in the order ISO 19139, DataCite, PANGAEA, Zenodo, Dataverse; they are never merged. The row date and the limit are compared at the coarser of their two precisions, down to a day at most, so a row dated in the year of an end given as a year is inside. An open start or end is not a limit. Rows without a readable date are not counted. One finding lists the rows, their number and one example date.
 
-### META-VARIABLE-MISSING
+**Example.** A record states a time span from 2019-05-01 to 2019-05-31 and the table has three rows dated in June 2019.
+
+**What you can do.** Correct the dates in the table or the time span in the record.
+
+## META-POINT-OUTSIDE-BBOX — Some rows of the table have a position outside the geographic area the record states
 
 Severity: warning
 
-**What the user sees.** The description mentions "«term»", but no matching column was found in the data. Add the column or correct the description.
+**What it checks.** Some rows of the table have a position outside the geographic area the record states. Either the coordinates are wrong (a swapped sign, a swapped latitude and longitude) or the area in the record is too small.
 
-**What triggers it.** «file»: abstract mentions '«term»' but no dataset variable maps to the corresponding canonical variable.
+**When it fires.** When a record gives a bounding box and at least one row has a latitude and a longitude outside it. The box is widened by half a unit of the last decimal place of the row coordinate and of the box edge, so a value rounded to the precision of the box is not outside it. A box whose west edge is greater than its east edge is read as crossing the antimeridian. A row at exactly 0, 0 is left to ROW-ZERO-COORD and not reported here. Rows without a position are not counted. One finding lists the rows, their number and one example position.
 
-### META-NO-DATES
+**Example.** A record gives a box from 54 to 56 degrees north and 10 to 12 degrees east, and four rows lie at 54.5 north and minus 11.2 (a lost sign).
+
+**What you can do.** Correct the coordinates or enlarge the box in the record.
+
+## META-VARIABLE-MISSING — The abstract of the record promises a measured quantity that the table has no column for
+
+Severity: warning
+
+**What it checks.** The abstract of the record promises a measured quantity that the table has no column for. A reader who relies on the abstract looks for the variable and finds nothing, or the column was dropped from the file.
+
+**When it fires.** Only when the table holds a column the tool recognises as a measured quantity, the table is a whole file (not one sheet of a workbook), the record links to at most one data file, and the record has an abstract. For each known variable the abstract names by one of its terms (several languages; whole word, accents ignored) while no column is recognised as that variable and no header contains one of its terms, one finding is raised. Short acronyms of up to four characters, such as DIC or pH, are matched with their capitals. A term used as a modifier of an instrument or a process (fluorescence, sensor, probe, maximum and similar words next to it) does not count as a promise of a column, and nitrate or nitrite is covered by a combined nitrate and nitrite column.
+
+**Example.** The abstract says that dissolved silica was measured, and the table has temperature, salinity and nitrate columns but nothing for silica.
+
+**What you can do.** Add the column or correct the abstract.
+
+## META-NO-DATES — Neither the table nor the record holds any date
 
 Severity: error
 
-**What the user sees.** Neither the data nor the metadata contain any date. Add the sampling date to the table or a time span to the metadata.
+**What it checks.** Neither the table nor the record holds any date. Data without a date cannot be placed in time, and OBIS and most repositories require one.
 
-**Sentence added when the finding has the parameter sheets.** This is about the sheets: «sheets».
+**When it fires.** For a table with rows and a supported layout, when no row has a date (a date cell that exists but cannot be read counts as a date column, and is reported by ROW-DATE-UNPARSEABLE) and no record has a temporal extent or a collection date. Publication dates are not used. A lookup table of the same file, which holds no measurement while another sheet of the file does, is skipped. For a workbook the sheets that lack a date are listed in one finding. When a join left rows without a date the finding names the joined sheet as the likely cause. For an empty eventDate column of a Darwin Core table only this rule speaks, and DWC-TERM-EMPTY stays silent.
 
-**Sentence added when the finding has the parameter sheetOne.** This is about the sheet: «sheetOne».
+**Example.** A table of temperature and salinity by depth with no date column, described by a record without a temporal extent.
 
-**Sentence added when the finding has the parameter joinSheet.** Likely cause: the join with sheet "«joinSheet»" gave no dates (its key matches rows that differ; see the warning about the key).
+**What you can do.** Add the sampling date to the table or a time span to the record. In /convert, where the converter has already said that no event has a date (CONV-EVENT-DATE-MISSING), this finding is not repeated. In /convert the finding is only shown and never stops the export.
 
-**What triggers it.** «file»: no row has a date and no record has a temporal extent or collection date.
-
-### META-NO-POSITIONS
+## META-NO-POSITIONS — Neither the table nor the record holds any position
 
 Severity: error
 
-**What the user sees.** Neither the data nor the metadata contain any position. Add latitude and longitude columns in decimal degrees to the table: OBIS needs decimalLatitude and decimalLongitude for every record, and a geographic bounding box in the metadata alone does not replace them.
+**What it checks.** Neither the table nor the record holds any position. OBIS needs decimalLatitude and decimalLongitude for every record, and a bounding box in the record is not a substitute for them.
 
-**Sentence added when the finding has the parameter sheets.** This is about the sheets: «sheets».
+**When it fires.** For a table with rows and a supported layout (and not a lookup table beside the data, as META-NO-DATES), when no latitude or longitude column is recognised, no row has a position, no row has a blank or unreadable position cell, and no record has a bounding box. A column that exists but is blank or unreadable is not this rule: ROW-NO-COORD, ROW-NON-NUMERIC and DWC-TERM-EMPTY speak for it. A position that is only in the record is left to the rules that compare the data with the record. Sheets of one workbook that lack a position are listed in one finding. Source: the OBIS Manual, location terms.
 
-**Sentence added when the finding has the parameter sheetOne.** This is about the sheet: «sheetOne».
+**Example.** A table of nutrient concentrations by sample number with no latitude and no longitude column, and a record without a bounding box.
 
-**What triggers it.** «file»: no latitude or longitude column is mapped, no row has a position and no record has a bounding box. OBIS requires decimalLatitude and decimalLongitude as the minimum location terms of every record; a bounding box in the metadata is not a substitute for them.
+**What you can do.** Add latitude and longitude columns in decimal degrees to the table. In /convert the finding is only shown and never stops the export.
 
 **Citations.**
 
 - [OBIS Manual, "Darwin Core" (iobis/manual darwin_core.md; manual.obis.org; read 2026-10-30)](https://manual.obis.org/darwin_core.html), "Location information can be documented in many DwC terms, but decimalLatitude and decimalLongitude are the minimally required terms"; "OBIS currently has seven required and one strongly recommended DwC term: occurrenceID, eventDate, decimalLongitude, decimalLatitude, scientificName, occurrenceStatus, basisOfRecord, scientificNameID"
 
-## Rows, Darwin Core and conversion
-
-### ROW-LAT-RANGE
+## ROW-LAT-RANGE
 
 Severity: error
-
-**What the user sees.** Latitude must be between -90 and 90 degrees, but lines «lines» are outside this range. Check whether latitude and longitude were swapped or mistyped.
-
-**What triggers it.** «file»:«lines» field «field» value '«value»': latitude outside -90..90 degrees.
 
 **Thresholds.**
 
@@ -570,13 +460,9 @@ Severity: error
 
 - [GTSPP Real-Time Quality Control Manual, IOC Manuals and Guides 22, rev. 1 (2010)](https://cdn.ioos.noaa.gov/media/2017/12/mg22rev1.pdf), Annex B, Test 1.3 "Impossible Location", PDF p.44
 
-### ROW-LON-RANGE
+## ROW-LON-RANGE
 
 Severity: error
-
-**What the user sees.** Longitude must be between -180 and 180 degrees, but lines «lines» are outside this range. Check whether latitude and longitude were swapped or mistyped.
-
-**What triggers it.** «file»:«lines» field «field» value '«value»': longitude outside -180..180 degrees.
 
 **Thresholds.**
 
@@ -587,145 +473,71 @@ Severity: error
 
 - [GTSPP Real-Time Quality Control Manual, IOC Manuals and Guides 22, rev. 1 (2010)](https://cdn.ioos.noaa.gov/media/2017/12/mg22rev1.pdf), Annex B, Test 1.3 "Impossible Location", PDF p.44
 
-### ROW-LON-360
+## ROW-LON-360
 
 Severity: info
-
-**What the user sees.** Longitudes in lines «lines» are given on a 0–360 scale. They were converted to the -180 to 180 scale; use that scale in the published file.
-
-**What triggers it.** «file»:«lines» field «field» value '«value»': longitude in (180, 360\] converted by subtracting 360.
 
 **Citations.**
 
 - [GTSPP Real-Time Quality Control Manual, IOC Manuals and Guides 22, rev. 1 (2010)](https://cdn.ioos.noaa.gov/media/2017/12/mg22rev1.pdf), Annex B, Test 1.3 "Impossible Location", PDF p.44
 
-### ROW-LAT-EQ-LON
+## ROW-LAT-EQ-LON
 
 Severity: error
 
-**What the user sees.** In lines «lines» latitude and longitude are identical («value»). One column was probably copied into the other; enter the correct values.
-
-**Sentence added when the finding has the parameter share.** That is at least 5 rows and a fifth of the rows with a position.
-
-**Sentence added when the finding has the parameter repeated.** The same value repeats in «repeated» rows and has two or more decimals, as when the position of one station was copied into both columns.
-
-**What triggers it.** «file»:«lines» latitude equals longitude exactly (value '«value»') in at least 5 rows and either at least 20 % of the rows with a position or at least 5 rows sharing one value with two or more written decimals that is not a multiple of 0.25 (the tool's own choice; otherwise ROW-LAT-EQ-LON-ISOLATED or ROW-LAT-EQ-LON-COARSE).
-
-### ROW-LAT-EQ-LON-ISOLATED
+## ROW-LAT-EQ-LON-ISOLATED
 
 Severity: warning
 
-**What the user sees.** In lines «lines» latitude and longitude are identical («value»). This is a small share of the rows with a position, so it may be a coincidence, but typing the same number into both columns is also a common slip. Check this position.
-
-**What triggers it.** «file»:«lines» latitude equals longitude exactly (value '«value»', finer than a half degree) in a small share of the rows with a position (fewer than 5 rows, or under 20 % and without 5 rows of one repeated value); a duplicated column would be ROW-LAT-EQ-LON.
-
-### ROW-LAT-EQ-LON-COARSE
+## ROW-LAT-EQ-LON-COARSE
 
 Severity: info
 
-**What the user sees.** In lines «lines» latitude and longitude are identical («value»). This position is rounded to a whole or half degree, as is common in historical data, so it may be right (for example -65 and -65 is the Antarctic Peninsula). Just check that the number was not typed twice.
-
-**What triggers it.** «file»:«lines» latitude equals longitude exactly (value '«value»', a whole or half degree) in fewer than 5 rows or fewer than 20 % of the rows with a position; a duplicated column would be ROW-LAT-EQ-LON.
-
-### ROW-RAGGED
+## ROW-RAGGED
 
 Severity: error
 
-**What the user sees.** Lines «lines» have a different number of values than the header (expected «expected», e.g. «found»). The columns may be shifted; fix these lines in the original file — the tool did not change them.
-
-**What triggers it.** «file»:«lines» expected «expected» fields, found «found» (first listed line); rows kept as found, not realigned.
-
-### ROW-NON-NUMERIC
+## ROW-NON-NUMERIC
 
 Severity: warning
 
-**What the user sees.** Column "«field»" should contain numbers, but lines «lines» contain text such as "«value»". Replace it with a number or leave the cell empty.
-
-**What triggers it.** «file»:«lines» field «field» value '«value»': non-numeric token in a numeric column.
-
-### ROW-NA-VARIANT
+## ROW-NA-VARIANT
 
 Severity: warning
 
-**What the user sees.** Column "«field»" marks missing values in an unusual way (e.g. "«value»") in lines «lines». Use one consistent marker, or an empty cell.
-
-**What triggers it.** «file»:«lines» field «field» value '«value»': variant of a missing-value token (not in the standard NA list).
-
-### ROW-STATION-MOVED
+## ROW-STATION-MOVED
 
 Severity: warning
 
-**What the user sees.** Station «station» appears at different positions («positions»). Check which one is right — a digit may have been mistyped or the coordinates swapped.
-
-**Sentence added when the finding has the parameter signLon.** Two of these positions differ (almost) only in the sign of the longitude: possibly a missing or extra minus (W/E). Check the other columns too — the sign need not be the whole cause.
-
-**Sentence added when the finding has the parameter signLat.** Two of these positions differ (almost) only in the sign of the latitude: possibly a missing or extra minus (S/N). Check the other columns too — the sign need not be the whole cause.
-
-**What triggers it.** «file»:«lines» station «station» at «positions»: positions differ by a typed digit, by exchanged axes, or by a sign (as written at least 100 km apart, within 50 km and at least 10 times closer once flipped).
-
-### ROW-STATION-SPREAD
+## ROW-STATION-SPREAD
 
 Severity: info
 
-**What the user sees.** Station «station» has positions up to «km» km apart («positions»). A station is usually one place, and 10 km is far more than a ship's position error on station. If this name stands for an area, a transect or a cruise, ignore this note.
-
-**What triggers it.** «file» station «station»: positions up to «km» km apart (more than 10 km; great-circle distance) at «positions». Rows of one name are compared only within one cruise (a cruise value) or, without one, within one calendar year (UTC); rows with neither get the note ROW-STATION-SPREAD and, for exchanged axes or a sign, ROW-STATION-MOVED, but not the typed-digit pattern. Placeholder names (unknown, not specified, n/a ...) are skipped.
-
-### ROW-STATION-SPREAD-FAR
+## ROW-STATION-SPREAD-FAR
 
 Severity: warning
 
-**What the user sees.** Station «station» has positions up to «km» km apart, more than 1000 km («positions»). A station is usually one place, so this is almost certainly a wrong position (a sign, a digit, swapped axes), not an area. Check which position is right.
-
-**What triggers it.** «file» station «station»: positions up to «km» km apart (more than 1000 km; great-circle distance) at «positions». The 10 to 1000 km case is the note ROW-STATION-SPREAD; 1000 km is a stated choice, not a published threshold. Rows of one name are compared only within one cruise (a cruise value) or, without one, within one calendar year (UTC); rows with neither get the note ROW-STATION-SPREAD and, for exchanged axes or a sign, ROW-STATION-MOVED, but not the typed-digit pattern. Placeholder names (unknown, not specified, n/a ...) are skipped.
-
-### ROW-ON-LAND-NEAR
+## ROW-ON-LAND-NEAR
 
 Severity: info
-
-**What the user sees.** In lines «lines» (N in all) the position falls on land or in a lake on the Natural Earth (1:10m) land map, 10–50 km from the sea: «places» (number of rows; least distance from the sea). If this is a sample from a river, estuary, tidal inlet, lake or coastal lagoon, ignore this note: the map can be inaccurate in such places. If not, check the digits and the order of the coordinates.
-
-**What triggers it.** «file»:«lines» N rows on land or in an inland lake 10 to 50 km from the sea (Natural Earth 1:10m, 0.05 degree cells; no sign hint at this level): «places».
 
 **Citations.**
 
 - [Argo Quality Control Manual for CTD and Trajectory Data, v3.9 (20 Feb 2025)](https://archimer.ifremer.fr/doc/00228/33951/32470.pdf), section 2.1.2, Test 4 "Position on land test", p.11
 - [Natural Earth 1:10m physical vectors: land, minor islands, lakes, v5.1.2 (public domain)](https://www.naturalearthdata.com/downloads/10m-physical-vectors/), layers ne_10m_land, ne_10m_minor_islands, ne_10m_lakes; rasterised by scripts/land-mask.py
 
-### ROW-ON-LAND
+## ROW-ON-LAND
 
 Severity: warning
-
-**What the user sees.** In lines «lines» (N in all) the position lies on land or in a lake, away from the sea: «places» (number of rows; least distance from the sea). In marine data this is usually an error: a wrong sign, swapped axes or a typo. 10–50 km from the sea: a separate note; the 10 km band and river banks near the sea are not judged.
-
-**Sentence added when the finding has the parameter flips.** With a sign flipped or the coordinates swapped, these positions lie at sea: «flips». This is only a hint, not a correction.
-
-**What triggers it.** «file»:«lines» N rows on land or in an inland lake at least 50 km from the sea (Natural Earth 1:10m, 0.05 degree cells; 10-50 km is ROW-ON-LAND-NEAR; nearer the coast, near rivers and canals nothing is judged): «places».
 
 **Citations.**
 
 - [Argo Quality Control Manual for CTD and Trajectory Data, v3.9 (20 Feb 2025)](https://archimer.ifremer.fr/doc/00228/33951/32470.pdf), section 2.1.2, Test 4 "Position on land test", p.11
 - [Natural Earth 1:10m physical vectors: land, minor islands, lakes, v5.1.2 (public domain)](https://www.naturalearthdata.com/downloads/10m-physical-vectors/), layers ne_10m_land, ne_10m_minor_islands, ne_10m_lakes; rasterised by scripts/land-mask.py
 
-### ROW-SHIP-SPEED
+## ROW-SHIP-SPEED
 
 Severity: warning
-
-**What the user sees.** Line numbers: «lines». To get here and on, the ship would have to sail faster than 40 knots, although the events before and after fit together: «cases» (lines previous→this→next; km; h = longest possible gap). The position, or the date or time, of one of them is wrong.
-
-**Sentence added when the finding has the parameter signLon.** Probably a missing or extra minus sign in the longitude of rows «signLon».
-
-**Sentence added when the finding has the parameter signLat.** Probably a missing or extra minus sign in the latitude of rows «signLat».
-
-**Sentence added when the finding has the parameter places.** In square brackets: the rows of each point of the track; "+" joins events within 10 km of the first of them, counted as one point.
-
-**Sentence added when the finding has the parameter split.** "a/b": the hop is measured from the position on line a and from the end of the time interval on line b.
-
-**Sentence added when the finding has the parameter declared.** If the files hold more than one ship or cruise, untick "…come from one cruise of one ship" or map a cruise column.
-
-**Sentence added when the finding has the parameter mixed.** So many events are named that the data probably come from more than one ship or cruise: map a cruise column, or do not tick the one-cruise box.
-
-**What triggers it.** «file»:«lines» N event(s) whose implied speed from the previous event and to the next event both exceed 40 knots while previous-to-next does not (Met Office marine-qc extreme speed limit, applied on both sides; MEDATLAS 4.4.4, GTSPP Test 1.5 and WOD18 name position or date/time as the possible error). Speed = distance, less the rounding of the written coordinates, over the LONGEST time gap the written dates and times allow (end of the previous event to start of the next): «cases».
 
 **Thresholds.**
 
@@ -737,29 +549,9 @@ Severity: warning
 - [GTSPP Real-Time Quality Control Manual, IOC Manuals and Guides 22, rev. 1 (2010)](https://cdn.ioos.noaa.gov/media/2017/12/mg22rev1.pdf), Annex B, Test 1.5 "Impossible Speed", PDF p.53 (per-platform maximum speed; the operator decides whether position or date/time is wrong)
 - [World Ocean Database 2018 User's Manual (prerelease, v0.10; Garcia et al.)](https://www.ncei.noaa.gov/data/oceans/woa/WOD/DOC/WOD18-UsersManual_final.pdf), section 4 "Speed check", printed p.31: "If the speed between adjoining casts is unrealistic, the date/time may be in error, the position may be wrong, or the cast may not belong to this cruise/platform."
 
-### ROW-SHIP-SPEED-UNUSUAL
+## ROW-SHIP-SPEED-UNUSUAL
 
 Severity: info
-
-**What the user sees.** Line numbers: «lines». To get here and on, the ship would have to sail faster than 15 knots, unusual for a research vessel, although the events before and after fit together: «cases» (lines previous→this→next; km; h = longest possible gap).
-
-**Sentence added when the finding has the parameter mayBeReal.** If the ship did sail that fast, ignore this note.
-
-**Sentence added when the finding has the parameter impossible.** At least one of these hops needs more than 40 knots, and no ship sails that fast: the position or the date or time of this event is probably wrong.
-
-**Sentence added when the finding has the parameter signLon.** Probably a missing or extra minus sign in the longitude of rows «signLon».
-
-**Sentence added when the finding has the parameter signLat.** Probably a missing or extra minus sign in the latitude of rows «signLat».
-
-**Sentence added when the finding has the parameter places.** In square brackets: the rows of each point of the track; "+" joins events within 10 km of the first of them, counted as one point.
-
-**Sentence added when the finding has the parameter split.** "a/b": the hop is measured from the position on line a and from the end of the time interval on line b.
-
-**Sentence added when the finding has the parameter declared.** If the files hold more than one ship or cruise, untick "…come from one cruise of one ship" or map a cruise column.
-
-**Sentence added when the finding has the parameter mixed.** So many events are named that the data probably come from more than one ship or cruise: map a cruise column, or do not tick the one-cruise box.
-
-**What triggers it.** «file»:«lines» N event(s) whose implied speed from the previous event and to the next event both exceed 15 knots (MEDATLAS 4.4.4 default maximum ship velocity) while previous-to-next does not, and which ROW-SHIP-SPEED does not already report. Speed = distance, less the rounding of the written coordinates, over the LONGEST time gap the written dates and times allow: «cases».
 
 **Thresholds.**
 
@@ -770,21 +562,9 @@ Severity: info
 
 - [World Ocean Database 2018 User's Manual (prerelease, v0.10; Garcia et al.)](https://www.ncei.noaa.gov/data/oceans/woa/WOD/DOC/WOD18-UsersManual_final.pdf), section 4 "Speed check", printed p.31: "If the speed between adjoining casts is unrealistic, the date/time may be in error, the position may be wrong, or the cast may not belong to this cruise/platform."
 
-### ROW-SHIP-SPEED-PAIR
+## ROW-SHIP-SPEED-PAIR
 
 Severity: info
-
-**What the user sees.** Line numbers: «lines». Between these two points of the track the ship would have to sail faster than 40 knots: «cases» (lines first→second; km; h = longest possible gap). The position or the time at one of them is wrong, and it is not clear which. A day and month swapped in a date has the same effect.
-
-**Sentence added when the finding has the parameter places.** In square brackets: the rows of each point of the track; "+" joins events within 10 km of the first of them, counted as one point.
-
-**Sentence added when the finding has the parameter split.** "a/b": the hop is measured from the position on line a and from the end of the time interval on line b.
-
-**Sentence added when the finding has the parameter declared.** If the files hold more than one ship or cruise, untick "…come from one cruise of one ship" or map a cruise column.
-
-**Sentence added when the finding has the parameter mixed.** So many events are named that the data probably come from more than one ship or cruise: map a cruise column, or do not tick the one-cruise box.
-
-**What triggers it.** «file»:«lines» N pair(s) of consecutive events whose implied speed exceeds 40 knots (Met Office marine-qc extreme speed limit) and which are not part of a two-sided finding (first or last event, or two bad events in a row). Position or date/time of either event may be wrong (WOD18 speed check; MEDATLAS 4.4.4). Speed = distance, less the rounding of the written coordinates, over the LONGEST time gap the written dates and times allow: «cases».
 
 **Thresholds.**
 
@@ -795,248 +575,136 @@ Severity: info
 - [World Ocean Database 2018 User's Manual (prerelease, v0.10; Garcia et al.)](https://www.ncei.noaa.gov/data/oceans/woa/WOD/DOC/WOD18-UsersManual_final.pdf), section 4 "Speed check", printed p.31: "If the speed between adjoining casts is unrealistic, the date/time may be in error, the position may be wrong, or the cast may not belong to this cruise/platform."
 - [MEDATLAS Protocol, Part I: exchange format and quality checks for observed profiles, v3 (SISMER/IFREMER, Dec 2001)](https://nodc.ogs.it/repository/documents/guidelines/medman_v3.pdf), section 4.4.4 "Check the ship velocity", PDF p.29: "If the ship velocity \> maximum velocity of the ship (default is 15 knots) between two consecutive profiles, find the erroneous data (date or location)"
 
-### ROW-DATE-UNPARSEABLE
+## ROW-DATE-UNPARSEABLE
 
 Severity: warning
-
-**What the user sees.** The dates in lines «lines» (e.g. "«value»") could not be read. Write dates as YYYY-MM-DD.
-
-**Wording when the column holds times of day.** The times in lines «lines» (e.g. "«value»") could not be read. Write the time as HH:MM (24 hours), for example 16:30 (1630 and 16:30. are read too), in UTC or with the time zone stated; a range such as 16:00-17:30 or 1600-1730 is read as its start.
-
-**What triggers it.** «file»:«lines» field «field» value '«value»': date not parseable (ISO 8601, YYYY/MM/DD, DD.MM.YYYY, unambiguous DD/MM/YYYY, YY-MM-DD, a four-digit year, YYYYMMDD in a column that is the date, or an Excel serial).
-
-**What triggers it, for times of day.** «file»:«lines» field «field» value '«value»': time of day not parseable (HH:MM or HH:MM:SS, 24 hours; a range HHMM-HHMM or HH:MM-HH:MM, also several separated by commas, is read as the start of its first range and the end is ignored; state UTC or the time zone).
 
 **Citations.**
 
 - [W3C Note, Date and Time Formats (profile of ISO 8601)](https://www.w3.org/TR/NOTE-datetime), Formats: complete date YYYY-MM-DD
 - [DataCite Metadata Schema 4.6, property Date](https://datacite-metadata-schema.readthedocs.io/en/4.6/properties/date/), section 8 Date, allowed formats
 
-### ROW-TIME-OTHER-DAY
+## ROW-TIME-OTHER-DAY
 
 Severity: warning
 
-**What the user sees.** In lines «lines» the time column (e.g. "«value»") holds a full date and time of another day than the date column (any other day without a time zone, more than a day apart with one). The time cannot be taken from it: check which date is right, or write the time of day alone.
-
-**What triggers it.** «file»:«lines» field «field» value '«value»': the time column holds a full datetime of another day than the date column of the row (any other day without a zone, more than one day apart with one); the time of day is not taken from it (a datetime with a zone within a day of the date is read as the event's instant instead).
-
-### ROW-DATE-MISSING
+## ROW-DATE-MISSING
 
 Severity: info
 
-**What the user sees.** N rows («percent» %) have no date although the other rows do. Fill in the missing dates.
-
-**What triggers it.** «file»:«lines» N row(s) («percent»%) without a date while other rows have one.
-
-### ROW-YEAR-OUTLIER
+## ROW-YEAR-OUTLIER
 
 Severity: warning
 
-**What the user sees.** Lines «lines» are dated «years», while the title, file name or time span says «declared». One of them is probably a typo in the year.
-
-**What triggers it.** «file»:«lines» year(s) «years» not among the declared year(s) «declared» (dataset label, file name, record title or temporal extent).
-
-### ROW-JOIN-AMBIGUOUS
+## ROW-JOIN-AMBIGUOUS
 
 Severity: warning
 
-**What the user sees.** Rows of sheet "«sheet»" (lines: «lines») got no position or date from sheet "«right»": the key "«field»" (e.g. «value») matches several rows there that differ in position or date, so none was taken (the first is not guessed).
-
-**What triggers it.** «file», «sheet»:«lines» key «field» (example value «value»): the key matches several rows of sheet «right» that differ in position or date, so the rows get no position and no date from it; the first matching row is never taken. Join on a key that identifies one row (a composite key such as Cruise + Station is tried by the layout).
-
-### ROW-LONG-VALUE-SKIPPED
+## ROW-LONG-VALUE-SKIPPED
 
 Severity: warning
 
-**What the user sees.** N values were not read in "«sheet»" (lines «lines»): another row has the same key and parameter (e.g. "«field»") with a different value, and no column of the sheet could safely be used to tell these rows apart; one value is kept and checked.
-
-**What triggers it.** «file», «sheet»:«lines» field «field»: in a long sheet (parameter and value columns) N value(s) differ from the value already kept for the same key (sample, position, date, depth) and parameter, and no column could safely be used to tell those rows apart (a column is refused when it is unique on every row, when it cuts the measurements of one key into rows with no parameter in common, when two columns are equally good, or when it leaves a collision in a key it varies in); one value of a pair is read (the first, or the first after a blank or missing one) and nothing is averaged. Values equal to the kept one are not counted.
-
-### ROW-LONG-NO-PARAMETER
+## ROW-LONG-NO-PARAMETER
 
 Severity: warning
 
-**What the user sees.** In "«sheet»" N rows have a value but nothing in the column "«column»" (lines «lines»). They cannot be read, because nothing says what they measure. Write the parameter name (if the cell was merged, the merge has to cover these rows).
-
-**What triggers it.** «file», «sheet»:«lines» N row(s) of a long sheet (parameter and value columns) have a value and a blank parameter cell ("«column»"), and no merged cell above them gives one. The row is not read; nothing is guessed from the unit or the value. A row whose value is blank too is not counted. /check only: the converter blocks such rows with CONV-LONG-NO-PARAMETER.
-
-### ROW-LONG-PARAMETER-MERGED
+## ROW-LONG-PARAMETER-MERGED
 
 Severity: info
 
-**What the user sees.** In "«sheet»" a cell of the column "«column»" is merged over several rows in the workbook; its name applies to every row of the merge: N rows below the first cell (lines «lines») were read with it. Check that this is the parameter you meant.
-
-**What triggers it.** «file», «sheet»:«lines» the parameter cell ("«column»") of a long workbook sheet is merged down several rows (SheetJS !merges); only its top cell holds the name, so the cells below read as blank. The name of the top cell is read for every row of the merge that has a value; N row(s) below the top cell were filled that way (the lines). Only the parameter column is filled, only from a merge the workbook declares, only on rows with a value. The same note is shown on /convert.
-
-### ROW-LONG-KEY-EXTENDED
+## ROW-LONG-KEY-EXTENDED
 
 Severity: info
 
-**What the user sees.** In "«sheet»" rows with the same key and parameter held different values. The columns that tell them apart («columns») now join the key, so the values of the separated rows (e.g. lines «lines») are read and checked. The clean CSV writes them too, unless you set a column to ignore yourself.
-
-**What triggers it.** «file», «sheet»:«lines» N column(s) («columns») were added to the row key because rows with the same key and parameter held different values there; the lines are some of the rows they separate. A column is taken only when it is not unique on every row, when in every key where it varies no two resulting rows have disjoint parameter sets, when it is the best of the acceptable ones (or splits the rows exactly like the others of equal count), and when it leaves no collision unresolved in a key it varies in. It is a column that separates the rows, not proof that it is a replicate: the choice is not confirmed by the header. Rows of other keys are unchanged and nothing is averaged; ROW-LONG-VALUE-SKIPPED still says what could not be read.
-
-### ROW-KEY-IGNORED
+## ROW-KEY-IGNORED
 
 Severity: info
 
-**What the user sees.** In "«sheet»" these rows (e.g. lines «lines») look alike in the identifying columns of the clean CSV. The columns you set to ignore («columns») differ between them and are not written. Their other measured values are still in the file and in the clean CSV.
-
-**What triggers it.** «file», «sheet»:«lines» N column(s) («columns») set to ignore by the person differ between rows that are equal in every identifying column the clean CSV writes (station, cruise, sample, date, position, depth and the other written key columns); the column is not written, so the rows look alike there. Long or wide sheet; on a long sheet only a column that entered the row key. The column may be a measurement. Their other measured values may differ and are all written. Nothing is removed from the file. Said only when two rows are equal in those columns and differ in a column set to ignore; a column that is ignore by default (a replicate, a cast, a comment) is written, as a key column or as a descriptive column after the variables, and is not this.
-
-### ROW-JOIN-KEY-BLANK
+## ROW-JOIN-KEY-BLANK
 
 Severity: warning
 
-**What the user sees.** In sheet "«sheet»" (lines: «lines») the key "«field»" is blank, so no position or date could be taken from sheet "«right»". Fill in the key on those rows.
-
-**What triggers it.** «file», «sheet»:«lines» key «field»: a part of the join key is blank on rows that have no position of their own, so the row of sheet «right» cannot be found and the rows keep no position and no date from it.
-
-### ROW-DATE-YYMMDD
+## ROW-DATE-YYMMDD
 
 Severity: info
 
-**What the user sees.** Dates in column "«field»" have a two-digit year and a century was added; e.g. "«value»" was read as «interpreted» (order «order»: ymd year first, dmy day first, mdy month first). One acceptance covers the century in every column this note names, each by name. Use a four-digit year.
-
-**What triggers it.** «file» field «field» value '«value»': NN-NN-NN read as «interpreted» in the order «order» (century inferred; ambiguous). The century of a two-digit year is the reader's decision. The export gate accepts per rule, not per column: one acceptance of ROW-DATE-YYMMDD covers the century in every column it names, each named in its own finding.
-
-### ROW-DATE-YY-AMBIGUOUS
+## ROW-DATE-YY-AMBIGUOUS
 
 Severity: warning
 
-**What the user sees.** Dates such as "«value»" can be read in more than one order (ymd: year first, dmy: day first, mdy: month first), and no date in column "«field»" decides it. Read as «interpreted»; it could also be «readings».
-
-**What triggers it.** «file» field «field» value '«value»': NN-NN-NN with two or more readings that fit every NN-NN-NN cell of the column (no part above 31, none above 12 in a month place rules them out) and a date that differs between them. Read as «interpreted» (the first reading that fits every cell: year-month-day when it does; century inferred); it could also be «readings» (date and order code, joined with "; "). Reported once per column. In /convert the export is blocked until the person declares the order of the column.
-
-### ROW-TZ-UNKNOWN
+## ROW-TZ-UNKNOWN
 
 Severity: info
 
-**What the user sees.** The time zone of the times in column "«field»" is not stated. Say whether they are UTC or local time.
-
-**What triggers it.** «file» field «field»: date-time values carry neither a UTC marker nor an offset; time zone unknown.
-
-### ROW-UNIT-MISSING
+## ROW-UNIT-MISSING
 
 Severity: warning
 
-**What the user sees.** No unit is given for: «headers». Add the unit to each column header, e.g. "DIC \[µmol/kg\]".
-
-**What triggers it.** «file»: no unit in the header or in the metadata for column(s) «headers».
-
-### ROW-HEADER-CODE-SHAPE
+## ROW-HEADER-CODE-SHAPE
 
 Severity: warning
-
-**What the user sees.** Header "«column»": the code «code» after "SDN:«collection»::" is not a «collection» code, which has exactly «length» capital letters and digits. NVS has no such concept (it answers 404). Check the code for a typo or an extra character.
-
-**What triggers it.** «file», column «column»: the code "«code»" after the explicit prefix SDN:«collection»:: is not of the shape of a «collection» code («length» upper-case letters and digits); the concept page does not exist (NVS: 404). Only the prefixed form is checked; a bare word is never read as a code.
 
 **Citations.**
 
 - [NERC Vocabulary Server (NVS), collections P01 (BODC Parameter Usage Vocabulary) and P06 (BODC data storage units); read 2026-10-29](https://vocab.nerc.ac.uk/collection/P06/current/), Every concept of P06 has a four-character code (411 of 411 codes read, e.g. UPAA) and every concept of P01 an eight-character one (50 613 of 50 613 codes read, e.g. TEMPPR01; 66 begin with a digit); a code of another length has no concept page: https://vocab.nerc.ac.uk/collection/P01/current/D13CMOP11/ answers 404, https://vocab.nerc.ac.uk/collection/P01/current/D13CMOP1/ is a concept.
 
-### ROW-DEPTH-SIGN
+## ROW-DEPTH-SIGN
 
 Severity: info
 
-**What the user sees.** It is not stated whether depth in column "«header»" is counted downwards (positive) or upwards. Describe the convention in the header or in the description.
-
-**What triggers it.** «file»: depth column '«header»' has no stated sign convention.
-
-### ROW-DEPTH-MIXED-SIGN
+## ROW-DEPTH-MIXED-SIGN
 
 Severity: warning
 
-**What the user sees.** The depth column "«header»" (sheet "«sheet»") has values of both signs: «negative» negative, «positive» positive. The direction (down or up) is not decided, and the range is checked on the values without their sign. State in the description which way depth is counted.
-
-**What triggers it.** «file», «sheet»: depth column '«header»' has «negative» negative and «positive» positive non-zero values (0, -99, -999 and -9999 not counted; every row read). No direction is chosen (not the majority); ROW-DEPTH-RANGE judges |depth|. No value is changed.
-
-### ROW-MISSING-CODE
+## ROW-MISSING-CODE
 
 Severity: warning
 
-**What the user sees.** The column "«column»" has a possible missing-value code in N cells, e.g. «value» (lines «lines»). Values such as -99, -999 and -9999 often stand for "not measured". They are kept as written and left out of the depth direction and the range checks.
-
-**What triggers it.** «file», «sheet»:«lines» N cell(s) of column '«column»' (column «index» of the sheet in /convert) hold exactly -99, -999 or -9999 (numeric equality, first: «value»), a code often written for "no measurement". /check keeps the cell as written and leaves it out of the depth direction, ROW-DEPTH-RANGE and CHEM-RANGE; /convert blocks the export until the column is answered (missing: the cells are left out and listed; real: they are written and judged like any value). Checked: the depth column (the two bounds of a Darwin Core range) and every variable of the sheet. The cell is never replaced.
-
-### ROW-DM-COORDS
+## ROW-DM-COORDS
 
 Severity: info
 
-**What the user sees.** Coordinates in column "«field»" are written as degrees and minutes (e.g. "«value»"). They were converted to decimal degrees; check a few of them.
-
-**What triggers it.** «file» field «field» value '«value»': degree-minute(-second) text converted to decimal degrees.
-
-### ROW-HEMISPHERE-CONFLICT
+## ROW-HEMISPHERE-CONFLICT
 
 Severity: warning
 
-**What the user sees.** In lines «lines» the value in column "«field»" (e.g. "«value»") disagrees with the hemisphere letter in column "«hemisphere»": it has a minus sign or a letter of its own, or the letter belongs to the other axis. It was kept as written and its sign was not changed again; correct these rows.
-
-**What triggers it.** «file»:«lines» field «field» value '«value»': disagrees with the hemisphere letter in «hemisphere»; kept as written, not negated again.
-
-### ROW-HEMISPHERE-UNPAIRED
+## ROW-HEMISPHERE-UNPAIRED
 
 Severity: warning
 
-**What the user sees.** Column "«hemisphere»" is set as a hemisphere letter, but it belongs to a different position than "«field»" (their start and end words disagree), so it was not applied. Check which column is mapped as the coordinate.
-
-**What triggers it.** «file» field «field»: hemisphere column «hemisphere» belongs to another start/end position; not applied.
-
-### ROW-HEMISPHERE-MISSING
+## ROW-HEMISPHERE-MISSING
 
 Severity: warning
 
-**What the user sees.** In lines «lines» column "«field»" has a value (e.g. "«value»") but the hemisphere column "«hemisphere»" is empty or holds something other than N, S, E, W. The value was kept as written, so it may have the wrong sign for the southern or western hemisphere; fill in the letter.
-
-**What triggers it.** «file»:«lines» field «field» value '«value»': the hemisphere column «hemisphere» is empty or not N/S/E/W; kept as written.
-
-### ROW-ZERO-COORD
+## ROW-ZERO-COORD
 
 Severity: error
-
-**What the user sees.** In lines «lines» latitude and longitude are both 0. That point lies in the Gulf of Guinea and usually stands for coordinates that are missing and were typed as zero. Enter the real position or leave the cells empty.
-
-**What triggers it.** «file»:«lines» latitude and longitude are both 0 (obis-qc ZERO_COORD, which drops the record; Biocheck "0-0 coordinates"). Reported instead of ROW-LAT-EQ-LON, which it would also match.
 
 **Citations.**
 
 - [OBIS obis-qc (Python), obisqc/location.py, master (read 2026-10-24)](https://github.com/iobis/obis-qc/blob/master/obisqc/location.py), check_record: "if record.get_interpreted("decimalLongitude") == 0 and record.get_interpreted("decimalLatitude") == 0: record.set_flag(Flag.ZERO_COORD); record.dropped = True"
 - [EMODnet Biocheck (R), README, Integrity and Format checks (read 2026-10-24)](https://github.com/EMODnet/EMODnetBiocheck/blob/master/README.md), Integrity checks: "decimalLatitude and decimalLongitude are both 0" ... "It is theoretically possible that a sampling event happens at 0-0 coordinates, however it is very common to inadvertedly add 0-0 when the actual coordinates are missing. Therefore, 0-0 coordinates should always be double checked."
 
-### ROW-NO-COORD
+## ROW-NO-COORD
 
 Severity: warning
-
-**What the user sees.** In lines «lines» (N in all) the latitude or the longitude is missing although the other rows have a position. Such a record cannot be placed on a map. Fill in the coordinates; if it is a summary or helper row, ignore this note.
-
-**What triggers it.** «file»:«lines» N row(s) with a blank latitude or longitude cell while other rows of the sheet have a position (obis-qc NO_COORD, which drops the record). Blank trailing rows, summary rows and rows that inherit a position from a parent event are not counted.
 
 **Citations.**
 
 - [OBIS obis-qc (Python), obisqc/location.py, master (read 2026-10-24)](https://github.com/iobis/obis-qc/blob/master/obisqc/location.py), check_record: "if record.get_interpreted("decimalLongitude") is None or record.get_interpreted("decimalLatitude") is None: record.set_flag(Flag.NO_COORD); record.dropped = True"
 
-### ROW-DEPTH-MIN-MAX
+## ROW-DEPTH-MIN-MAX
 
 Severity: error
-
-**What the user sees.** In lines «lines» the minimum depth is greater than the maximum depth (e.g. «value»). The two columns may be swapped or mistyped; correct the values.
-
-**What triggers it.** «file»:«lines» minimumDepthInMeters greater than maximumDepthInMeters (first: «value»); obis-qc MIN_DEPTH_EXCEEDS_MAX, obistools check_depth.
 
 **Citations.**
 
 - [OBIS obis-qc (Python), obisqc/location.py, master (read 2026-10-24)](https://github.com/iobis/obis-qc/blob/master/obisqc/location.py), check_record: "if record.get_interpreted("minimumDepthInMeters") \> record.get_interpreted("maximumDepthInMeters"): record.set_flag(Flag.MIN_DEPTH_EXCEEDS_MAX)"
 - [OBIS obistools (R), R/check_depth.R, master (read 2026-10-24)](https://github.com/iobis/obistools/blob/master/R/check_depth.R), check_depth, details: "minimum depth greater than maximum depth" (error); code: minGTmax \<- !is.na(maxd) & !is.na(mind) & mind \> maxd
 
-### ROW-DEPTH-RANGE
+## ROW-DEPTH-RANGE
 
 Severity: warning
-
-**What the user sees.** Depth in column "«field»" (lines «lines», e.g. «value» m) is outside the range -100000 to 11000 m that OBIS accepts. The deepest point of the ocean is about 10,935 m. Check the unit (metres) and the sign.
-
-**What triggers it.** «file»:«lines» field «field» value '«value»': depth outside -100000..11000 m (obis-qc DEPTH_OUT_OF_RANGE bounds, inclusive; positive down; a column with an upward convention is judged after the sign is turned). The deepest point of the ocean, Challenger Deep, is about 10,935 m (NOAA).
 
 **Thresholds.**
 
@@ -1047,92 +715,92 @@ Severity: warning
 
 - [NOAA National Ocean Service, "How deep is the ocean?" (last updated 2026-09-23)](https://oceanservice.noaa.gov/facts/oceandepth.html), "Challenger Deep is approximately 10,935 meters (35,876 feet) deep." (the deepest part of the ocean)
 
-### ROW-DATE-FUTURE
+## ROW-DATE-FUTURE
 
 Severity: warning
-
-**What the user sees.** The date in column "«field»" (lines «lines», e.g. «value») is later than today; for an interval its end counts. An event in the future cannot have happened yet: check the year, month and day.
-
-**What triggers it.** «file»:«lines» field «field» value '«value»': the date, or the end of the interval, is later than today (UTC; a value counts as future only when it can have begun nowhere yet, so a date within a day of today, as read in the latest time zone UTC+14, is not; a year or month counts by its first day). obis-qc DATE_IN_FUTURE.
 
 **Citations.**
 
 - [OBIS obis-qc (Python), obisqc/time.py, master (read 2026-10-24)](https://github.com/iobis/obis-qc/blob/master/obisqc/time.py), check_record: "if ms_end \> date_to_millis(datetime.date.today()): # date in the future record.set_flag(Flag.DATE_IN_FUTURE)"
 
-### ROW-INVISIBLE-CHAR
+## ROW-INVISIBLE-CHAR
 
 Severity: warning
-
-**What the user sees.** In column "«field»" the values in lines «lines» contain invisible characters («chars»), e.g. "«value»", so the name or ID will not match the same text typed normally. A space-like character: replace it with a plain space. A zero-width one (U+200B, U+FEFF ...): it should be taken out of the value.
-
-**What triggers it.** «file»:«lines» field «field» value '«value»': invisible characters inside the value («chars»). OBIS trims only the ends of a value, so inside they break name matching, vocabulary matching and duplicate checks (OBIS Manual, "Hidden characters and non-breaking spaces"). Checked columns: station, cruise and sample identifiers, and the name, identifier and vocabulary columns of Darwin Core input.
 
 **Citations.**
 
 - [OBIS Manual, "Common data quality issues" (iobis/manual common_qc.md; manual.obis.org)](https://manual.obis.org/common_qc.html), "Hidden characters and non-breaking spaces": "a value like Abra alba containing a non-breaking space will not match the same name typed with a normal space"; "OBIS removes leading and trailing whitespace from values during processing, but does not change spaces inside a value"; "Other invisible characters, such as tabs, line breaks within a cell, and zero-width spaces (U+200B), can cause similar problems"
 
-### ROW-YEAR-DATE-MISMATCH
+## ROW-YEAR-DATE-MISMATCH
 
 Severity: warning
 
-**What the user sees.** In column "«field»" the year in lines «lines» (N in all) is not the year of the date in "«date»", e.g. the date "«value»" beside the year «year». One of the two is wrong, or they belong to different events, or the column means something else, such as a cruise or a season. Nothing was changed; check which one is right.
-
-**What triggers it.** «file»:«lines» field «field»: N row(s) whose year («year» in the first) is not a year of the date in «date» (e.g. '«value»'). A date range counts every year it covers; a year-only date, a date built from the Year column itself and a blank or non-numeric year are not compared. Nothing is changed.
-
-### ROW-TEXT-MOJIBAKE
+## ROW-TEXT-MOJIBAKE
 
 Severity: warning
 
-**What the user sees.** Text in «columns» (lines «lines»; N cells with this pattern) looks encoded twice, e.g. "«value»": a UTF-8 file was read as Windows-1252 or Latin-1 somewhere. The text was not changed. Save the original again as UTF-8 and compare these values.
-
-**What triggers it.** «file»:«lines» N cell(s) in «columns» hold a double-encoding pair (U+00C3 or U+00C2 followed by a character in U+0080-U+00BF; first value '«value»'), the signature of UTF-8 bytes read as a single-byte encoding and encoded again. A lone U+00C3 or U+00C2 is real text and is not matched. Only this pair is counted: other double-encoded forms (for example U+00E2 U+20AC U+2122 for an apostrophe, U+00C5 U+201A, U+00C3 U+201C, U+00C3 U+20AC, U+00D0 followed by a letter) are not matched, so the count is of the pair and not of every damaged cell. A file the parser decoded by a fallback (IN-ENCODING-FALLBACK, or IN-ENCODING-AMBIGUOUS when windows-1250, ISO-8859-2 and windows-1252 read its bytes differently) is not read; UTF-16 and valid UTF-8 are read as text; one that declares its own encoding is. Nothing is rewritten.
-
-### DWC-TERM-MISSING
+## DWC-TERM-MISSING — A Darwin Core table has no column for a term that OBIS requires
 
 Severity: error
 
-**What the user sees.** This looks like a Darwin Core table («core»), but it has no column for terms that OBIS requires: «terms». Add them; without them the records are not fit to publish in OBIS.
+**What it checks.** A Darwin Core table has no column for a term that OBIS requires. Without the required terms the records cannot be published in OBIS, so the file is not ready however good its other columns are.
 
-**What triggers it.** «file»: Darwin Core input («core» core) without a column for the required term(s) «terms». Required: occurrenceID (Occurrence core) or eventID (Event core), eventDate, decimalLatitude, decimalLongitude, and for an Occurrence core scientificName, occurrenceStatus, basisOfRecord (obistools check_fields; OBIS Manual). scientificNameID is only recommended (DWC-RECOMMENDED).
+**When it fires.** Only on Darwin Core input. It fires once per table and lists every missing term. Required for every core: eventDate, decimalLatitude and decimalLongitude, plus an identifier (eventID for an Event core; occurrenceID or eventID for an Occurrence core; in a Darwin Core Archive the core id column may stand for it). An Occurrence core also requires scientificName, occurrenceStatus and basisOfRecord. An occurrence table that carries a filled eventID column is read as the occurrence side of an event and occurrence pair, and then eventDate and the two coordinates are not required of it. scientificNameID is only recommended (DWC-RECOMMENDED). Sources: obistools check_fields and the OBIS Manual.
+
+**Example.** A table with the columns occurrenceID, scientificName, eventDate, decimalLatitude and decimalLongitude but no basisOfRecord column is reported as missing basisOfRecord.
+
+**What you can do.** Add a column for each listed term and fill it. In /convert this rule is applied to the Event and Occurrence tables the converter writes, so the remedy is in the declarations that feed those tables, not in a column you add by hand. In /convert this finding blocks the export.
 
 **Citations.**
 
 - [OBIS obistools (R), R/check_fields.R, master (read 2026-10-24)](https://github.com/iobis/obistools/blob/master/R/check_fields.R), check_fields: required \<- c("eventDate", "decimalLongitude", "decimalLatitude", "scientificName", "scientificNameID", "occurrenceStatus", "basisOfRecord"); "Missing or empty required fields are reported as errors"
 - [OBIS Manual, "Common format issues" (iobis/manual common_formatissues.md; manual.obis.org)](https://manual.obis.org/common_formatissues.html), "Missing required fields": "one (or more) of the eight required terms for OBIS"; "occurrenceID or eventID"; "scientificNameID (strongly recommended)"
 
-### DWC-TERM-EMPTY
+## DWC-TERM-EMPTY — A column that OBIS requires exists but has empty cells
 
 Severity: error
 
-**What the user sees.** Column "«field»", which OBIS requires, has no value in lines «lines» (N in all). Fill them in.
+**What it checks.** A column that OBIS requires exists but has empty cells. A record without a required value cannot be published, so the empty rows must be filled or dealt with before submission.
 
-**What triggers it.** «file»:«lines» field «field»: N empty value(s) in a column OBIS requires (obistools check_fields: "Empty value for required field"). For decimalLatitude, decimalLongitude and eventDate only a column empty in every row is reported here (single missing positions are ROW-NO-COORD, single missing dates ROW-DATE-MISSING; where no date exists anywhere, data or metadata, META-NO-DATES says it instead).
+**When it fires.** Only on Darwin Core input, one finding per column. The identifier column (occurrenceID or eventID, or the archive id) and, for an Occurrence core, scientificName, occurrenceStatus and basisOfRecord fire when any cell is blank after trimming. eventDate, decimalLatitude and decimalLongitude fire only when the column is blank in every row: a few missing positions are ROW-NO-COORD, a few missing dates are ROW-DATE-MISSING, and a date missing everywhere in the data and the metadata is reported by META-NO-DATES alone. Those three are not checked on the occurrence side of an event and occurrence pair. Sources: obistools check_fields and the OBIS Manual.
+
+**Example.** A table of 40 rows whose scientificName column is blank on lines 7, 8, 19 and 33 gets one finding naming those four lines.
+
+**What you can do.** Fill the cells, or remove the rows that cannot be filled. In /convert the rule is applied to the tables the converter writes; for a missing position or date the converter says it first in the terms of the source sheet (CONV-POSITION-NONE, CONV-EVENT-DATE-MISSING) and this finding is then not repeated. In /convert this finding blocks the export.
 
 **Citations.**
 
 - [OBIS obistools (R), R/check_fields.R, master (read 2026-10-24)](https://github.com/iobis/obistools/blob/master/R/check_fields.R), check_fields: required \<- c("eventDate", "decimalLongitude", "decimalLatitude", "scientificName", "scientificNameID", "occurrenceStatus", "basisOfRecord"); "Missing or empty required fields are reported as errors"
 - [OBIS Manual, "Common format issues" (iobis/manual common_formatissues.md; manual.obis.org)](https://manual.obis.org/common_formatissues.html), "Missing required fields": "one (or more) of the eight required terms for OBIS"; "occurrenceID or eventID"; "scientificNameID (strongly recommended)"
 
-### DWC-RECOMMENDED
+## DWC-RECOMMENDED — A Darwin Core table lacks a column that OBIS recommends, or leaves it empty in every row
 
 Severity: warning
 
-**What the user sees.** OBIS also recommends the following, which this Darwin Core table («core») lacks or leaves empty in every row: «terms». It is not an error, but it makes the data easier to check and the names easier to match.
+**What it checks.** A Darwin Core table lacks a column that OBIS recommends, or leaves it empty in every row. The data are still publishable, but depth and a persistent taxon identifier make the data easier to check and the names easier to match.
 
-**What triggers it.** «file»: Darwin Core input («core» core) without a column, or with no value in any row, for the recommended term(s) «terms». Recommended: minimumDepthInMeters and maximumDepthInMeters (obistools check_fields), scientificNameID for an Occurrence core ("strongly recommended", OBIS Manual; obistools lists it as required).
+**When it fires.** Only on Darwin Core input, once per table, listing every recommended term that is absent or blank in every row. The terms are minimumDepthInMeters and maximumDepthInMeters (not asked of the occurrence side of an event and occurrence pair) and, for an Occurrence core, scientificNameID. The OBIS Manual calls scientificNameID strongly recommended; obistools lists it as required, and this tool follows the manual. Sources: obistools check_fields and the OBIS Manual.
+
+**Example.** An occurrence table with all required columns but no scientificNameID column and no depth columns is told that scientificNameID, minimumDepthInMeters and maximumDepthInMeters are recommended.
+
+**What you can do.** Add the columns, for example the persistent identifier of each name from a taxon register, and the depth range of the sample. In /convert a lacking scientificNameID on the Occurrence table is not raised by this rule but by CONV-NAMEID-MISSING; the depth terms are still judged. In /convert this finding is accepted and does not stop the export.
 
 **Citations.**
 
 - [OBIS obistools (R), R/check_fields.R, master (read 2026-10-24)](https://github.com/iobis/obistools/blob/master/R/check_fields.R), check_fields: recommended \<- c("minimumDepthInMeters", "maximumDepthInMeters"); "missing or empty recommended fields are reported as warnings"
 - [OBIS Manual, "Common format issues" (iobis/manual common_formatissues.md; manual.obis.org)](https://manual.obis.org/common_formatissues.html), "Missing required fields": "one (or more) of the eight required terms for OBIS"; "occurrenceID or eventID"; "scientificNameID (strongly recommended)"
 
-### DWC-VOCAB-VALUE
+## DWC-VOCAB-VALUE — A basisOfRecord or occurrenceStatus value is not on the list OBIS accepts
 
 Severity: warning
 
-**What the user sees.** In column "«field»" the value "«value»" (lines «lines») is not on the list OBIS accepts: «allowed». Capitalisation does not matter, but the spelling must be that of the list. Correct the value.
+**What it checks.** A basisOfRecord or occurrenceStatus value is not on the list OBIS accepts. OBIS compares these values with a fixed vocabulary, so a misspelt value can make the record fail the quality control of OBIS.
 
-**What triggers it.** «file»:«lines» field «field» value '«value»': not in the vocabulary obis-qc compares with, in lower case, after OBIS trims the ends: «allowed». basisOfRecord: the eight identifiers of the GBIF vocabulary basis_of_record_2022-02-02 (the obis-qc README also names Event and Taxon; the code reads the vocabulary file); occurrenceStatus: absent, present, notDetected, detected. One finding per value.
+**When it fires.** Only on Darwin Core input, for the columns basisOfRecord and occurrenceStatus. A value is compared in lower case after its ends are trimmed, so capitalisation does not matter but spelling and inner spaces do. basisOfRecord accepts PreservedSpecimen, FossilSpecimen, LivingSpecimen, HumanObservation, MachineObservation, MaterialSample, Occurrence and MaterialCitation (the GBIF vocabulary of 2022-02-02, the file the OBIS quality control reads). occurrenceStatus accepts absent, present, notDetected and detected. Empty cells are DWC-TERM-EMPTY. One finding per distinct wrong value, with its lines; beyond ten distinct values the rest share one finding. Sources: GBIF vocabulary, OBIS Manual, Biocheck.
+
+**Example.** A basisOfRecord cell that reads Human Observation, with a space, is not on the list; HumanObservation is.
+
+**What you can do.** Correct the value to the spelling of the list. In /convert the rule is applied to the tables the converter writes. In /convert this finding blocks the export.
 
 **Citations.**
 
@@ -1141,127 +809,115 @@ Severity: warning
 - [EMODnet Biocheck (R), README, Integrity and Format checks (read 2026-10-24)](https://github.com/EMODnet/EMODnetBiocheck/blob/master/README.md), Format checks: "basisOfRecord does not seem to contain a valid term such as: "PreservedSpecimen", "FossilSpecimen", "LivingSpecimen", "HumanObservation", "MachineObservation", "MaterialSample", "Occurrence""
 - [OBIS obis-qc (Python), obisqc/absence.py, master (read 2026-10-24)](https://github.com/iobis/obis-qc/blob/master/obisqc/absence.py), absence.py: ABSENT_VALUES = {"absent", "notDetected"}, PRESENT_VALUES = {"present", "detected"}; the status is compared in lower case; any other value: record.set_invalid("occurrenceStatus")
 
-### DWC-EVENTID-DUPLICATE
+## DWC-EVENTID-DUPLICATE — In an Event core the same eventID names more than one event
 
 Severity: error
 
-**What the user sees.** In lines «lines» event identifiers repeat (e.g. "«value»"; N repeated in all). Every event needs its own unique eventID, otherwise it is unclear which event the dependent records belong to.
+**What it checks.** In an Event core the same eventID names more than one event. The eventID is the key of an event, and records that point at it cannot say which event they belong to when it repeats.
 
-**What triggers it.** «file»:«lines» eventID '«value»' and N repeated eventID(s) in all, in an Event core (obistools check_eventids: "eventID ... is duplicated"). Every row of a repeated eventID is listed. Not run on an Occurrence core, where one eventID legitimately repeats.
+**When it fires.** Only on Darwin Core input read as an Event core. In a Darwin Core Archive every repeated eventID fires, since the archive has one row per event. In any other table (a flattened sheet repeats the eventID on every depth level) an eventID fires only when its rows disagree on the date or on a coordinate; dates are compared by their parsed value and coordinates as numbers, so 60.5 and 60.50 agree. A repeated eventID whose rows agree is not reported. The finding lists every row of every repeated eventID and counts the ids. It does not run on an Occurrence core, where one eventID may repeat. Source: obistools check_eventids.
+
+**Example.** An event table in which eventID S-12 appears on two lines with two different dates is reported, with both lines.
+
+**What you can do.** Give each event its own eventID, or merge rows that describe the same event. In /convert this finding blocks the export.
 
 **Citations.**
 
 - [OBIS obistools (R), R/check_eventids.R, master (read 2026-10-24)](https://github.com/iobis/obistools/blob/master/R/check_eventids.R), check_eventids: "check duplicate eventIDs" (error: "eventID ... is duplicated"); "check if all parentEventIDs have corresponding eventID" (error: "parentEventID ... has no corresponding eventID")
 
-### DWC-PARENT-DANGLING
+## DWC-PARENT-DANGLING — A parentEventID points at an event that is not in the eventID column of the same table
 
 Severity: error
 
-**What the user sees.** In lines «lines» the parentEventID (e.g. "«value»"; N different in all) points at an event that is not in this table's eventID column. Correct the identifier or add the missing parent event.
+**What it checks.** A parentEventID points at an event that is not in the eventID column of the same table. The hierarchy of events then has a broken link, and a reader cannot rebuild the cruise, station and sample structure.
 
-**What triggers it.** «file»:«lines» parentEventID '«value»' (N different in all) has no matching eventID in the Event core (obistools check_eventids; Biocheck). Not run when the archive was read only in part (IN-DWCA-PARTIAL).
+**When it fires.** Only on Darwin Core input read as an Event core that has a parentEventID column. Every non-blank parentEventID that matches no eventID of the table is listed with its lines, and the finding counts the different missing parents. It does not run when the archive was read only in part (the first 200000 rows, see IN-DWCA-PARTIAL), because the parent may be in a row that was not read. Sources: obistools check_eventids and Biocheck.
+
+**Example.** An event table whose parentEventID cells name CRUISE-A on three lines, while no eventID is CRUISE-A, is reported.
+
+**What you can do.** Correct the identifier, or add the missing parent event as a row. In /convert this finding blocks the export.
 
 **Citations.**
 
 - [OBIS obistools (R), R/check_eventids.R, master (read 2026-10-24)](https://github.com/iobis/obistools/blob/master/R/check_eventids.R), check_eventids: "check duplicate eventIDs" (error: "eventID ... is duplicated"); "check if all parentEventIDs have corresponding eventID" (error: "parentEventID ... has no corresponding eventID")
 - [EMODnet Biocheck (R), README, Integrity and Format checks (read 2026-10-24)](https://github.com/EMODnet/EMODnetBiocheck/blob/master/README.md), Integrity checks: "if the parentEventID field is populated, it must be populated with an existing eventID from the eventID field. Adding to the parentEventID field something different than an existing eventID is incoherent."
 
-### DWC-PARENT-LOOP
+## DWC-PARENT-LOOP — The eventID and parentEventID columns form a circle: an event is its own ancestor
 
 Severity: error
 
-**What the user sees.** In lines «lines» (N in all) the event hierarchy runs in a circle: an event is its own ancestor (e.g. "«value»"). Correct the parentEventID so that the hierarchy ends in an event without a parent.
+**What it checks.** The eventID and parentEventID columns form a circle: an event is its own ancestor. A hierarchy that never reaches a top event cannot be read, and GBIF flags it as an infinite lineage.
 
-**What triggers it.** «file»:«lines» N row(s) lie on a loop of the eventID / parentEventID hierarchy (e.g. eventID '«value»'; GBIF OccurrenceIssue PARENT_EVENT_INFINITE_LINEAGE). A row whose parentEventID equals its own eventID is a loop of one. Linear-time detection.
+**When it fires.** Only on Darwin Core input read as an Event core that has a parentEventID column. Each eventID is followed to its parent, then to that parent, and so on; every row on a circle is listed and counted. A row whose parentEventID equals its own eventID is a circle of one. When an eventID repeats, its first non-blank parent is used. The search visits each event once. Source: the GBIF issue PARENT_EVENT_INFINITE_LINEAGE.
+
+**Example.** Event A has parent B, B has parent C and C has parent A: all three rows are reported.
+
+**What you can do.** Correct the parentEventID of one event on the circle so that the chain ends in an event without a parent. In /convert this finding blocks the export.
 
 **Citations.**
 
 - [GBIF API, enumeration of OccurrenceIssue (read 2026-10-24)](https://api.gbif.org/v1/enumeration/basic/OccurrenceIssue), OccurrenceIssue value PARENT_EVENT_INFINITE_LINEAGE (a loop in the eventID / parentEventID hierarchy)
 
-### DWC-OCCURRENCEID-DUPLICATE
+## DWC-OCCURRENCEID-DUPLICATE — The same occurrenceID is used for more than one record of an Occurrence core
 
 Severity: error
 
-**What the user sees.** In lines «lines» occurrenceIDs repeat (e.g. "«value»"; N repeated in all). The occurrenceID is the key of a record and must be unique; give every record its own identifier.
+**What it checks.** The same occurrenceID is used for more than one record of an Occurrence core. The occurrenceID is the key of a record, and a repeated key makes later updates and links ambiguous.
 
-**What triggers it.** «file»:«lines» occurrenceID '«value»' and N repeated occurrenceID(s) in all (Biocheck: "occurrenceID is unique in the occurrence table", the primary key). Every row of a repeated occurrenceID is listed.
+**When it fires.** Only on Darwin Core input read as an Occurrence core with an occurrenceID column (in an archive without that column, the core id column is used, but not when the table has an eventID column). Every non-blank occurrenceID that appears in more than one row fires; the finding lists every row of every repeated id, counts the ids and shows one example. Source: Biocheck, the occurrenceID is unique in the occurrence table.
+
+**Example.** A table in which occurrenceID occ-0015 appears on lines 16 and 41 is reported with both lines.
+
+**What you can do.** Give each record its own identifier. In /convert a repeat that the conversion already named in the terms of the source sheet (CONV-ID-DUPLICATE for occurrences) is not said a second time by this rule. In /convert this finding blocks the export.
 
 **Citations.**
 
 - [EMODnet Biocheck (R), README, Integrity and Format checks (read 2026-10-24)](https://github.com/EMODnet/EMODnetBiocheck/blob/master/README.md), Integrity checks: "Checks that occurrenceID is unique in the occurrence table" ... "The occurrenceID acts as the Primary Key for the occurrence table, therefore two records with the same occurrenceID cannot exist in the occurrence table."
 
-### DWC-EVENTDATE-NOT-ISO
+## DWC-EVENTDATE-NOT-ISO — Dates in a column headed eventDate are not written in ISO 8601
 
 Severity: warning
 
-**What the user sees.** In column "«field»" the dates in lines «lines» (N in all) are not written in ISO 8601, e.g. "«value»". Darwin Core takes 2011-06-14, 2011-06, 2011, a time such as 2011-06-14T10:00Z, or an interval with a slash (2011-06-14/2011-06-20). Nothing was changed; write the dates that way.
+**What it checks.** Dates in a column headed eventDate are not written in ISO 8601. Darwin Core and OBIS read eventDate as text in that form, so a date such as 14/06/2011 is not understood, or is read in the wrong order.
 
-**What triggers it.** «file»:«lines» field «field»: N value(s) that are not ISO 8601 as Darwin Core eventDate takes it (year, year-month, date, date with a time and an optional zone, or an interval of two such values joined by a slash; first '«value»'). Only a column headed exactly eventDate is read; an xlsx date-formatted cell is not judged. Nothing is changed.
+**When it fires.** On any table with a column headed exactly eventDate (with or without the dwc: prefix), Darwin Core input or not. A cell fires unless it is blank, a missing-value token (NA, N/A, a dash, null, nd) or a valid ISO 8601 value: a year, a year and month, a date, an ordinal or week date, a date with a time and an optional zone (hour 24 is not accepted), a basic form such as 20110614 (only from the year 1700), or an interval of two such values joined by one slash, whose end may be shortened (2011-06-14/20), or an interval with a duration. A spreadsheet cell formatted as a date is not judged. Nothing is changed. The finding lists the lines and one example.
 
-## Across files and chemistry
+**Example.** The cell 14/06/2011 in an eventDate column is reported; 2011-06-14 is accepted.
 
-### XF-DUPLICATE-SAMPLES
+**What you can do.** Write the dates in ISO 8601, for example 2011-06-14 or 2011-06-14/2011-06-20. Nothing is changed in your file. In /convert the rule is applied to the tables the converter writes. In /convert the finding is only shown and never stops the export.
+
+## XF-DUPLICATE-SAMPLES
 
 Severity: info
 
-**What the user sees.** The files «fileA» and «fileB» have N samples in common. Make sure they are not counted twice.
-
-**What triggers it.** «fileA» and «fileB»: N matched samples (same station or position, same depth, same day).
-
-### XF-DATE-CONFLICT
+## XF-DATE-CONFLICT
 
 Severity: warning
 
-**What the user sees.** Station «station» has the same values in «fileA» and «fileB» but different dates («dateA» and «dateB»). One of the dates is probably wrong.
-
-**Sentence added when the finding has the parameter ambiguous.** One of them is a two-digit-year date of a column whose order is open; it was read in the default order, so the conflict may come from the reading.
-
-**What triggers it.** station «station»: «fileA»:«lineA» dated «dateA» vs «fileB»:«lineB» dated «dateB»; at least 2 shared variables are equal. When one of the dates is a two-digit-year date of a column whose order is open (ROW-DATE-YY-AMBIGUOUS), it was read in the default order and the text says so (optional param ambiguous = yes).
-
-### XF-STATION-ALIAS
+## XF-STATION-ALIAS
 
 Severity: info
 
-**What the user sees.** "«nameA»" and "«nameB»" look like the same station written in two ways. Use one name everywhere.
-
-**What triggers it.** «file»: station ids '«nameA»' and '«nameB»' are equal after normalisation (last '/' segment, upper case, spaces removed).
-
-### XF-UNIT-CONFLICT
+## XF-UNIT-CONFLICT
 
 Severity: warning
-
-**What the user sees.** «variable» has the same numbers in «fileA» and «fileB», but one says «unitA» and the other «unitB». These are not the same unit; correct the wrong label.
-
-**What triggers it.** «variable»: «equal» of «matched» matched samples have equal values, but the units differ in dimension: '«unitA»' («fileA») vs '«unitB»' («fileB»).
 
 **Citations.**
 
 - [Lauvset et al. (2024), GLODAPv2.2023, Earth System Science Data 16, 2047](https://essd.copernicus.org/articles/16/2047/2024/), section 3.1 (per-litre to per-kilogram conversion with seawater density)
 - [Fofonoff & Millard (1983), UNESCO Technical Papers in Marine Science 44 (GitHub-hosted copy)](https://raw.github.com/ocefpaf/python-seawater/master/docs/UNESCO-TechPaper44_eo.pdf), PDF p.23, check values of seawater density
 
-### XF-POSITION-SWAP
+## XF-POSITION-SWAP
 
 Severity: warning
 
-**What the user sees.** The positions of stations «stationA» and «stationB» are exchanged between «fileA» and «fileB». One of the files probably has the station names mixed up.
-
-**What triggers it.** stations «stationA» and «stationB»: positions exchanged between «fileA» and «fileB».
-
-### XF-POSITION-CONFLICT
+## XF-POSITION-CONFLICT
 
 Severity: warning
 
-**What the user sees.** Station «station» is at a different position in «files» than in the other files («positions»). Check which coordinates are correct.
-
-**What triggers it.** station «station»: position in «files» lies outside the range seen in the other dataset(s): «positions».
-
-### CHEM-UNIT-PAIR
+## CHEM-UNIT-PAIR
 
 Severity: warning
-
-**What the user sees.** «variable» is given in two units («unitA» and «unitB»), but after conversion the two columns do not agree. One of them is wrong.
-
-**What triggers it.** «file»:«lines» «variable»: «unitA» vs «unitB» inconsistent after conversion with molar masses C 12.011, N 14.007, P 30.974, Si 28.085 g/mol (e.g. «value»).
 
 **Thresholds.**
 
@@ -1270,13 +926,9 @@ Severity: warning
 - molarMass.P = 30.974 g/mol. Source: [CIAAW, Abridged Standard Atomic Weights (2024)](https://ciaaw.org/abridged-atomic-weights.htm), table, "15 P phosphorus 30.974 ± 0.001"
 - molarMass.Si = 28.085 g/mol. Source: [CIAAW, Abridged Standard Atomic Weights (2024)](https://ciaaw.org/abridged-atomic-weights.htm), table, "14 Si silicon 28.085 ± 0.001"
 
-### CHEM-DIC-GT-TA
+## CHEM-DIC-GT-TA
 
 Severity: warning
-
-**What the user sees.** In «group», N of «total» rows have more dissolved inorganic carbon (DIC) than alkalinity (TA), which is unusual in sea water. Check the columns and units.
-
-**What triggers it.** «file»:«lines» «group»: DIC \> TA in N of «total» rows (median TA-DIC «medianDiff»).
 
 **Citations.**
 
@@ -1284,13 +936,9 @@ Severity: warning
 - [Dickson, Sabine & Christian (2007), Guide to Best Practices for Ocean CO2 Measurements, PICES Special Publication 3](https://www.ncei.noaa.gov/access/ocean-carbon-acidification-data-system/oceans/Handbook_2007/Guide_all_in_one.pdf), SOP 2 section 1, PDF p.39 (oceanic DIC 1800–2300 µmol/kg)
 - [Dickson, Sabine & Christian (2007), Guide to Best Practices for Ocean CO2 Measurements, PICES Special Publication 3](https://www.ncei.noaa.gov/access/ocean-carbon-acidification-data-system/oceans/Handbook_2007/Guide_all_in_one.pdf), SOP 3a section 1, PDF p.53 (oceanic TA 2000–2500 µmol/kg)
 
-### CHEM-RANGE
+## CHEM-RANGE
 
 Severity: warning
-
-**What the user sees.** N values of «variable» lie outside the open-ocean range of «min» to «max» «unit» used by Argo quality control. Check the values and the unit; if the sample is from fresh or brackish water, confirm that.
-
-**What triggers it.** «file»:«lines» field «field» «variable»: N value(s) outside «min»..«max» «unit» (e.g. '«value»'); global range test of the cited QC manuals.
 
 **Thresholds.**
 

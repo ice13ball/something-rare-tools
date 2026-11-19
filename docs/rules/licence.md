@@ -5,57 +5,37 @@ Regenerate with `UPDATE_RULES_DOC=1 npx vitest run test/rules/rules-docs-per-too
 
 /licence reads the licence statements of one or several records (DOI or link) and compares them: with each other, with the record in DataCite, and with the data files the repository holds back. It lists only the rules it can raise itself. A rule that /check also raises is described here in the same words.
 
-The list is the rules the tool can raise, found by a static scan of its code, so a few may never fire in practice. Severity is error, warning or info. Every number a rule compares against is listed with its source. A text in guillemets, «name», stands for a value the tool fills in from the finding; N stands for a number; a plural form is written in the plural. The texts are the ones the tool shows (English), unchanged.
+The list is the rules the tool can raise, found by a static scan of its code, so a few may never fire in practice. Severity is error, warning or info. Every number a rule compares against is listed with its source. Each rule has four short parts: what it checks, when it fires, an invented example, and what the person can do.
 
 13 rules.
 
-## Reading the file or record
-
-### IN-RECORD-INACCESSIBLE
+## IN-RECORD-INACCESSIBLE
 
 Severity: error
 
-**What the user sees.** The record on «host» could not be opened (error «status»); it may be private or unpublished. Download its files or metadata and drop them here.
-
-**Wording when the server fails (status 500 to 599).** The server «host» returned an error («status»), so the record could not be opened. This is usually a temporary fault on the server's side: try again later, or download its files or metadata and drop them here.
-
-**Wording when the status is neither 403, 404 nor a server failure.** The record on «host» could not be opened (error «status»). Try again later, or download its files or metadata and drop them here.
-
-**What triggers it.** «file»: HTTP «status» from «host»; record metadata not readable, continuing with what the other sources provided.
-
-### IN-HOST-NOT-ALLOWED
+## IN-HOST-NOT-ALLOWED
 
 Severity: warning
 
-**What the user sees.** A link points to «host», which this tool is not allowed to open. Download the file yourself and drop it here.
-
-**What triggers it.** «file»: host «host» is not on the allowlist (DATA_HOSTS); not fetched.
-
-### IN-FETCH-BLOCKED
+## IN-FETCH-BLOCKED
 
 Severity: warning
 
-**What the user sees.** Your browser could not download from «host». Download the file yourself and drop it here.
-
-**What triggers it.** «file»: fetch from «host» blocked in browser mode (CORS, CSP or network error).
-
-### IN-FETCH-TIMEOUT
+## IN-FETCH-TIMEOUT
 
 Severity: warning
 
-**What the user sees.** «host» did not start to answer within 30 seconds, so the browser stopped waiting. Try again later or switch to server mode.
-
-**What triggers it.** «file»: no response from «host» within 30 s in browser mode; the request was abandoned.
-
-## Licence and metadata
-
-### LIC-TEXT-URI-CONFLICT
+## LIC-TEXT-URI-CONFLICT — A licence statement has both a text and a link, and they do not agree
 
 Severity: warning
 
-**What the user sees.** The licence text ("«text»") and its link point to different licences, the link is not recognised, or the text does not name this licence and says something else. From the text: «textLicence»; from the link: «uriLicence» ("—" = not recognised). Check by hand and state one licence with its own link.
+**What it checks.** A licence statement has both a text and a link, and they do not agree. Either one is wrong, or the text is not about the licence at all.
 
-**What triggers it.** «file» field «field»: text '«text»' reads as «textLicence», link '«uri»' as «uriLicence»; the statement is not classified (text and link differ, the link is not recognised, or the text names no licence and says something else). Check manually.
+**When it fires.** For one statement that has a link, when the text itself offers several licences, or the text and the link read as different licences, or a text with no version names only a licence family against the link of another family, or the link is a licence link the tool has no identifier for while the text names one, or the text names no licence and says more than plain Open Access next to a licence link. For DataCite and Zenodo it also fires when the text is an exact licence name but the link is no licence link and no access value. A text that is empty, plain Open Access or Public Domain next to a CC0 link is neutral and does not fire it. One finding per statement, with the licence read from the text and from the link, a dash meaning not recognised.
+
+**Example.** The text says CC BY 4.0 and the link points to the page of the CC BY-NC 4.0 licence.
+
+**What you can do.** Decide which licence applies and write it once, with its own link and with a text that names the same licence.
 
 **Citations.**
 
@@ -63,66 +43,82 @@ Severity: warning
 - [DataCite Metadata Schema 4.6, 16. Rights](https://datacite-metadata-schema.readthedocs.io/en/4.6/properties/rights/), 16.a rightsURI: "The URI of the license."
 - [Creative Commons wiki, Best practices for attribution](https://wiki.creativecommons.org/wiki/Best_practices_for_attribution), section on licence attribution: "We recommend that you name and provide a link to the license, e.g., CC BY 4.0 ( http://creativecommons.org/licenses/by/4.0 ) for a work licensed under CC BY 4.0."
 
-### LIC-ADDED-CONDITIONS
+## LIC-ADDED-CONDITIONS — A licence text names a licence and then adds conditions to it
 
 Severity: warning
 
-**What the user sees.** The text ("«text»") names the licence «textLicence» but adds conditions to it ("«rest»"), so as written it is no longer that standard licence. Check it by hand and state the licence and any extra conditions clearly.
+**What it checks.** A licence text names a licence and then adds conditions to it. With extra conditions it is no longer the standard licence and cannot be treated as one.
 
-**Sentence added when another source of the statement also leaves something out.** Another string of the same statement (the identifier or the title) also leaves: "«otherRest»".
+**When it fires.** For a statement whose text names a licence, when nothing else contradicts it (the readings of text and link agree) and what is left of the text after the licence name and the neutral wording are taken away contains a restriction marker, such as a limit on commercial use or a duty to ask for permission (words in Polish, English, German and French are looked for). The finding quotes the leftover. When the identifier or the Zenodo title leaves something too, that is added to the finding. A leftover with no restriction marker is LIC-EXTRA-TEXT instead.
 
-**What triggers it.** «file» field «field»: text '«text»' names «textLicence» but the rest '«rest»' adds or negates conditions; the statement is not classified as that licence. Check manually.
+**Example.** The text reads CC BY 4.0, commercial use only with written permission of the authors.
+
+**What you can do.** State the licence alone, or name the extra conditions explicitly as such and say that the data are not under the plain licence.
 
 **Citations.**
 
 - [Creative Commons FAQ](https://creativecommons.org/faq/), Alterations and additions to the license, "Can I change the license terms or conditions?": "if you change the terms and conditions of any Creative Commons license, you must no longer call, label, or describe the license as a “Creative Commons” or “CC” license"
 
-### LIC-EXTRA-TEXT
+## LIC-EXTRA-TEXT — A licence text names a licence and also says something else
 
 Severity: warning
 
-**What the user sees.** The text ("«text»") contains something besides the licence name ("«rest»"). Check by hand whether it changes the licence; until that is clear, do not treat this as the standard licence.
+**What it checks.** A licence text names a licence and also says something else. The extra words may change the licence, so the statement is not read as the standard licence until a person has looked.
 
-**Sentence added when another source of the statement also leaves something out.** Another string of the same statement (the identifier or the title) also leaves: "«otherRest»".
+**When it fires.** For a statement whose text names a licence, when the readings of text and link agree and something is left over after the licence name and the neutral wording are removed, and the leftover has no restriction marker. A leftover with a restriction marker is LIC-ADDED-CONDITIONS instead. The finding quotes the leftover, and the leftover of another string of the same statement (identifier or Zenodo title) is added when there is one.
 
-**What triggers it.** «file» field «field»: text '«text»' contains '«rest»' besides the licence name; the statement is not classified. Check manually whether it changes the licence.
+**Example.** The text reads CC BY 4.0, please contact the data manager.
+
+**What you can do.** Move the extra sentence to the description of the data and leave the licence field with the licence only.
 
 **Citations.**
 
 - [Creative Commons FAQ](https://creativecommons.org/faq/), Alterations and additions to the license, "Can I change the license terms or conditions?": "if you change the terms and conditions of any Creative Commons license, you must no longer call, label, or describe the license as a “Creative Commons” or “CC” license"
 
-### LIC-OTHER-RIGHTS-ENTRY
+## LIC-OTHER-RIGHTS-ENTRY — A repeated rights entry that is no recognised licence stands next to a licence the same record does recognise
 
 Severity: warning
 
-**What the user sees.** Next to the licence «licence», another rights entry says: "«text»". Check whether it restricts or changes the licence.
+**What it checks.** A repeated rights entry that is no recognised licence stands next to a licence the same record does recognise. The other entry may restrict or change the licence.
 
-**What triggers it.** «file» field «field»: a rights entry '«text»' is no recognised licence and no plain access value, next to the recognised licence «licence». Check manually whether it restricts or changes the licence.
+**When it fires.** Once per record, only for the repeated entries of DataCite rightsList and Zenodo rights (never for the fields of an ISO record), when the record has a recognised licence and another repeated entry that is no recognised licence, has no conflict of its own and is not a neutral value: a plain access word, or a notice that only names the creators, the organisations or the publisher of the record. Repeated recognised licences are read as dual licensing and do not fire it. The finding quotes the entry, or its link, and names the recognised licence.
+
+**Example.** A rights list holds CC BY 4.0 and a second entry, Data may not be redistributed without consent.
+
+**What you can do.** Remove the second entry or move it to the description, or state clearly how it relates to the licence.
 
 **Citations.**
 
 - [Creative Commons FAQ](https://creativecommons.org/faq/), Alterations and additions to the license, "Can I change the license terms or conditions?": "if you change the terms and conditions of any Creative Commons license, you must no longer call, label, or describe the license as a “Creative Commons” or “CC” license"
 
-### LIC-AMBIGUOUS
+## LIC-AMBIGUOUS — A licence statement without a link reads as more than one licence
 
 Severity: warning
 
-**What the user sees.** The licence statement ("«text»") can be read as more than one licence («readings»; "—" = a name no identifier exists for), so it cannot be assigned to one licence. Check it by hand and state one licence.
+**What it checks.** A licence statement without a link reads as more than one licence. It cannot be assigned to one licence, so a harvester cannot tell what is allowed.
 
-**What triggers it.** «file» field «field»: statement '«text»' reads as «readings»; it is not classified as one licence. Check manually.
+**When it fires.** For one statement with no link, when its strings (the rights text, the identifier, the title) name different licences, when it names two licences or a licence family and a licence, when a versionless family such as CC BY is read against a named version of another family, or when a recognised name stands next to one the tool has no identifier for. One finding per statement, which lists what it reads as, separated by a slash, a dash meaning a name with no identifier. The same text with a link is LIC-TEXT-URI-CONFLICT.
+
+**Example.** The text reads CC BY 4.0 (CC BY-NC) and no link is given.
+
+**What you can do.** State one licence, with its identifier and link. If both licences really apply, list them as separate entries and say so in the description.
 
 **Citations.**
 
 - [DataCite Metadata Schema 4.6, 16. Rights](https://datacite-metadata-schema.readthedocs.io/en/4.6/properties/rights/), 16. Rights, allowed values, examples, other constraints: "Use the complete title of a license and include version information if applicable."
 - [DataCite Metadata Schema 4.6, 16. Rights](https://datacite-metadata-schema.readthedocs.io/en/4.6/properties/rights/), 16.b rightsIdentifier: "A short, standardized version of the license name."
 
-### LIC-RESTRICTION-CONFLICT
+## LIC-RESTRICTION-CONFLICT — The record names an open licence and also carries a restriction code that says the data are restricted
 
 Severity: warning
 
-**What the user sees.** The metadata names an open licence («licence») together with the restriction code «codes». INSPIRE expects the code "otherRestrictions" with a description of the conditions; check whether «codes» is meant as a real restriction and, if not, replace it.
+**What it checks.** The record names an open licence and also carries a restriction code that says the data are restricted. The two cannot both describe the data.
 
-**What triggers it.** «file»: restriction code(s) «codes» (MD_RestrictionCode) together with the open licence statement '«licence»'; INSPIRE TG Req. C.18 expects otherRestrictions plus otherConstraints describing the conditions. Check whether the code is a real restriction.
+**When it fires.** Once per record, when a record carries a restrictive ISO restriction code (copyright, patent, patentPending, trademark, intellectualPropertyRights or restricted) and the record names an open licence: a recognised open identifier, or an open licence family as written, even without a version. The codes license and otherRestrictions never count, the first because it is the normal way to say that a licence applies and the second because it only points to the constraints text. A non-commercial or no-derivatives licence is not open here. The finding lists the codes and the licence.
+
+**Example.** A record states CC BY 4.0 in otherConstraints and the code copyright in its restriction code.
+
+**What you can do.** Replace the code with license, or with otherRestrictions and a description of the conditions as INSPIRE expects, if the data are in fact restricted, state the restriction instead of the open licence.
 
 **Citations.**
 
@@ -131,34 +127,46 @@ Severity: warning
 - [ISO/TS 19139 code lists (gmxCodelists.xml), MD_RestrictionCode](https://standards.iso.org/iso/19139/resources/gmxCodelists.xml), MD_RestrictionCode "restricted": "withheld from general circulation or disclosure"
 - [Creative Commons FAQ](https://creativecommons.org/faq/), How do CC licenses operate?: "CC licenses are operative only when applied to material in which a copyright exists, and even then only when a particular use would otherwise not be permitted by copyright."
 
-### LIC-FILES-HELD-BACK
+## LIC-FILES-HELD-BACK — Some files of the dataset are under restricted access or an embargo
 
 Severity: warning
 
-**What the user sees.** Some files of this dataset are restricted or under embargo: «files». Access to them is decided by the repository, not by the licence in the metadata, so the licence verdict covers only the open files. If these are the data, state in the description how they can be obtained.
+**What it checks.** Some files of the dataset are under restricted access or an embargo. Whatever licence the metadata states, the repository decides who may get these files.
 
-**What triggers it.** «file»: restricted or embargoed files («files»); the stated licence does not open them, so the licence result covers the open files only.
+**When it fires.** Once per record, when a Dataverse record lists files that are restricted or embargoed. The finding names up to ten of the files and counts the rest. The licence verdict of the tool covers only the open files, and the page says so.
 
-### LIC-DATACITE-EMPTY
+**Example.** A Dataverse dataset has four files, and two of them are marked restricted.
+
+**What you can do.** If the held files are the data, say in the description how and when they can be obtained, or open them.
+
+## LIC-DATACITE-EMPTY — The DOI registration record at DataCite states no licence
 
 Severity: warning
 
-**What the user sees.** The DOI registration record (DataCite) states no licence. Other records: «licence» ("—" = none states one, or the record could not be read). Add the licence to the DOI record.
+**What it checks.** The DOI registration record at DataCite states no licence. Harvesters read that record first, so the data look unlicensed to them.
 
-**What triggers it.** «file»: DataCite rightsList is empty; other records state '«licence»' ('—' = none states one, or the main record could not be read).
+**When it fires.** Once per record, when the DataCite record was read and has no licence statement, and either another source of the record states a licence or some source could not be read. The finding names the licence of the other record, and a dash when none states one or the main record could not be read. It is not counted as a contradiction between records, because silence contradicts nothing.
+
+**Example.** The Zenodo record of a dataset says CC BY 4.0, and the DataCite record of its DOI has an empty rights list.
+
+**What you can do.** Add the licence to the DOI record at the registration agency.
 
 **Citations.**
 
 - [OpenAIRE Guidelines for Data Archives, 16. Rights (MA)](https://guidelines.openaire.eu/en/latest/data/field_rights.html), 16. Rights (MA), note: "In particular OpenAIRE also recommends including license information if available."
 - [OpenAIRE Guidelines for Data Archives, 16. Rights (MA)](https://guidelines.openaire.eu/en/latest/data/field_rights.html), 16. Rights (MA), note: "Mandatory when applicable property in OpenAIRE instead of optional in DataCite."
 
-### LIC-MISMATCH
+## LIC-MISMATCH — Two records, or two fields of one record, state different licences
 
 Severity: warning
 
-**What the user sees.** Two records state different licences («licenceA» and «licenceB»). Make them the same.
+**What it checks.** Two records, or two fields of one record, state different licences. A reader cannot tell which one applies.
 
-**What triggers it.** «file»: licence mismatch between records: «licenceA» vs «licenceB».
+**When it fires.** Once per record (only the first disagreeing pair is reported), when two sources that each have a recognised licence share none of them, or when different recognised licences stand in different fields of one source, outside the repeated rights entries a publisher offers on purpose. Records of one deposit, such as a Zenodo record and the DataCite record of its DOI, are compared to each other. Statements that are not recognised do not take part. The finding names the two identifiers.
+
+**Example.** The catalogue record says CC BY 4.0 and the DataCite record says CC BY-SA 4.0.
+
+**What you can do.** Make the licence the same in every record of the dataset.
 
 **Citations.**
 

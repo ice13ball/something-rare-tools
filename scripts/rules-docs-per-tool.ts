@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { LOAD_FAILURES } from '../src/core/licence/failure';
-import { applyPlurals } from '../src/core/i18n/plural';
+import { RULE_DOCS } from '../src/core/rules/docs';
 import { RULES } from '../src/core/rules/registry';
+import type { RuleDoc } from '../src/core/rules/docs/types';
 import type { Citation, RuleDef } from '../src/core/types';
 import { emittedBy, scanProject } from './rules-scan';
 import type { Scan } from './rules-scan';
@@ -19,15 +20,10 @@ import type { Scan } from './rules-scan';
  *  - RUNTIME_BUILT: ids a scan cannot see because the code builds them at run time. None exists today (every raise names its id in a string literal); the
  *    mechanism stays so that a future one is written down here and tested against the registry, not skipped.
  *
- * THE TEXT of a rule is the registry's, as it is: the title and explanation a user sees (the English `plain` wording and its variants), the technical
- * text, the thresholds with their sources, the citations. The generator adds no sentence about any rule. The registry has no separate title or advice
- * field, so none is printed: the advice a user gets is part of the plain wording.
- *
- * PLACEHOLDERS: registry texts are templates filled from a finding. In a reference there is no finding, so they are rendered as neutral text:
- *  - a plural token {+count:row|rows} becomes its last (plural) form, "rows";
- *  - {threshold.name} becomes the rule's own threshold value, the number the check compares against;
- *  - {count}, {lineCount}, any parameter whose name ends in "count": "N";
- *  - every other {name}: the name in guillemets, «lines», «field»: a stand-in for what the tool fills in from the finding.
+ * THE TEXT of a rule is the hand-written description in src/core/rules/docs/<family>.ts (checks, fires, example, action: see docs/types.ts), checked
+ * against the code that raises the rule. The generator carries no prose about any rule: it assembles the stored descriptions with the registry's
+ * facts (severity, export policy, thresholds with their sources, citations). The title of a rule is the first sentence of its `checks`. A rule whose
+ * family is still unwritten (see PENDING_FAMILIES in test/rules/rule-docs.test.ts) is printed without the description fields.
  */
 
 export type Tool = 'check' | 'licence' | 'collection' | 'convert';
@@ -78,31 +74,7 @@ const HEAD: Record<Tool, string> = {
 const HOW_TO_READ =
   'The list is the rules the tool can raise, found by a static scan of its code, so a few may never fire in practice. ' +
   'Severity is error, warning or info. Every number a rule compares against is listed with its source. ' +
-  'A text in guillemets, «name», stands for a value the tool fills in from the finding; N stands for a number; a plural form is written in the plural. ' +
-  'The texts are the ones the tool shows (English), unchanged.';
-
-const CATEGORY_TITLE: Record<RuleDef['category'], string> = {
-  input: 'Reading the file or record',
-  A: 'Licence and metadata',
-  B: 'Rows, Darwin Core and conversion',
-  C: 'Across files and chemistry',
-};
-const CATEGORIES: readonly RuleDef['category'][] = ['input', 'A', 'B', 'C'];
-
-/* ---------- placeholders ---------- */
-
-export function neutral(text: string, rule: RuleDef): string {
-  const plurals = applyPlurals('en', text, () => undefined);
-  return plurals.replace(/\{([A-Za-z_][\w.]*)\}/g, (_whole, name: string) => {
-    if (name.startsWith('threshold.')) {
-      const t = rule.thresholds?.find((x) => x.name === name.slice('threshold.'.length));
-      if (!t) throw new Error(`${rule.id}: no threshold ${name}`);
-      return String(t.value);
-    }
-    if (/count$/i.test(name)) return 'N';
-    return `«${name}»`;
-  });
-}
+  'Each rule has four short parts: what it checks, when it fires, an invented example, and what the person can do.';
 
 /** Markdown-safe text: the characters that would start emphasis, a link or HTML are escaped. */
 const md = (s: string): string => s.replace(/\\/g, '\\\\').replace(/[*<>[\]]/g, (c) => `\\${c}`).replace(/\n+/g, ' ').trim();
@@ -138,31 +110,24 @@ export function membership(): Record<Tool, { ids: string[]; sites: Map<string, s
 
 /* ---------- one rule ---------- */
 
-function variants(rule: RuleDef, tool: Tool): [string, string][] {
-  const v: [string, string][] = [];
-  const n = (t: Record<string, string>): string => neutral(t.en, rule);
-  if (rule.plainByStatus) {
-    v.push(['Wording when the server fails (status 500 to 599)', n(rule.plainByStatus.server)]);
-    v.push(['Wording when the status is neither 403, 404 nor a server failure', n(rule.plainByStatus.other)]);
-  }
-  if (rule.plainDataciteNotCompared) v.push(['Wording when the DataCite comparison could not be made', n(rule.plainDataciteNotCompared)]);
-  if (rule.plainCollection && tool === 'collection') v.push(['Wording in Collection review', n(rule.plainCollection)]);
-  if (rule.plainConvert && tool === 'convert') v.push(['Wording when the converter waits for the answer of the person', n(rule.plainConvert)]);
-  if (rule.plainTime) v.push(['Wording when the column holds times of day', n(rule.plainTime)]);
-  if (rule.plainOtherRest) v.push(['Sentence added when another source of the statement also leaves something out', n(rule.plainOtherRest)]);
-  for (const extra of rule.plainIf ?? []) v.push([`Sentence added when the finding has the parameter ${extra.param}`, n(extra.plain)]);
-  return v;
+/** The title of a rule: the first sentence of its description's `checks`. */
+export function titleOf(doc: RuleDoc): string {
+  const m = /^.*?[.!?](?=\s|$)/s.exec(doc.checks.trim());
+  return (m ? m[0] : doc.checks.trim()).replace(/[.]$/, '');
 }
 
 function ruleSection(rule: RuleDef, tool: Tool): string[] {
-  const lines: string[] = ['', `### ${rule.id}`, ''];
+  const doc = RULE_DOCS[rule.id];
+  const lines: string[] = ['', `## ${rule.id}${doc ? ` — ${md(titleOf(doc))}` : ''}`, ''];
   const facts = [`Severity: ${rule.severity}`];
   if (tool === 'convert') facts.push(`Export policy: ${rule.exportPolicy}`);
   lines.push(facts.join(' · '), '');
-  lines.push(`**What the user sees.** ${md(neutral(rule.plain.en, rule))}`, '');
-  for (const [label, text] of variants(rule, tool)) lines.push(`**${label}.** ${md(text)}`, '');
-  lines.push(`**What triggers it.** ${md(neutral(rule.technical, rule))}`, '');
-  if (rule.technicalTime !== undefined) lines.push(`**What triggers it, for times of day.** ${md(neutral(rule.technicalTime, rule))}`, '');
+  if (doc) {
+    lines.push(`**What it checks.** ${md(doc.checks)}`, '');
+    lines.push(`**When it fires.** ${md(doc.fires)}`, '');
+    lines.push(`**Example.** ${md(doc.example)}`, '');
+    lines.push(`**What you can do.** ${md(doc.action)}`, '');
+  }
   if (rule.thresholds?.length) {
     lines.push('**Thresholds.**', '');
     for (const t of rule.thresholds) lines.push(`- ${md(t.name)} = ${t.value} ${md(t.unit)}. Source: ${link(t.citation)}`);
@@ -195,12 +160,7 @@ export function toolDoc(tool: Tool, ids: readonly string[]): string {
     '',
     `${rules.length} rules.`,
   ];
-  for (const cat of CATEGORIES) {
-    const inCat = rules.filter((r) => r.category === cat);
-    if (!inCat.length) continue;
-    out.push('', `## ${CATEGORY_TITLE[cat]}`);
-    for (const r of inCat) out.push(...ruleSection(r, tool));
-  }
+  for (const r of rules) out.push(...ruleSection(r, tool));
   out.push('');
   return out.join('\n');
 }

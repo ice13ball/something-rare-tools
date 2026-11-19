@@ -12,8 +12,8 @@ const ROOT = join(__dirname, '..', '..');
 const ids = new Set(RULES.map((r) => r.id));
 const generated = perToolDocs();
 const onDisk = (tool: Tool): string => readFileSync(join(ROOT, docFile(tool)), 'utf8');
-/** The rule ids a file documents: its `### ID` headings. */
-const namedIn = (text: string): string[] => [...text.matchAll(/^### (\S+)$/gm)].map((m) => m[1]);
+/** The rule ids a file documents: its `## ID` headings. */
+const namedIn = (text: string): string[] => [...text.matchAll(/^## (\S+?)(?: — .*)?$/gm)].map((m) => m[1]);
 
 describe('docs/rules/<tool>.md', () => {
   it.each(TOOLS)('%s is up to date with the registry and the code paths', (tool) => {
@@ -60,7 +60,7 @@ describe('docs/rules/<tool>.md', () => {
       const text = onDisk(tool);
       for (const id of namedIn(text)) {
         const r = RULES.find((x) => x.id === id)!;
-        const section = text.split(`\n### ${id}\n`)[1].split('\n### ')[0];
+        const section = text.split('\n## ').find((p) => p.startsWith(`${id}\n`) || p.startsWith(`${id} — `))!;
         for (const t of r.thresholds ?? []) {
           expect(section, `${id} ${t.name}`).toContain(`${t.name} = ${t.value}`);
           expect(section).toContain(t.citation.url);
