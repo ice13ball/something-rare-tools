@@ -41,12 +41,12 @@ describe('docs/rules/<tool>.md', () => {
     expect(namedIn(onDisk(tool)).sort()).toEqual([...membership()[tool].ids].sort());
   });
 
-  it('the release notes give the per-tool rule counts the generator lists', () => {
+  it('the v1.1.0 release notes keep the per-tool rule counts of the 1.1.0 release', () => {
     const notes = readFileSync(join(ROOT, 'docs', 'releases', 'v1.1.0.md'), 'utf8');
     const m = notes.match(/list (\d+) rules for \/check, (\d+) for \/licence, (\d+) for \/collection and (\d+) for \/convert/);
     expect(m, 'per-tool count sentence in docs/releases/v1.1.0.md').not.toBeNull();
-    const counts = membership();
-    expect(m!.slice(1, 5).map(Number)).toEqual(TOOLS.map((t) => counts[t].ids.length));
+    // v1.1.0 is released (tag v1.1.0, 5b49cd3): its notes keep the counts the generator gave then. Rules added later go to the next notes.
+    expect(m!.slice(1, 5).map(Number)).toEqual([121, 13, 14, 201]);
   });
 
   it('ids built at run time exist in the registry', () => {
