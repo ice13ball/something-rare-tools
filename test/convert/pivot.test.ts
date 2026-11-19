@@ -433,6 +433,13 @@ describe('a merged parameter cell in a long workbook (round 4 K1)', () => {
     expect(note?.lines).toEqual([3, 4]);
     expect(note?.params).toMatchObject({ count: 2, column: 'Parameter' });
   });
+  it('through convert(): the merged note is in the findings and nothing is blocked for a missing parameter', () => {
+    const file = pivotConvertFile(book([{ s: { r: 1, c: 2 }, e: { r: 3, c: 2 } }]));
+    const r = convert({ sheets: [sheetInput(file, { profile: { depthIds: true } })] });
+    expect(ids(r)).toContain('ROW-LONG-PARAMETER-MERGED');
+    expect(ids(r)).not.toContain('CONV-LONG-NO-PARAMETER');
+    expect(r.findings.find((f) => f.ruleId === 'ROW-LONG-PARAMETER-MERGED')?.lines).toEqual([3, 4]);
+  });
   it('without the merge the two rows are still blocked as before', () => {
     const file = pivotConvertFile(book([]));
     expect(file.sheets[0].pivot?.unnamed).toEqual([3, 4]);

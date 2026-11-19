@@ -137,6 +137,7 @@ function detectLong(sheet: RawSheet, proposals: readonly ColumnProposal[], decim
     const distinct = new Set<string>();
     let n = 0;
     for (const r of sheet.rows) {
+      // (detection only: it fills any candidate column, also on rows with no value; buildLong and the pivot fill only the parameter column, only on rows with a value)
       // a name merged down several rows of a workbook is the name of each (the merged-away cells read as blank): without it a sheet whose every parameter is merged never repeats, and is not seen as long
       const c = r.cells[col] ?? mergedValue(sheet, col, r.line) ?? null;
       if (isBlankCell(c)) continue;

@@ -93,7 +93,7 @@ describe('ROW-LONG-NO-PARAMETER and ROW-LONG-PARAMETER-MERGED (round 4 K1)', () 
   const rows = [hdr, ['A', 54.5, 18.5, '2021-06-01', 'Nitrate', 'umol/l', 1.1], ['B', 54.5, 18.6, '2021-06-01', null, 'umol/l', 1.2], ['C', 54.5, 18.7, '2021-06-01', null, 'umol/l', 1.3], ['D', 54.5, 18.8, '2021-06-01', 'Silicate', 'umol/l', 2.1]];
   it('a parameter cell merged over rows 2-4 applies to all three rows, with a note naming lines 3 and 4', () => {
     const { dataset, findings } = book(rows, [{ s: { r: 1, c: 4 }, e: { r: 3, c: 4 } }]);
-    expect(dataset.rows.flatMap((r) => Object.values(r.values))).toHaveLength(4);
+    expect(dataset.rows.flatMap((r) => Object.keys(r.values)).sort()).toEqual(['Nitrate', 'Nitrate', 'Nitrate', 'Silicate']);
     const f = findings.filter((x) => x.ruleId === 'ROW-LONG-PARAMETER-MERGED');
     expect(f).toHaveLength(1);
     expect(f[0].lines).toEqual([3, 4]);

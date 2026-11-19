@@ -317,19 +317,44 @@ function scanUnitsRow(header: readonly string[], rows: readonly RawRow[], decima
   return { header: out, line: first.line, changed, failing, plainOk, ...(example === undefined ? {} : { example }) };
 }
 
-const rowsByLine = new WeakMap<RawSheet, Map<number, RawRow>>();
+interface MergeIndex {
+  byLine: Map<number, RawRow>;
+  /** per column, its vertical merges sorted by top line (merges never overlap) */
+  byColumn: Map<number, { from: number; to: number }[]>;
+}
+const mergeIndexOf = new WeakMap<RawSheet, MergeIndex>();
 /**
  * A workbook cell merged down a column holds its value only in the top cell; the cells below read as blank. The value of the merge that covers `line` in column `index`
  * (the top cell's), or undefined when no vertical merge covers it, the line is the top cell itself, or the top cell is blank. Only the merge's own column is ever read.
  */
 export function mergedValue(sheet: RawSheet, index: number, line: number): RawCell | undefined {
-  const m = sheet.mergedDown?.find((x) => x.index === index && x.from < line && line <= x.to);
-  if (m === undefined) return undefined;
-  let byLine = rowsByLine.get(sheet);
-  if (byLine === undefined) {
-    byLine = new Map(sheet.rows.map((r) => [r.line, r]));
-    rowsByLine.set(sheet, byLine);
+  if (sheet.mergedDown === undefined) return undefined;
+  let ix = mergeIndexOf.get(sheet);
+  if (ix === undefined) {
+    const byColumn = new Map<number, { from: number; to: number }[]>();
+    for (const m of sheet.mergedDown) {
+      const list = byColumn.get(m.index);
+      if (list === undefined) byColumn.set(m.index, [{ from: m.from, to: m.to }]);
+      else list.push({ from: m.from, to: m.to });
+    }
+    for (const list of byColumn.values()) list.sort((a, b) => a.from - b.from);
+    ix = { byLine: new Map(sheet.rows.map((r) => [r.line, r])), byColumn };
+    mergeIndexOf.set(sheet, ix);
   }
-  const top = byLine.get(m.from)?.cells[index] ?? null;
+  const list = ix.byColumn.get(index);
+  if (list === undefined) return undefined;
+  // the last merge that starts above `line`
+  let lo = 0;
+  let hi = list.length - 1;
+  let at = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (list[mid].from < line) {
+      at = mid;
+      lo = mid + 1;
+    } else hi = mid - 1;
+  }
+  if (at < 0 || line > list[at].to) return undefined;
+  const top = ix.byLine.get(list[at].from)?.cells[index] ?? null;
   return top === null || (typeof top === 'string' && top.trim() === '') ? undefined : top;
 }
