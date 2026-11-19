@@ -66,3 +66,36 @@ The plan writer checked the spec against this branch's code and SheetJS 0.20.3. 
 - **V3 widened**: every distinct text in a count column is listed, grouped by text, and answered per text: "absence", "leave out" or "presence, text to remarks". No text is preselected; absence words are not a guess the tool makes.
 - **V4**: the IDs do not change. The note on how a repeated code's ID is built goes where round 3 states the own-records ID rule, and the tips text is corrected.
 - **R3**: the century of a two-digit year stays a one-time acceptance per column.
+
+## 8. Rulings made while executing (from the SDD ledger)
+
+Each line gives what was decided, why, and what it costs if wrong.
+
+- accept-level rules that follow from the person's own answer (CONV-ROW-COPIES-DROPPED/-KEPT, CONV-QUANTITY-REPEATED-ONCE, CONV-OWN-RECORDS, CONV-POSITION-DECLARED, CONV-QUANTITY-REAL-COUNTS) stay accept this round — no regression risk; a redundant click at worst — revisit with Michał.
+- CONV-SEAFLOOR-SIGNS accept for both sources — the converter cannot tell who set the direction — cost: one click when the person set it.
+- V3 gets a per-column "same answer for every text" control, not preselected; "absence" stays offered for every text (the person's call) — cost if wrong: one more control.
+- R2 asking about most legacy Polish files is accepted (1250 vs ISO-8859-2 truly differ on ą ś ź); the acceptance run counts how often — cost: one click per such file.
+- rule-count pins are relative — the plan assumed converter 133 / other 112; main has converter 136 (CONV-DATE-DECLARED, -INVALID, -HELD) / other 112. Each task bumps from the value it finds — cost: none.
+- minors parked except M1 (policy.ts header sentence: policy follows the rule, not the finding's severity) → carried into Task 2.
+- CONV-QUANTITY-REAL-COUNTS stays show (it is show today; the earlier ruling list was wrong to call it accept) — cost: none.
+- join-appended description columns set to ignore by the tool count as proposed (accept) — the tool chose them — cost: one acceptance.
+- CONV-TAXON-ATTRIBUTE-IGNORED excludes the person's columns instead of a split — CONV-COLUMN-IGNORED already names them — cost: none.
+- I3 — drop the "set ignore yourself" clause in all four languages; accepting the finding IS the person's answer — cost: none.
+- I4 — columns named by YEAR/NUMBER/TAXON-ATTRIBUTE findings go to `taken`, so they are not listed twice — cost: none.
+- minors 1, 2, 4, 5 fixed in the same round; proposal caching in Held parked (perf only).
+- R3 "one acceptance per column" → carried to Task 7: the export gate accepts per rule; the ROW-DATE-YYMMDD text must say one acceptance covers the columns it names (each named) — cost: none.
+- only '1.250,5' settles; a comma-thousands cell keeps the question and is named in it (thousandsSeen) — cost: one question where the answer is clear. Fix round 2 → same implementer.
+- a column the person confirmed at the old proposal counts as untouched and may take the new proposal after the answer — its cells read differently now — cost: one re-check by the person, visible on the page.
+- M3 (strict NUL rule misses some BOM-less UTF-16) accepted — not a regression, brief-mandated — cost: such files behave as before.
+- the golden expected.json update is held to the deploy step and done by a targeted scripted replacement of that one expectation (no reading of data by hand), with the AI-Wall session (Michał's authority) told first because the golden set holds IO PAN files — cost: deploy waits for that one message.
+- a column holds two independent answers — slash order (round 3 dayMonthOrder dmy|mdy) and two-digit order (new slot ymd|dmy|mdy) — each checked only against its own cells; Task 8 wires both on the page and in the companion — cost: one more field.
+- ROW-DATE-UNPARSEABLE keeps no leave-out answer (unchanged behaviour; the person fixes the cell) — cost: an edit of the file for such rows; candidate for a later round. Task 10: complete (46db564..ac1cc9c)
+- a missing-value code must not reach the archive as a depth/value after one acceptance. In /convert ROW-MISSING-CODE blocks, with an answer "treat as missing" (cells not written, listed in the not-written ledger) — fix round after the investigation — cost: one more question for files with codes.
+- crossfile compares open-direction datasets on absolute depth (same as rows.ts range rule); cross-file date conflict notes YY ambiguity; + /convert missing-code block with 'treat as missing' answer → Task 13 fix round 1.
+- two answers (missing | real), none preselected, both in the companion — cost: none. Pins for Tasks 14/16 relative (conv now 140). Fix round 2 → same implementer.
+- 'absence' follows the existing zero path (absent + individualCount 0 with the full-list tick; otherwise not written as zero, listed) — consistent with how 0 is written — cost: none.
+- I1 — store count-text answers per column (hash + column index), and a column-wide answer as a column line; reload applies each only to its column — cost: none. I2 — widen the scan to dataset.ts, checks/rows.ts, convert/pivot.ts, convert/dateOrder.ts; ROW-LONG-PARAMETER-MERGED → accept (a reader decision: the tool fills a merged value into rows) — cost: one acceptance on merged files. M1 — drop answers whose count went stale from page state after the pass that found them stale (the question is shown) — cost: none. M2/M3 parked.
+- ROW-DEPTH-SIGN, ROW-LONG-KEY-EXTENDED, ROW-LONG-VALUE-SKIPPED → accept (tool default / reader decision; moot where /check-only) — cost: up to three more acceptances on /convert. Old-format line ambiguity → strict anchoring. Fix wave round 2 → same implementer.
+- regroup the question per text (columns listed), keep per-column storage (I1); one click answers all listed columns — cost: none. Fix wave round 3 → same implementer; then a VPS delta for faroe/sargassum.
+- per-column override inside a finding left out (column control covers ≥2 open texts) — cost: rare case of one text in a column that the person wants answered differently from sibling columns. VPS delta on 2b81bad dispatched.
+- Golden expected.json: one entry (gn-f43e8925) changed by script from ROW-DATE-YYMMDD/info to ROW-DATE-YY-AMBIGUOUS/warning. This is the intended Task 7 change, approved by the AI-Wall session under Michał's authority on 19.11. No data was read and a backup is kept beside the file.
