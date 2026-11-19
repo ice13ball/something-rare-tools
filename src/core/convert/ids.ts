@@ -18,8 +18,9 @@ import type { AddedColumn, GroupPart } from './sampleGroups';
  *   occurrenceID     wide: `<sample eventID>:<exact species header>`
  *                    long: the user's occurrenceID column, else `<sample eventID>:<exact taxon cell>[:<lifeStage from the lifeStage column>]`
  *
- * ⛔ A SAMPLE's ID is NEVER derived from depth, from row order or from a WoRMS name. The only generated codes are the one-time proposal below,
- * which the user checks and uploads again; from then on the ID is the user's own code, and the converter never regenerates it silently.
+ * ⛔ A SAMPLE's ID is the user's own code, NEVER derived from row order or from a WoRMS name. The one exception is a code repeated at one station on different visits (CONV-ID-REVISIT):
+ * the visit is added, `<station>:<date>[T<time>][:<depth>m]:<code>`, the time and the depth only when the date alone does not tell the visits apart (visitLevel, visitQualifier). The only other
+ * generated codes are the one-time proposal below, which the user checks and uploads again; from then on the ID is the user's own code, and the converter never regenerates it silently.
  *
  *   profile level eventID (stage 6)   `<station eventID>:<code>` with the sheet's code column; without one, `<station eventID>:<depth as written>m` (`<pressure as written>dbar` without a depth) ONLY with the user's explicit
  *                    approval for that sheet (the pressure as written when the sheet has no depth column). The one exception to the rule above, and never from the order of the rows

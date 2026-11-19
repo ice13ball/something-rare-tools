@@ -8,6 +8,9 @@ import { visitLevel, visitQualifier } from '../../src/core/convert/ids';
 import { policyOf } from '../../src/core/convert/policy';
 import { renderConvertPlain } from '../../src/core/rules/convert';
 import type { Finding } from '../../src/core/types';
+import { TIP_TEXTS } from '../../src/core/i18n/tips-text';
+import { parseXml } from '../../src/core/metadata/xml';
+import { exportSheet } from './exportHelpers';
 import { fileOf, sheetInput } from './helpers';
 import type { Cell } from './helpers';
 
@@ -170,5 +173,40 @@ describe('CONV-ID-REVISIT texts', () => {
     expect(renderConvertPlain(f, 'de')).toMatch(/^1 Probencode wird.*enthält: Datum\./);
     expect(renderConvertPlain(f, 'fr')).toMatch(/^1 code d'échantillon sert.*contient : date\./);
     for (const [n, pl] of [[2, /^2 kody próbek są użyte/], [5, /^5 kodów próbek jest użytych/], [22, /^22 kody próbek są użyte/]] as const) expect(renderConvertPlain({ ...f, params: { ...f.params, count: n } }, 'pl')).toMatch(pl);
+  });
+});
+
+describe('the texts and the archive say how a visit ID is made (CONV-ID-REVISIT)', () => {
+  const steps = (eml: string) => [...parseXml(eml, 'eml.xml').getElementsByTagName('methodStep')].map((x) => x.textContent?.trim() ?? '');
+  const DEPTH_HEADER = ['Station', 'Sample', 'Date', 'Latitude', 'Longitude', 'Calanus finmarchicus', 'Depth [m]'];
+
+  it('a code repeated at one depth-told visit: the IDs are pinned as before and the methods say it once for the sheet', async () => {
+    const rows: Cell[][] = [['A', '1', '2021-06-01', 1, 2, 4, 5], ['A', '1', '2021-06-01', 1, 2, 5, 20]];
+    const e = await exportSheet(DEPTH_HEADER, rows, { quantity: { kind: 'count' } });
+    expect(e.result.events.filter((x) => x.eventType === 'sample').map((x) => x.id)).toEqual(['A:2021-06-01:5m:1', 'A:2021-06-01:20m:1']);
+    const told = steps(e.eml).filter((t) => t.includes('told apart by its visit'));
+    expect(told).toHaveLength(1);
+    expect(told[0]).toMatch(/^Sheet .* of .*: a sample code repeated at one station is told apart by its visit; sample eventID = <station>:<date>\[T<time>\]\[:<depth>m\]:<code>$/);
+  });
+
+  it('a sheet with no repeated code has no such methods line and the IDs are the codes', async () => {
+    const e = await exportSheet(DEPTH_HEADER, [['A', '1', '2021-06-01', 1, 2, 4, 5], ['A', '2', '2021-06-01', 1, 2, 5, 20]], { quantity: { kind: 'count' } });
+    expect(e.result.events.filter((x) => x.eventType === 'sample').map((x) => x.id)).toEqual(['1', '2']);
+    expect(e.result.methodSteps.filter((t) => t.includes('told apart'))).toEqual([]);
+    expect(steps(e.eml).filter((t) => t.includes('told apart'))).toEqual([]);
+  });
+
+  it('the tips in all four languages name the visit and no longer claim an ID is never made from depth', () => {
+    const all = TIP_TEXTS as Record<string, Record<string, string>>;
+    for (const lang of ['en', 'pl', 'de', 'fr']) {
+      const t = all[lang]['tip.convertStationPrefix.logic'];
+      expect(t, lang).toContain('CONV-ID-REVISIT');
+      expect(t, lang).toContain('[:');
+    }
+    expect(all.en['tip.convertStationPrefix.logic']).toContain('the visit is added');
+    expect(all.en['tip.convertStationPrefix.logic']).not.toContain('never made from depth');
+    expect(all.pl['tip.convertStationPrefix.logic']).not.toContain('nigdy nie powstaje z głębokości');
+    expect(all.de['tip.convertStationPrefix.logic']).not.toContain('entsteht nie aus Tiefe');
+    expect(all.fr['tip.convertStationPrefix.logic']).not.toContain('jamais fabriqué à partir de la profondeur');
   });
 });

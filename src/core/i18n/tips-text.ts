@@ -285,7 +285,7 @@ No findings only means that no problems were found in the checked categories.`,
   'tip.convertStationPrefix.does': `Makes sample IDs unique when the same sample code is used at several stations.`,
   'tip.convertStationPrefix.logic': `• Off: the ID of a sample is your sample code.
 • On: the ID is the station ID, a colon and your code.
-• The ID of a sample is never made from depth, from row order or from a taxon name lookup (the ID of a profile level uses the depth as written only when you approve that for its sheet).
+• The ID of a sample is your code; it is never made from row order or a taxon name lookup. One exception: when a code repeats at one station on different visits, the visit is added: the date, then the time and the depth only when the date alone does not tell the visits apart (<station>:<date>[T<time>][:<depth>m]:<code>). You accept it once (CONV-ID-REVISIT). The ID of a profile level uses the depth as written only when you approve that for its sheet.
 • The choice appears when codes repeat, or when a companion file ticked it.`,
   'tip.convertFlattenStation.does': `Leaves the station level out of the tree.`,
   'tip.convertFlattenStation.logic': `• The station code is kept as the locality of each sample and of each profile level, and they hang directly under the cruise.
@@ -793,7 +793,7 @@ Brak zastrzeżeń oznacza tylko, że w sprawdzanych kategoriach nie znaleziono p
   'tip.convertStationPrefix.does': `Czyni identyfikatory próbek unikalnymi, gdy ten sam kod próbki występuje na kilku stacjach.`,
   'tip.convertStationPrefix.logic': `• Wyłączone: identyfikatorem próbki jest Twój kod próbki.
 • Włączone: identyfikator to identyfikator stacji, dwukropek i Twój kod.
-• Identyfikator próbki nigdy nie powstaje z głębokości, kolejności wierszy ani z wyszukiwania nazwy taksonu (identyfikator poziomu profilu używa głębokości zapisanej w arkuszu tylko po Twojej zgodzie dla tego arkusza).
+• Identyfikatorem próbki jest Twój kod; nigdy nie powstaje z kolejności wierszy ani z wyszukiwania nazwy taksonu. Jeden wyjątek: gdy kod powtarza się na jednej stacji przy różnych wizytach, dodawana jest wizyta: data, a czas i głębokość tylko wtedy, gdy sama data nie rozróżnia wizyt (<stacja>:<data>[T<czas>][:<głębokość>m]:<kod>). Akceptujesz to raz (CONV-ID-REVISIT). Identyfikator poziomu profilu używa głębokości zapisanej w arkuszu tylko po Twojej zgodzie dla tego arkusza.
 • Wybór pojawia się, gdy kody się powtarzają albo zaznaczył go plik towarzyszący.`,
   'tip.convertFlattenStation.does': `Pomija poziom stacji w drzewie.`,
   'tip.convertFlattenStation.logic': `• Kod stacji zostaje jako miejsce (locality) każdej próbki i każdego poziomu profilu, a one wiszą bezpośrednio pod rejsem.
@@ -1299,7 +1299,7 @@ Keine Befunde heißt nur, dass in den geprüften Kategorien keine Probleme gefun
   'tip.convertStationPrefix.does': `Macht Proben-Kennungen eindeutig, wenn derselbe Probencode an mehreren Stationen vorkommt.`,
   'tip.convertStationPrefix.logic': `• Aus: Die Kennung einer Probe ist Ihr Probencode.
 • An: Die Kennung ist die Stations-Kennung, ein Doppelpunkt und Ihr Code.
-• Die Kennung einer Probe entsteht nie aus Tiefe, Zeilenreihenfolge oder einer Abfrage von Taxonnamen (die Kennung einer Profilebene nutzt die Tiefe wie geschrieben nur mit Ihrer Zustimmung für ihr Blatt).
+• Die Kennung einer Probe ist Ihr Code; sie entsteht nie aus der Zeilenreihenfolge oder einer Abfrage von Taxonnamen. Eine Ausnahme: Wiederholt sich ein Code an einer Station bei verschiedenen Besuchen, wird der Besuch ergänzt: das Datum, Uhrzeit und Tiefe nur, wenn das Datum allein die Besuche nicht unterscheidet (<Station>:<Datum>[T<Uhrzeit>][:<Tiefe>m]:<Code>). Sie bestätigen das einmal (CONV-ID-REVISIT). Die Kennung einer Profilebene nutzt die Tiefe wie geschrieben nur mit Ihrer Zustimmung für ihr Blatt.
 • Die Wahl erscheint, wenn sich Codes wiederholen oder eine Begleitdatei sie angekreuzt hat.`,
   'tip.convertFlattenStation.does': `Lässt die Stationsebene im Baum weg.`,
   'tip.convertFlattenStation.logic': `• Der Stationscode bleibt als Fundort jeder Probe und jeder Profilebene erhalten, und sie hängen direkt unter der Fahrt.
@@ -1805,7 +1805,7 @@ Aucun constat signifie seulement qu'aucun problème n'a été trouvé dans les c
   'tip.convertStationPrefix.does': `Rend uniques les identifiants d'échantillon lorsque le même code est utilisé à plusieurs stations.`,
   'tip.convertStationPrefix.logic': `• Désactivé : l'identifiant d'un échantillon est votre code d'échantillon.
 • Activé : l'identifiant est l'identifiant de la station, deux-points et votre code.
-• L'identifiant d'un échantillon n'est jamais fabriqué à partir de la profondeur, de l'ordre des lignes ni d'une recherche de nom de taxon (celui d'un niveau de profil n'utilise la profondeur telle qu'écrite qu'avec votre accord pour sa feuille).
+• L'identifiant d'un échantillon est votre code ; il n'est jamais fabriqué à partir de l'ordre des lignes ni d'une recherche de nom de taxon. Une exception : quand un code se répète à une station lors de visites différentes, la visite est ajoutée : la date, puis l'heure et la profondeur seulement si la date seule ne distingue pas les visites (<station>:<date>[T<heure>][:<profondeur>m]:<code>). Vous l'acceptez une fois (CONV-ID-REVISIT). L'identifiant d'un niveau de profil n'utilise la profondeur telle qu'écrite qu'avec votre accord pour sa feuille.
 • Le choix apparaît quand des codes se répètent ou quand un fichier d'accompagnement l'a coché.`,
   'tip.convertFlattenStation.does': `Retire le niveau station de l'arbre.`,
   'tip.convertFlattenStation.logic': `• Le code de station est gardé comme localité de chaque échantillon et de chaque niveau de profil, et ils dépendent directement de la campagne.

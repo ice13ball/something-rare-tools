@@ -3168,6 +3168,7 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
       }
     }
     if (visitGroups.length > 0) {
+      methodSteps.push(`Sheet ${sheet.name} of ${fileName}: a sample code repeated at one station is told apart by its visit; sample eventID = <station>:<date>[T<time>][:<depth>m]:<code>`);
       findings.push(makeConvertFinding('CONV-ID-REVISIT', { ...base, value: visitGroups[0].id, lines: visitGroups.flatMap((g) => g.lines).sort((a, b) => a - b), params: { count: visitGroups.length, by: VISIT_PARTS.filter((p) => visitParts.has(p)).join(', ') } }));
     }
     {

@@ -1503,8 +1503,8 @@ code" (the button above applies it).
   header added only to tell apart two columns of the same name (`taxonColumnNames`,
   `convert/headers.ts`); of a long sheet the
   user's occurrence-id column, else `<sample eventID>:<exact taxon cell>` plus the life-stage column
-  when there is one. **A sample's id is never derived from depth, row order or a WoRMS name** (one exception below: a
-  code reused on every visit of a station). **Second exception, only by the person's choice (`ownRecords`, "each row is its own record", `convert/ownRecords.ts`):
+  when there is one. **A sample's id is your code, never derived from row order or a WoRMS name** (one exception: a code repeated at one station on different visits gets the visit,
+  `<station>:<date>[T<time>][:<depth>m]:<code>`, the time and the depth only when the date alone does not tell the visits apart; accepted once, `CONV-ID-REVISIT`; the archive's methods say it per sheet). **Second exception, only by the person's choice (`ownRecords`, "each row is its own record", `convert/ownRecords.ts`):
   occurrenceIDs from source lines.** On a long sheet with a taxon column and no occurrenceID column (not a profile, pivoted or turned sheet; decided in one function, `ownRecordsEligible`) the
   person may declare every row a record of its own. The `occurrenceID` is then `<eventID>:L<line>`, the line number of the row in the SOURCE file (for a joined sheet, the line of the results
   sheet), never the order of the rows after sorting or merging; the archive says so in its methods. **The cost** (`CONV-OWN-RECORDS`, accept): the IDs change if rows are inserted or deleted in the
