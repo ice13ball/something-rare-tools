@@ -80,6 +80,14 @@ export const EXCLUDED: Record<Tool, Readonly<Record<string, string>>> = {
     'ROW-SHIP-SPEED-PAIR': 'same as ROW-SHIP-SPEED (checks/speed.ts:381-396, convert/validate.ts:77)',
     'ROW-ON-LAND': 'runs only with a land mask (checks/rows.ts:890 "if (ctx.land)"); convert/validate.ts:77 passes none',
     'ROW-ON-LAND-NEAR': 'runs only with a land mask (checks/rows.ts:890 "if (ctx.land)"); convert/validate.ts:77 passes none',
+    'ROW-JOIN-AMBIGUOUS': 'emitted only in the sheet-join builder (dataset.ts:950); /convert calls buildDatasets once, on its flat Event table (convert/validate.ts:76), which has no join; its own join rules are in convert/sampleJoin.ts',
+    'ROW-JOIN-KEY-BLANK': 'emitted only in the sheet-join builder (dataset.ts:939); /convert calls buildDatasets once, on its flat Event table (convert/validate.ts:76), which has no join',
+    'ROW-KEY-IGNORED': 'emitted only for an explicit ignore list (dataset.ts:1342-1369); /convert builds its Event table with none (convert/validate.ts:76)',
+    'ROW-LONG-KEY-EXTENDED': 'emitted only in the long-sheet reader (dataset.ts:1416); /convert reads long sheets in its own pivot (convert/pivot.ts:348-362), which raises CONV-LONG-DUPLICATE',
+    'ROW-LONG-VALUE-SKIPPED': 'emitted only in the long-sheet reader (dataset.ts:1500); /convert reads long sheets in its own pivot, which raises CONV-LONG-DUPLICATE (convert/pivot.ts:357)',
+    'ROW-LONG-NO-PARAMETER': 'emitted only in the long-sheet reader (dataset.ts:1498); /convert raises CONV-LONG-NO-PARAMETER for the same rows (convert/pivot.ts:358)',
+    'ROW-HEADER-CODE-SHAPE': 'checks/rows.ts:667 reads the headers of the Event table, which are the fixed Darwin Core columns (convert/dwca.ts:56-75); the headers of the source are checked by CONV-NERC-CODE-MALFORMED (convert/build.ts:1381)',
+    'ROW-DEPTH-SIGN': 'raised only when the depth direction is unknown (checks/rows.ts:697); the Event table depth columns are minimumDepthInMeters and maximumDepthInMeters, always positive down (recognize/columns.ts:447-448, 1101-1103; dataset.ts:1868-1869)',
   },
 };
 
