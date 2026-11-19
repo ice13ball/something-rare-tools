@@ -110,11 +110,13 @@ const SHIP_DECLARED = {
  *   ROW-NON-NUMERIC       (none)      field = column, value = example token, lines = rows
  *   ROW-NA-VARIANT        (none)      field = column, value = example token (e.g. NANA), lines = rows
  *   ROW-STATION-MOVED     station, positions   positions = compact text such as "76.9N 15.5E (9 rows); 76.9N 16.5E (14 rows)"
+ *                         groups, onLand, onLandCount  /check only (not with codesAreValues): groups = "position: lines" for EVERY position; onLand = positions ROW-ON-LAND also judges
  *                         signLon / signLat    'yes' when two positions differ (almost) only by the sign of that coordinate (optional)
  *   ROW-STATION-SPREAD    station, km, positions   km = largest distance between the station's positions (rounded), 10 to 1000 km (note)
  *   ROW-STATION-SPREAD-FAR  the same, above 1000 km (warning)
- *   ROW-ON-LAND-NEAR      count, places   the same for positions 10-50 km inside (note, no hint)
- *   ROW-ON-LAND           count, places, flips   count = rows on land; places = up to 5 positions "lat, lon (rows; ≥N km)";
+ *   ROW-ON-LAND-NEAR      count, places, rest, allPlaces   the same for positions 10-50 km inside (note, no hint)
+ *   ROW-ON-LAND           count, places, rest, allPlaces, flips   count = rows on land; places = up to 5 positions "lat, lon (rows; ≥N km)";
+ *                         rest (optional) = number of further positions not in places; allPlaces = EVERY position "lat, lon (rows; ≥N km; lines a–b) → hint"
  *                         flips (optional) = "position → the same with a sign flipped or axes exchanged" where that lies at sea
  *   ROW-SHIP-SPEED        count, cases   count = events flagged (a merged cast = one event); cases = up to 5 of "previous→this→next: km, h, ≥kn; km, h, ≥kn"
  *                         (line numbers; km = distance, h = LONGEST possible time between the two events, kn = the speed at least); declared (optional) = 'yes' when
@@ -327,6 +329,24 @@ export const ROW_RULES: readonly RuleSpec[] = [
     },
     plainIf: [
       {
+        param: 'groups',
+        plain: {
+          pl: `Wiersze każdej pozycji: {groups}. Pozycja z mniejszą liczbą wierszy nie musi być tą błędną.`,
+          en: `Lines of each position: {groups}. The position with fewer rows is not necessarily the wrong one.`,
+          de: `Zeilen jeder Position: {groups}. Die Position mit weniger Zeilen ist nicht unbedingt die falsche.`,
+          fr: `Lignes de chaque position : {groups}. La position qui a le moins de lignes n'est pas forcément la mauvaise.`,
+        },
+      },
+      {
+        param: 'onLand',
+        plain: {
+          pl: `{+onLandCount:Pozycja|Pozycje|Pozycje} {onLand}: według mapy {+onLandCount:leży|leżą|leżą} na lądzie (osobna uwaga ROW-ON-LAND); to nie dotyczy pozostałych pozycji stacji.`,
+          en: `By the map, {onLand} {+onLandCount:lies|lie} on land (separate finding ROW-ON-LAND); that does not concern the other positions of this station.`,
+          de: `Laut Karte {+onLandCount:liegt|liegen} {onLand} an Land (eigener Befund ROW-ON-LAND); das betrifft die übrigen Positionen der Station nicht.`,
+          fr: `D'après la carte, {onLand} {+onLandCount:se trouve|se trouvent} sur terre (constat séparé ROW-ON-LAND) ; cela ne concerne pas les autres positions de la station.`,
+        },
+      },
+      {
         param: 'signLon',
         plain: {
           pl: `Dwie z tych pozycji różnią się (prawie) tylko znakiem długości geograficznej: możliwe, że brakuje minusa albo jest zbędny (W/E). Sprawdź też inne kolumny — znak nie musi być całą przyczyną.`,
@@ -380,7 +400,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     category: 'B',
     severity: 'info',
     exportPolicy: 'show',
-    params: ['count', 'places'],
+    params: ['count', 'places', 'allPlaces'],
     citations: [CITE.argoLand, CITE.naturalEarthLand],
     plain: {
       pl: `W wierszach {lines} (razem: {count}) pozycja wypada na mapie lądu Natural Earth (1:10m) na lądzie lub w jeziorze, 10–50 km od morza: {places} (liczba wierszy; najmniejsza odległość od morza). Jeśli to próbka z rzeki, estuarium, zatoki pływowej, jeziora albo laguny przy brzegu, pomiń tę uwagę: w takich miejscach mapa bywa niedokładna. Jeśli nie, sprawdź cyfry i kolejność współrzędnych.`,
@@ -388,14 +408,25 @@ export const ROW_RULES: readonly RuleSpec[] = [
       de: `In den Zeilen {lines} (insgesamt {count}) liegt die Position auf der Landkarte Natural Earth (1:10m) an Land oder in einem See, 10–50 km vom Meer: {places} (Anzahl Zeilen; kleinster Abstand zum Meer). Stammt die Probe aus einem Fluss, Ästuar, Gezeitenarm, See oder einer Küstenlagune, ignorieren Sie diesen Hinweis: dort ist die Karte oft ungenau. Sonst prüfen Sie Ziffern und Reihenfolge der Koordinaten.`,
       fr: `Aux lignes {lines} ({count} au total), la position tombe, sur la carte des terres Natural Earth (1:10m), sur terre ou dans un lac, à 10–50 km de la mer : {places} (nombre de lignes ; distance min. à la mer). Pour un échantillon de rivière, d'estuaire, de bras de marée, de lac ou de lagune côtière, ignorez cette remarque : la carte y est parfois imprécise. Sinon, vérifiez les chiffres et l'ordre des coordonnées.`,
     },
-    technical: `{file}:{lines} {count} rows on land or in an inland lake 10 to 50 km from the sea (Natural Earth 1:10m, 0.05 degree cells; no sign hint at this level): {places}.`,
+    plainIf: [
+      {
+        param: 'rest',
+        plain: {
+          pl: `Jeszcze {rest} {+rest:pozycja|pozycje|pozycji}: pełna lista, z numerami wierszy, jest w szczegółach technicznych.`,
+          en: `{rest} more {+rest:position|positions}: the full list, with line numbers, is in the technical details.`,
+          de: `{rest} weitere {+rest:Position|Positionen}: die vollständige Liste mit Zeilennummern steht in den technischen Details.`,
+          fr: `{rest} {+rest:autre position|autres positions} : la liste complète, avec les numéros de ligne, figure dans les détails techniques.`,
+        },
+      },
+    ],
+    technical: `{file}:{lines} {count} rows on land or in an inland lake 10 to 50 km from the sea (Natural Earth 1:10m, 0.05 degree cells; no sign hint at this level): {places}. All positions with their lines: {allPlaces}.`,
   },
   {
     id: 'ROW-ON-LAND',
     category: 'B',
     severity: 'warning',
     exportPolicy: 'show',
-    params: ['count', 'places'],
+    params: ['count', 'places', 'allPlaces'],
     citations: [CITE.argoLand, CITE.naturalEarthLand],
     plain: {
       pl: `W wierszach {lines} (razem: {count}) pozycja leży na lądzie lub w jeziorze, z dala od morza: {places} (liczba wierszy; najmniejsza odległość od morza). W danych morskich to zwykle błąd: zły znak, zamienione osie lub literówka. 10–50 km od morza: osobna uwaga; pas 10 km i brzegi rzek przy morzu nie są oceniane.`,
@@ -404,6 +435,15 @@ export const ROW_RULES: readonly RuleSpec[] = [
       fr: `Aux lignes {lines} ({count} au total), la position est sur terre ou dans un lac, loin de la mer : {places} (nombre de lignes ; distance min. à la mer). En données marines, c'est souvent une erreur : signe, axes inversés ou faute de frappe. À 10–50 km : remarque à part ; bande de 10 km et rives près de la mer non évaluées.`,
     },
     plainIf: [
+      {
+        param: 'rest',
+        plain: {
+          pl: `Jeszcze {rest} {+rest:pozycja|pozycje|pozycji}: pełna lista, z numerami wierszy, jest w szczegółach technicznych.`,
+          en: `{rest} more {+rest:position|positions}: the full list, with line numbers, is in the technical details.`,
+          de: `{rest} weitere {+rest:Position|Positionen}: die vollständige Liste mit Zeilennummern steht in den technischen Details.`,
+          fr: `{rest} {+rest:autre position|autres positions} : la liste complète, avec les numéros de ligne, figure dans les détails techniques.`,
+        },
+      },
       {
         param: 'flips',
         plain: {
@@ -414,7 +454,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
         },
       },
     ],
-    technical: `{file}:{lines} {count} rows on land or in an inland lake at least 50 km from the sea (Natural Earth 1:10m, 0.05 degree cells; 10-50 km is ROW-ON-LAND-NEAR; nearer the coast, near rivers and canals nothing is judged): {places}.`,
+    technical: `{file}:{lines} {count} rows on land or in an inland lake at least 50 km from the sea (Natural Earth 1:10m, 0.05 degree cells; 10-50 km is ROW-ON-LAND-NEAR; nearer the coast, near rivers and canals nothing is judged): {places}. All positions with their lines: {allPlaces}.`,
   },
   {
     id: 'ROW-SHIP-SPEED',

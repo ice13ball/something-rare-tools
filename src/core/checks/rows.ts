@@ -2,6 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 
 import { ON_LAND_MIN_KM, ON_LAND_NEAR_MIN_KM, type LandMask } from '../geo/land';
+import { formatLines } from '../lines';
 import { unitFromHeader } from '../recognize/columns';
 import { depthSuffixUnit, isMetreUnit } from '../recognize/depthUnit';
 import { badHeaderCodes } from '../recognize/headerCodes';
@@ -357,7 +358,10 @@ function stationGroups(srows: DataRow[]): { rows: DataRow[]; anchored: boolean; 
   return [...by.values()];
 }
 
-function stationMoved(ds: Pick<Dataset, 'file'>, sheet: string, rows: DataRow[], out: Finding[]): void {
+/** /check only: the finding then also lists the lines of every position and names the positions ROW-ON-LAND judges. /convert shares the station checks and gets neither. */
+interface StationDetail { land?: LandMask }
+
+function stationMoved(ds: Pick<Dataset, 'file'>, sheet: string, rows: DataRow[], out: Finding[], detail?: StationDetail): void {
   const byName = new Map<string, DataRow[]>();
   for (const r of rows) {
     if (r.station === undefined || r.station === '' || GENERIC_STATION.test(r.station.trim())) continue;
@@ -366,11 +370,11 @@ function stationMoved(ds: Pick<Dataset, 'file'>, sheet: string, rows: DataRow[],
     else byName.set(r.station, [r]);
   }
   for (const [station, nameRows] of byName) {
-    for (const g of stationGroups(nameRows)) stationGroup(ds, sheet, station, g.rows, g.anchored, g.cruise, out);
+    for (const g of stationGroups(nameRows)) stationGroup(ds, sheet, station, g.rows, g.anchored, g.cruise, out, detail);
   }
 }
 
-function stationGroup(ds: Pick<Dataset, 'file'>, sheet: string, station: string, srows: DataRow[], anchored: boolean, inCruise: boolean, out: Finding[]): void {
+function stationGroup(ds: Pick<Dataset, 'file'>, sheet: string, station: string, srows: DataRow[], anchored: boolean, inCruise: boolean, out: Finding[], detail?: StationDetail): void {
   const positions = positionsOf(srows);
   if (positions.length < 2) return;
   const track = positions.length > MAX_STATION_POSITIONS;
@@ -404,8 +408,18 @@ function stationGroup(ds: Pick<Dataset, 'file'>, sheet: string, station: string,
     out.push(makeFinding(far ? 'ROW-STATION-SPREAD-FAR' : 'ROW-STATION-SPREAD', { file: ds.file, sheet, value: station, params }));
     return;
   }
-  const text = [...involved].sort((a, b) => firstLine(a) - firstLine(b)).map(positionText).join('; ');
-  const params: Record<string, string> = { station, positions: text };
+  const ordered = [...involved].sort((a, b) => firstLine(a) - firstLine(b));
+  const text = ordered.map(positionText).join('; ');
+  const params: Record<string, string | number> = { station, positions: text };
+  if (detail) {
+    // the lines of EVERY position, larger group first: the finding's own lines are the smaller group's, which is no verdict that it is the wrong one
+    params.groups = [...ordered].sort((a, b) => b.rows.length - a.rows.length || firstLine(a) - firstLine(b)).map((p) => `${positionText(p)}: ${formatLines(p.rows.map((r) => r.line))}`).join('; ');
+    const landed = detail.land ? ordered.filter((p) => { const at = detail.land!.place(p.lat, p.lon); return at.kind === 'land' && at.atLeastKm >= ON_LAND_MIN_KM; }) : [];
+    if (landed.length > 0) {
+      params.onLand = landed.map((p) => place(p.lat, p.lon, p.latDec, p.lonDec)).join('; ');
+      params.onLandCount = landed.length;
+    }
+  }
   if (flipped.has('lon')) params.signLon = 'yes';
   if (flipped.has('lat')) params.signLat = 'yes';
   out.push(makeFinding('ROW-STATION-MOVED', { file: ds.file, sheet, value: station, lines: [...minority].map((r) => r.line), params }));
@@ -437,13 +451,20 @@ const place = (lat: number, lon: number, latDec: number, lonDec: number): string
  *   and a row this close to the coast is far more likely a digit typo or a river, lake or lagoon sample.
  * A row is reported by one level only. Nearer the coast, out of range, or where the mask makes no claim gives nothing.
  */
-interface LandHit { lat: number; lon: number; latDec: number; lonDec: number; km: number; n: number }
+interface LandHit { lat: number; lon: number; latDec: number; lonDec: number; km: number; n: number; lines: number[] }
 
-function landPlaces(hits: Map<string, LandHit>): { shown: LandHit[]; places: string } {
-  const all = [...hits.values()].sort((a, b) => b.n - a.n);
+/*
+ * The sentence names the MAX_PLACES most frequent positions and counts the rest (`rest`); `allPlaces` (technical details) lists every position with its row count,
+ * distance and line numbers, so none is hidden behind a bare "…+N". `flipOf` (ROW-ON-LAND only) adds the sign hint to a position.
+ */
+function landPlaces(hits: Map<string, LandHit>, flipOf?: (h: LandHit) => string | undefined): { shown: LandHit[]; params: Record<string, string | number> } {
+  const all = [...hits.values()].sort((a, b) => b.n - a.n || a.lines[0] - b.lines[0]);
   const shown = all.slice(0, MAX_PLACES);
-  const places = shown.map((h) => `${place(h.lat, h.lon, h.latDec, h.lonDec)} (${h.n}; ≥${h.km} km)`).join('; ') + (all.length > shown.length ? `; …+${all.length - shown.length}` : '');
-  return { shown, places };
+  const text = (h: LandHit): string => `${place(h.lat, h.lon, h.latDec, h.lonDec)} (${h.n} ${h.n === 1 ? 'row' : 'rows'}; ≥${h.km} km; ${h.lines.length === 1 ? 'line' : 'lines'} ${formatLines(h.lines)})`;
+  const params: Record<string, string | number> = { places: shown.map((h) => `${place(h.lat, h.lon, h.latDec, h.lonDec)} (${h.n}; ≥${h.km} km)`).join('; ') };
+  if (all.length > shown.length) params.rest = all.length - shown.length;
+  params.allPlaces = all.map((h) => { const flip = flipOf?.(h); return flip ? `${text(h)} → ${flip}` : text(h); }).join(' | ');
+  return { shown, params };
 }
 
 function onLand(ds: Dataset, sheet: string, rows: DataRow[], land: LandMask, out: Finding[]): void {
@@ -457,24 +478,25 @@ function onLand(ds: Dataset, sheet: string, rows: DataRow[], land: LandMask, out
     level.lines.push(r.line);
     const key = `${r.lat}\u0000${r.lon}`;
     const h = level.hits.get(key);
-    if (h) h.n++;
-    else level.hits.set(key, { lat: r.lat, lon: r.lon, latDec: writtenDecimals(r.lat, r.latDecimals ?? decimalsOfNumber(r.lat)), lonDec: writtenDecimals(r.lon, r.lonDecimals ?? decimalsOfNumber(r.lon)), km: at.atLeastKm, n: 1 });
+    if (h) { h.n++; h.lines.push(r.line); }
+    else level.hits.set(key, { lat: r.lat, lon: r.lon, latDec: writtenDecimals(r.lat, r.latDecimals ?? decimalsOfNumber(r.lat)), lonDec: writtenDecimals(r.lon, r.lonDecimals ?? decimalsOfNumber(r.lon)), km: at.atLeastKm, n: 1, lines: [r.line] });
   }
   if (far.lines.length > 0) {
-    const { shown, places } = landPlaces(far.hits);
-    const flips: string[] = [];
-    for (const h of shown) {
+    const flipOf = (h: LandHit): string | undefined => {
       const options: [number, number, number, number][] = [[h.lat, -h.lon, h.latDec, h.lonDec], [-h.lat, h.lon, h.latDec, h.lonDec]];
       if (Math.abs(h.lon) <= 90) options.push([h.lon, h.lat, h.lonDec, h.latDec]);
       const sea = options.find(([la, lo]) => land.place(la, lo).kind === 'sea');
-      if (sea) flips.push(`${place(h.lat, h.lon, h.latDec, h.lonDec)} → ${place(sea[0], sea[1], sea[2], sea[3])}`);
-    }
-    const params: Record<string, string | number> = { count: far.lines.length, places };
+      return sea ? place(sea[0], sea[1], sea[2], sea[3]) : undefined;
+    };
+    const { shown, params: placeParams } = landPlaces(far.hits, flipOf);
+    // the sentence hints only for the positions it names
+    const flips = shown.flatMap((h) => { const f = flipOf(h); return f ? [`${place(h.lat, h.lon, h.latDec, h.lonDec)} → ${f}`] : []; });
+    const params: Record<string, string | number> = { count: far.lines.length, ...placeParams };
     if (flips.length > 0) params.flips = flips.join('; ');
     out.push(makeFinding('ROW-ON-LAND', { file: ds.file, sheet, lines: far.lines, params }));
   }
   if (near.lines.length > 0) {
-    out.push(makeFinding('ROW-ON-LAND-NEAR', { file: ds.file, sheet, lines: near.lines, params: { count: near.lines.length, places: landPlaces(near.hits).places } }));
+    out.push(makeFinding('ROW-ON-LAND-NEAR', { file: ds.file, sheet, lines: near.lines, params: { count: near.lines.length, ...landPlaces(near.hits).params } }));
   }
 }
 
@@ -886,7 +908,7 @@ export function checkRows(ds: Dataset, ctx: RowContext = {}): Finding[] {
   for (const [sheet, rows] of bySheet(ds.rows)) {
     positionRules(ds, sheet, rows, out);
     noCoord(ds, sheet, rows, out);
-    stationMoved(ds, sheet, rows, out);
+    stationMoved(ds, sheet, rows, out, ctx.codesAreValues === true ? undefined : { land: ctx.land });
     if (ctx.land) onLand(ds, sheet, rows, ctx.land, out);
     const mixedSign = depthMixedSign(ds, sheet, rows, ctx.codesAreValues === true, out);
     if (mixedSign) mixed.add(sheet);

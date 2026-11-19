@@ -71,7 +71,9 @@ export function SourceLink({ s, compact = false }: { s: Source; compact?: boolea
 function FindingItem({ f, hideCitations }: { f: Finding; hideCitations: (ruleId: string) => boolean }): React.ReactElement {
   const { lang } = useLang();
   const plain = safe(() => renderPlain(f, lang), f.ruleId);
-  const technical = safe(() => renderTechnical(f), '');
+  // every position of a finding that lists many (ROW-ON-LAND) is a list item of its own, not one long line of the technical text
+  const positions = typeof f.params.allPlaces === 'string' ? f.params.allPlaces.split(' | ') : [];
+  const technical = safe(() => renderTechnical(positions.length > 0 ? { ...f, params: { ...f.params, allPlaces: `${positions.length} positions, listed below` } } : f), '');
   const sources = hideCitations(f.ruleId) ? [] : sourcesOf(f.ruleId);
   const lines = formatLines(f.lines);
   const row = (label: string, value: React.ReactNode): React.ReactElement => (
@@ -91,6 +93,7 @@ function FindingItem({ f, hideCitations }: { f: Finding; hideCitations: (ruleId:
       <details>
         <summary>{t('report.details')}</summary>
         {technical && <p className="technical"><code>{technical}</code></p>}
+        {positions.length > 0 && <ul className="positions">{positions.map((p, i) => <li key={i}><code>{p}</code></li>)}</ul>}
         <dl>
           {f.file && row(t('report.file'), f.file)}
           {f.sheet && row(t('report.sheet'), f.sheet)}

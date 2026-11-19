@@ -60,7 +60,8 @@ function expectSoundArchive(b: ReadBack): void {
   for (const t of Object.values(b.tables)) expect(t.header.length).toBeGreaterThan(0);
   for (const [name, text] of Object.entries(b.text)) if (name.endsWith('.txt')) expect(text, name).not.toMatch(/\r|^"|\t"|"\t/m);
   // the repository's DwC-A reader reads the same archive: an Event core with the columns of meta.xml and one row per event
-  expect(b.core.dwca).toEqual({ core: 'Event', partial: false });
+  // the reader also returns the time span the archive's eml.xml states (what /check uses against META-NO-DATES); the archive itself is unchanged
+  expect(b.core.dwca).toMatchObject({ core: 'Event', partial: false });
   expect(b.core.sheets[0].header).toEqual(b.tables['event.txt'].header);
   expect(b.core.sheets[0].rows).toHaveLength(ev.length);
   expect(b.core.findings.find((f) => f.ruleId === 'IN-DWCA-EVENT-CORE')?.params.occurrences).toBe(occ.length);

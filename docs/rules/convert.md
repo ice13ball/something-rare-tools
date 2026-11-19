@@ -331,7 +331,7 @@ Severity: warning · Export policy: accept
 
 **When it fires.** For rows of one station name, compared within one cruise or, without a cruise column, within one calendar year, when two positions differ in one of three ways. A typed digit: one coordinate differs by a whole number of degrees and the other keeps its whole degree; the shifted coordinate needs two written decimals (one inside a cruise, not .0 or .5) and there is no distance limit. Exchanged axes: each position is the other with latitude and longitude swapped. A sign: as written the positions are at least 100 km apart, and with one sign flipped they are within 50 km and at least ten times closer. Placeholder names such as unknown do not count. Among rows with neither a cruise nor a date a typed digit is not looked for; such a station gets ROW-STATION-SPREAD instead.
 
-**Example.** Station A3 is at 76.9 N 15.5 E on 9 rows and at 76.9 N -15.5 E on 14 rows. The finding lists both positions and says that the longitude differs only by its sign.
+**Example.** Station A3 is at 76.9 N 15.5 E on 9 rows and at 76.9 N -15.5 E on 14 rows. The finding lists both positions and says that the longitude differs only by its sign. In /check it also gives the lines of each position, and it does not take the position with fewer rows to be the wrong one.
 
 **What you can do.** Decide which position is right and correct the other rows. In /convert this finding does not block the export, but it needs your acceptance, one tick for the rule, before the export button works.
 
