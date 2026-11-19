@@ -11,7 +11,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A record that was opened holds no file the tool can read as a data table, only other files such as PDFs, images or text documents. Nothing in it can be checked.',
     fires:
-      'When a record from any source (Dataverse, Zenodo, GeoNetwork or a plain link) was read and none of its files is a table in a format the tool reads: csv, tsv, txt, tab, xlsx, xls or ods. The finding lists the names of the files that were found; at most ten names are listed. Held-back files are mentioned by their own findings.',
+      'When a record from any source (Dataverse, Zenodo, GeoNetwork or a plain link) was read and none of its files is a table in a format the tool reads: csv, tsv, txt, tab, xlsx, xls or ods. The finding lists the names of the files that were found; at most ten names are listed, and only for Dataverse and Zenodo records (for a GeoNetwork record or a DOI with no known repository the list is empty). A README is not counted as a table. A Dataverse record whose only table is held back or too large gets the finding of that file instead.',
     example:
       'A record lists report.pdf, map.png and notes.docx and no table; the finding names all three.',
     action:
@@ -21,7 +21,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'The record behind a link could not be opened, so its metadata and files were not read. The reason is a failed request to the host, and the finding names the host and the HTTP status code.',
     fires:
-      'When a request for the record or one of its files gets an error status such as 403, 404 or 500, or a proxy error (429, 504, a 413 on a file that is not an archive), or when the answer is not JSON or not Dataverse metadata, or when a Dataverse version is not released. The wording has three forms: a server fault for status 500 to 599 (usually temporary), a record that may be private or unpublished for 403 and 404, and a neutral "try again later" for any other status, with no guess about the reason. Whatever the other sources of the same run gave is still used.',
+      'When a request for the record or one of its files gets an error status such as 403, 404 or 500, or a proxy error (429, 504, a 413 on a file that is not an archive), or when the answer is not JSON or is not the metadata of the source (Dataverse, PANGAEA, an ISO record from GeoNetwork), or when DataCite, GBIF or OBIS do not know the DOI or id (reported as 404), or when a Dataverse version is not released. The wording has three forms: a server fault for status 500 to 599 (usually temporary), a record that may be private or unpublished for 403 and 404, and a neutral "try again later" for any other status, with no guess about the reason. Whatever the other sources of the same run gave is still used.',
     example:
       'A link to a repository record returns status 404; the finding reads that the record on that host could not be opened (error 404).',
     action:
@@ -31,9 +31,9 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A link points to a host the tool is not allowed to open, so nothing was fetched from it.',
     fires:
-      'When a link in a record, or one the person pasted, names a host that is not on the tool\'s list of data hosts. Only the host name is reported, never the whole address.',
+      'When a link the person pasted names a host that is not on the tool\'s list of data hosts. From a record, only the data links of a GeoNetwork record that end in a table extension are looked at, one finding per host. It also fires when a download from a listed host is redirected to a host that is not listed, and for a pasted DOI whose landing page is off the list. Only the host name is reported, never the whole address.',
     example:
-      'A record links its data to a personal file-sharing site that is not on the list; the finding names that site and nothing is downloaded.',
+      'A GeoNetwork record has a distribution link to https://files.example.invalid/share/data.csv; the host files.example.invalid is not on the list, so it is named and nothing is downloaded.',
     action:
       'Download the file from that site yourself and add it to the tool. The tool does not widen its list of hosts for one run. In /convert this finding is only shown and never stops the export.',
   },
@@ -41,7 +41,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'The browser could not download from a host, so the file was not read. This is a limit of the browser mode, not a fault in the data.',
     fires:
-      'In browser mode, when a download fails before any answer arrives because the host does not allow the request (a cross-origin or content-security rule) or the network failed. It also appears in server mode when the page\'s own fetch route could not be reached, or when a body that is not an archive was cut off midway. The finding names the host.',
+      'In browser mode, when a download fails before any answer arrives because the host does not allow the request (a cross-origin or content-security rule) or the network failed. It also appears in server mode when the page\'s own fetch route could not be reached, or when a body from a host that is not a listed IPT server was cut off midway (at an IPT server it is IN-FETCH-INTERRUPTED). The finding names the host.',
     example:
       'A link to a data file on a repository that sends no cross-origin permission; the browser refuses and the finding names the repository.',
     action:
@@ -51,7 +51,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A host did not start to answer in time, so the browser stopped waiting and the file was not read.',
     fires:
-      'In browser mode, when a download receives no response within 30 seconds. A slow body that has already started is not a timeout: a download cut off after it began is IN-FETCH-INTERRUPTED. The finding names the host.',
+      'In browser mode, when a download receives no response within 30 seconds. A download that starts and is then cut off is not a timeout: at a listed IPT server it is IN-FETCH-INTERRUPTED, at another host IN-FETCH-BLOCKED. In server mode this rule does not occur. The finding names the host.',
     example:
       'A repository server is overloaded and sends nothing for 30 seconds; the request is abandoned and the host is named.',
     action:
@@ -61,7 +61,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'The download of an archive from an archive server was cut off or ran out of time before it was complete, so the archive was not checked at all.',
     fires:
-      'When the download of a Darwin Core Archive from a listed IPT server times out (the proxy gave up after 90 s on an archive) or the connection closes before the whole body arrived. The finding names the host. A partly received archive is never read.',
+      'When the download of a Darwin Core Archive from a listed IPT server times out (the proxy gave up after 90 s on an archive) or the connection closes before the whole body arrived. A body that breaks off within 1 MB of the 100 MB limit is IN-ARCHIVE-TOO-LARGE instead. The connection-closed case also applies to any other page from a listed IPT server and in browser mode; the 90 s timeout only to an archive in server mode. The finding names the host. A partly received archive is never read.',
     example:
       'A large archive from a slow IPT server stops after a few megabytes; nothing of it is read.',
     action:
@@ -81,7 +81,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'This client has used the daily allowance for archive downloads through the tool\'s server, so the archive was not fetched and not checked.',
     fires:
-      'When the proxy answers HTTP status 429 with the reason archive_daily_budget: this IP address has used its daily allowance of 200 archive requests or 2 GiB of archive bytes. The finding names the host of the archive. The allowance starts again within 24 hours.',
+      'When the proxy answers HTTP status 429 with the reason archive_daily_budget: this IP address has used its daily allowance of 200 archive requests or 2 GiB of archive bytes. The finding names the host of the archive. If the client also has two archive downloads running, IN-ARCHIVE-BUSY is raised instead (the busy check comes first). The allowance starts again within 24 hours.',
     example:
       'After many large archives in one day the next request is refused; the host of that archive is named.',
     action:
@@ -121,7 +121,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A file of a linked record is held back by its source (restricted access or an embargo), so it was not downloaded and not checked. This is not an error in the data, but the lack of remarks says nothing about the file.',
     fires:
-      'When the source marks a file of a Dataverse dataset as restricted or embargoed, or when downloading the file returns status 401 or 403. The finding names the file and the host. The other files of the record are still read.',
+      'When the source marks a file of a Dataverse dataset as restricted or embargoed, or when downloading the file returns status 401 or 403. A restricted or embargoed document, picture or README is not reported (documents are left out before this test). The finding names the file and the host. The other files of the record are still read.',
     example:
       'A dataset has an open file samples.csv and a restricted file raw.csv; raw.csv gets this finding.',
     action:
@@ -141,7 +141,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'Some files of a linked record may hold data but are in a format the tool does not read, such as zip or NetCDF, so they were not checked. The report names them so that it never reads as if the whole dataset was checked.',
     fires:
-      'When a Dataverse record has at least one table the tool reads and, besides, files that are not tables and are not documents, images or a README. The finding names those files. Documents, pictures and READMEs describe the deposit and are left out of the list. If the record has no table at all, IN-NO-DATA-FILE is raised instead.',
+      'When a Dataverse record has at least one table the tool reads and, besides, files that are not tables and are not documents, images or a README. The finding names those files. Documents, pictures and READMEs describe the deposit and are left out of the list. A restricted or embargoed file is reported by IN-FILE-HELD-BACK instead. A table that is held back or too large still counts as a table, so IN-NO-DATA-FILE is not raised. If the record has no table at all, IN-NO-DATA-FILE is raised instead.',
     example:
       'A record holds counts.csv and also model.nc and images.zip; the finding names model.nc and images.zip.',
     action:
@@ -151,7 +151,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A note about what was read from a Dataverse dataset: which version, and in which form its tables were read.',
     fires:
-      'Every time a Dataverse dataset is read. It states the version (the latest published one) and the host. It also says whether the tables were read as the author uploaded them, as the .tab copy Dataverse made when the original cannot be read, or that no data file was read at all.',
+      'Every time the version of a Dataverse dataset is read (not when the record cannot be loaded). It states the version (the latest published one) and the host. It also says whether the tables were read as the author uploaded them, as the .tab copy Dataverse made when the original cannot be read, or that no data file was read at all. Only tables Dataverse converted to .tab are named; a table uploaded as CSV or Excel is not listed.',
     example:
       'Version 2.1 of a dataset is read from a Dataverse host; one table in its original form and one as the .tab copy.',
     action:
@@ -159,9 +159,9 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
   },
   'IN-FILE-UNREADABLE': {
     checks:
-      'None of the files that were added could be read at all, for example a damaged workbook or a file in an unsupported format. Nothing was checked, so the absence of other remarks does not mean the data are fine.',
+      'None of the files that were added could be read at all, for example a damaged workbook. Nothing was checked, so the absence of other remarks does not mean the data are fine.',
     fires:
-      'When every added file fails to parse. The finding lists the names of the files, comma-separated. If at least one file is read, a failing file is not reported by this rule.',
+      'When every added file fails to parse. A file of a kind the tool does not read at all (such as a PDF) is listed as not read and does not raise this rule; only a file that fails while being parsed counts. The finding lists the names of the files, comma-separated. If at least one file is read, a failing file is not reported by this rule.',
     example:
       'A workbook that was cut off during copying cannot be opened; the finding names it.',
     action:
@@ -171,7 +171,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'The table is laid out in a way the tool cannot read as one header row and one row per sample, so it was not read.',
     fires:
-      'When the layout reader finds data that is transposed (variables or species in rows, samples in columns), a header spread over several rows (more than half of the header cells empty in a table of three or more columns, or a first data row of units that was not folded into the header), a row above the names that holds footnote markers, a table with no rows, a workbook with no sheet of coordinates or measurements, or no table at all. The finding gives the reason and, for a workbook, the sheet.',
+      'When the layout reader finds data that is transposed (variables in rows, samples in columns; the first column must hold at least two names the tool knows as columns, such as Latitude or Temperature; species in rows are not detected here, only in /convert), a header spread over several rows (more than half of the header cells empty in a table of three or more columns, or a first data row of units that was not folded into the header), a row above the names that holds footnote markers, a table with no rows (only when every sheet is empty), a workbook with no sheet of coordinates or measurements, or no table at all. In /convert a transposed sheet is reported as CONV-SHEET-TRANSPOSED instead. The finding gives the reason and, for a workbook, the sheet.',
     example:
       'A sheet lists the variables down the first column and the samples across the top; the finding says the data is transposed.',
     action:
@@ -181,7 +181,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'The file is not saved as UTF-8, so the tool read it as an 8-bit Central European or Western code page. The letters with accents may be wrong if that guess is wrong.',
     fires:
-      'When the bytes are not valid UTF-8 and all three 8-bit readings the tool tries (windows-1250, ISO-8859-2 and windows-1252) give the same text. The file is read as windows-1250 when one of the bytes 8A, 9A, 8C, 9C, 8F or 9F occurs, otherwise as ISO-8859-2; the finding names the reading used. Plain ASCII is valid UTF-8 and never raises it. If the readings differ, IN-ENCODING-AMBIGUOUS is raised instead. A UTF-16 file or a UTF-8 file with a BOM is read without a finding.',
+      'When the bytes are not valid UTF-8 and all three 8-bit readings the tool tries (windows-1250, ISO-8859-2 and windows-1252) give the same text. The file is read as ISO-8859-2 (a byte 8A, 9A, 8C, 9C, 8F or 9F makes the readings differ, so that case is IN-ENCODING-AMBIGUOUS, read as windows-1250). Plain ASCII is valid UTF-8 and never raises it. If the readings differ, IN-ENCODING-AMBIGUOUS is raised instead. A UTF-16 file or a UTF-8 file with a BOM is read without a finding.',
     example:
       'A file that is not valid UTF-8 and whose only non-ASCII byte is E9 in caf followed by that byte: all three readings give the same letter, and the file is read as ISO-8859-2.',
     action:
@@ -211,7 +211,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'In one column of a file that uses a decimal comma, every number with a comma has exactly three digits after it, so the comma may be a decimal comma (1,250 is one and a quarter) or a thousands separator (1,250 is one thousand two hundred fifty). The file does not say which.',
     fires:
-      'Per column of a decimal-comma file, only when every number with a comma has exactly three digits after it. A single value such as 1.250,5 settles the column (with both separators the last is the decimal), and so does a value with one, two, or four or more decimals; then no finding is raised. In 1,250,000 the comma repeats, so it is a thousands mark; the question stays open for the other values and the finding names that cell. The finding gives the column, the number of cells, the first such value and both readings. The cells were read as decimals.',
+      'Per column of a decimal-comma file, only when every number with a comma has exactly three digits after it. A single value such as 1.250,5 settles the column (with both separators the last is the decimal), and so does a value with one, two, or four or more decimals, a value with a leading zero (0,125) or with four or more digits before the comma (1234,500), since such a number cannot be a thousands group; then no finding is raised. In 1,250,000 the comma repeats, so it is a thousands mark; the question stays open for the other values and the finding names that cell. The finding gives the column, the number of cells, the first such value and both readings. The cells were read as decimals.',
     example:
       'A column of depths in metres holds 1,250 and 2,500; read as decimals they are 1.25 and 2.5, read as thousands 1250 and 2500.',
     action:
@@ -231,9 +231,9 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A second header row of units was read: the line under the column names holds only units, so it is not data. The units were added to the column names.',
     fires:
-      'When the row directly under the header (or under a row of statistic labels) has only unit cells, at least two of which go into a header, every cell has a name above it, and the numbers below fit the units. A unit that disagrees with the one the name already gives means the row is not folded. The finding gives the line and the first changed name, for example a column now named a [h]. The line numbers in the report stay the file\'s own.',
+      'When the row directly under the header (or under a row of statistic labels) has only unit cells, at least two of its cells are units (a unit the header already states counts, so a single name may be the only one that changes), every cell has a name above it, and the numbers below fit the units. A unit that disagrees with the one the name already gives means the row is not folded. The finding gives the line and the first changed name, for example a column now named a [h]. The line numbers in the report stay the file\'s own.',
     example:
-      'A header latitude, longitude over a row degrees_north, degrees_east: the names become latitude [degrees_north] and longitude [degrees_east].',
+      'A header latitude, longitude over a row degrees_north, degrees_east, then rows of numbers: the names become latitude [degrees_north] and longitude [degrees_east].',
     action:
       'Nothing to fix. If you prefer a single header row, put the unit into the column name. In /convert this finding is only shown and never stops the export.',
   },
@@ -241,9 +241,9 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A row of units under the header was recognised and skipped. The column names already carried the same units, so no name was changed.',
     fires:
-      'When the row under the header holds only units and every column it names has the same unit in its own header too, for instance depth [m] over m. The row is not a data row and the report keeps the file\'s own line numbers. The finding gives the line.',
+      'When the row under the header holds only units and every column it names has the same unit in its own header too, for instance depth [m] over m. It needs numbers under at least two of the units and at least one data row below the units row; otherwise the row is not recognised and nothing is reported. The row is not a data row and the report keeps the file\'s own line numbers. The finding gives the line.',
     example:
-      'The header holds temperature [C] and depth [m] and the next line holds C and m.',
+      'The header holds temperature [°C] and depth [m], the next line holds °C and m, and rows of numbers follow.',
     action:
       'Nothing to fix. Remove the second row if you want a plain single header. In /convert this finding is only shown and never stops the export.',
   },
@@ -291,7 +291,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'The Event(s) block of a PANGAEA file gives a position or date, but no position was copied into the table (a date may still be), and the table has no position of its own.',
     fires:
-      'When the table lacks the position and the block cannot give it: several events are listed but the table has no Event column to say which row belongs to which, or the event\'s position is a track (start and end differ) and not a point, which also applies to a single event. The finding gives the number of events and which of the two reasons applies.',
+      'When the table lacks the position or the date and the block cannot give it: several events are listed but the table has no Event column to say which row belongs to which, or the event\'s position is a track (start and end differ) and not a point, which also applies to a single event; the track reason is given only when none of the listed events is a point. The finding gives the number of events and which of the two reasons applies.',
     example:
       'A block lists three stations and the table has no Event column; nothing is borrowed.',
     action:
@@ -301,7 +301,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'Some rows of a PANGAEA table have no matching event in the Event(s) block of the file header, so nothing was taken for them.',
     fires:
-      'When the table has an Event column, for each row whose Event cell is empty, names an event that is not listed, names an event listed twice, or names an event with no position or date (also for a single event lacking the value). The finding gives the number of rows and their lines.',
+      'When the table has an Event column, for each row whose Event cell is empty, names an event that is not listed, names an event listed twice, or names an event with no position or date . With one event the Event column is not consulted: every row takes that event, and a single event with neither position nor date gives no finding. The finding appears only when at least one column was added, and gives the number of rows and their lines.',
     example:
       'Rows 12 and 13 say station 7, and the block lists stations 1 to 6.',
     action:
@@ -311,7 +311,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A file named .zip is not a Darwin Core Archive, so nothing was checked. It has no meta.xml and may not even be a ZIP, for example a saved error page.',
     fires:
-      'When the file has no meta.xml at its root or in its single top-level folder, or is not a zip at all.',
+      'When the file has no meta.xml at its root or in its single top-level folder, or does not begin with the zip signature (PK); a file that begins with PK but cannot be opened as a zip is IN-DWCA-UNREADABLE.',
     example:
       'A web page saved with a .zip extension.',
     action:
@@ -331,7 +331,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A Darwin Core Archive could not be read safely, so nothing was checked.',
     fires:
-      'When the zip is damaged, encrypted, uses an unsupported method, is too large or has too many entries, or when meta.xml is missing, too big, has a DTD, is not well-formed or does not describe a single core file with fields. The finding gives a language-neutral reason code such as ZIP-ENCRYPTED or DWCA-META-INVALID.',
+      'When the zip is damaged, encrypted, uses an unsupported method, is too large or has too many entries, or when meta.xml is too big, has a DTD, is not well-formed or does not describe a single core file with fields, or when the core file that meta.xml names is not in the archive (DWCA-CORE-MISSING). The finding gives a language-neutral reason code such as ZIP-ENCRYPTED or DWCA-META-INVALID.',
     example:
       'An archive with a password-protected entry gives ZIP-ENCRYPTED.',
     action:
@@ -361,7 +361,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'The core of the archive is Event, so the tool checked the event table. Its Occurrence extension was counted, not checked row by row.',
     fires:
-      'When the core is Event and an Occurrence extension exists. The finding gives the number of occurrence rows.',
+      'When the core is Event and meta.xml lists an Occurrence extension whose file is in the archive and can be read (otherwise nothing is reported). The finding gives the number of occurrence rows.',
     example:
       'An event-core archive with an Occurrence extension of 4,200 rows.',
     action:

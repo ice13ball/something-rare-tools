@@ -33,7 +33,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'Two station names that differ only in spelling occur in the loaded tables, so they are probably the same station written in two ways. Left as they are, the station is split into two in any grouping by name and the other cross-file rules cannot match it.',
     fires:
-      'Across all loaded tables, when two different station names become equal after normalisation: only the part after the last slash is kept, letters are made upper case and spaces are removed. A name that is the same in every table is not reported. One finding per pair of spellings; the first spelling is the one that is used by the most tables, then by the most rows. The finding names both spellings.',
+      'Needs at least two loaded tables; two spellings inside a single table that is the only one loaded are not reported. Across all loaded tables, when two different station names become equal after normalisation: only the part after the last slash is kept, letters are made upper case and spaces are removed. A name that is the same in every table is not reported. One finding per pair of spellings; the first spelling is the one that is used by the most tables, then by the most rows. The finding names both spellings.',
     example:
       'One file calls a station "ST 7" and another calls it "st7"; "ST 7" and "st7" are reported as the same station.',
     action:
