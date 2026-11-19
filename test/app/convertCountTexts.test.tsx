@@ -183,6 +183,24 @@ describe('one answer for a whole column', () => {
     expect(lastSheet().countTexts).toEqual({ 'not found': { answer: 'present', count: 1 } });
   });
 
+  it('"Ask again" on a text answered by itself also takes back the column answer: the text is asked, and the other texts that answer covered come back as questions', async () => {
+    await load([{ name: 'hauls.csv', text: COLUMN_FILE }]);
+    fireEvent.click(button(itemOf('CONV-TEXT-IN-TAXON-CELL', 'not found'), T['convert.finding.countPresent']));
+    await waitFor(() => expect(decided()).toHaveLength(1));
+    await idle();
+    fireEvent.click(within(columnControl()!).getByRole('button', { name: T['convert.finding.countLeaveOut'] }));
+    await waitFor(() => expect(decided()).toHaveLength(4));
+    await idle();
+    expect(itemOf('CONV-COUNT-TEXT-DECIDED', 'not found').textContent).not.toContain('whole column');
+    fireEvent.click(button(itemOf('CONV-COUNT-TEXT-DECIDED', 'not found'), T['convert.finding.askAgain']));
+    await waitFor(() => expect(asked()).toHaveLength(4));
+    await idle();
+    expect(asked().map((q) => q.textContent?.match(/"([^"]+)"/)?.[1]).sort()).toEqual(['absent', 'nie stwierdzono', 'none seen', 'not found']);
+    expect(decided()).toHaveLength(0);
+    expect(lastSheet().countTextColumns).toBeUndefined();
+    expect(lastSheet().countTexts).toBeUndefined();
+  });
+
   it('no column control for a column with one open text', async () => {
     await load([{ name: 'hauls.csv', text: FILE.replace('nie stwierdzono', '4') }]);
     expect(asked()).toHaveLength(1);
@@ -208,6 +226,35 @@ describe('many texts', () => {
     // the answered ones are grouped as well, per column
     expect(document.querySelectorAll('details[data-testid="count-texts-group"]')).toHaveLength(1);
     expect(document.querySelector('details[data-testid="count-texts-group"] summary')?.textContent).toBe('Oithona similis: texts (12)');
+  });
+});
+
+describe('the collapse counts texts per column, and a mostly-text column is not silently ignored', () => {
+  const groupsOpen = (): HTMLDetailsElement[] => [...document.querySelectorAll<HTMLDetailsElement>('details[data-testid="count-texts-group"]')];
+  const ten = (oithona: (string | number)[], calanus: (string | number)[]): (string | number)[][] =>
+    oithona.map((o, i) => ['CR', `S${i + 1}`, `s${i + 1}`, 50 + i / 10, 1.5, `2020-05-${String(i + 1).padStart(2, '0')}`, o, calanus[i] ?? 3]);
+
+  it('six texts spread over two columns (three each) stay listed, none collapsed', async () => {
+    await load([{ name: 'hauls.csv', text: csvOf(HEADER, ten([1, 2, 3, 4, 'absent', 'none seen', 'not found'], [1, 2, 3, 4, 'zero seen', 'nil seen', 'n found'])) }]);
+    expect(asked()).toHaveLength(6);
+    expect(groupsOpen()).toHaveLength(0);
+  });
+
+  it('a column with six texts is collapsed, the two texts of the other column stay listed', async () => {
+    await load([{ name: 'hauls.csv', text: csvOf(HEADER, ten([1, 2, 3, 4, 5, 6, 7, 8, 'w a', 'w b', 'w c', 'w d', 'w e', 'w f'], [1, 2, 3, 4, 5, 6, 7, 8, 'zero seen', 'nil seen'])) }]);
+    expect(groupsOpen()).toHaveLength(1);
+    expect(groupsOpen()[0].querySelector('summary')?.textContent).toBe('Oithona similis: texts (6)');
+    expect(groupsOpen()[0].querySelectorAll('li[data-rule="CONV-TEXT-IN-TAXON-CELL"]')).toHaveLength(6);
+    const outside = asked().filter((q) => q.closest('details') === null);
+    expect(outside.map((q) => q.textContent?.match(/"([^"]+)"/)?.[1]).sort()).toEqual(['nil seen', 'zero seen']);
+  });
+
+  it('a column of 8 text cells and 2 numbers is not asked per text: the converter says it proposed to ignore the column, visibly', async () => {
+    await load([{ name: 'hauls.csv', text: csvOf(HEADER, ten([5, 6, 'a1 none', 'b1 none', 'c1 none', 'd1 none', 'e1 none', 'f1 none', 'g1 none', 'h1 none'], [])) }]);
+    expect(asked()).toHaveLength(0);
+    const ignored = items('CONV-COLUMN-IGNORED-PROPOSED');
+    expect(ignored).toHaveLength(1);
+    expect(ignored[0].textContent).toContain('Oithona similis');
   });
 });
 

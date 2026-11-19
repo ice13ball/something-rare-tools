@@ -483,8 +483,10 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
           const left = Object.fromEntries(Object.entries(cols ?? {}).filter(([i, a]) => !(indexes.includes(Number(i)) && a.answer === f.params.answer)));
           return { ...prev, [key]: { ...next, ...(own === undefined ? {} : { countTexts: own }), ...(Object.keys(left).length === 0 ? {} : { countTextColumns: left as never }) } };
         }
+        // a text of its own: it is removed, and the answer for the whole column of this text goes too, or the column would settle it again without being asked; the other texts it covered come back as questions
         const { [text]: _gone, ...others } = own ?? {};
-        return { ...prev, [key]: { ...next, ...(Object.keys(others).length === 0 ? {} : { countTexts: others }), ...(cols === undefined ? {} : { countTextColumns: cols }) } };
+        const kept = Object.fromEntries(Object.entries(cols ?? {}).filter(([i]) => !indexes.includes(Number(i))));
+        return { ...prev, [key]: { ...next, ...(Object.keys(others).length === 0 ? {} : { countTexts: others }), ...(Object.keys(kept).length === 0 ? {} : { countTextColumns: kept as never }) } };
       });
       return;
     }
@@ -2177,9 +2179,14 @@ function FindingList({ titleKey, findings, kind, onUseReplicate, onReadAsMeasure
   );
   // texts in count columns: a few are listed as any finding; many are grouped per column, collapsed, so the page stays usable
   const texts = findings.filter((f) => COUNT_TEXT_RULES.has(f.ruleId));
-  const grouped = texts.length > MANY_TEXTS;
-  const groups = new Map<string, Finding[]>();
-  if (grouped) for (const f of texts) groups.set(`${f.file}\u0000${f.sheet}\u0000${f.field}\u0000${f.ruleId}`, [...(groups.get(`${f.file}\u0000${f.sheet}\u0000${f.field}\u0000${f.ruleId}`) ?? []), f]);
+  const byColumn = new Map<string, Finding[]>();
+  for (const f of texts) {
+    const k = `${f.file}\u0000${f.sheet}\u0000${f.field}\u0000${f.ruleId}`;
+    byColumn.set(k, [...(byColumn.get(k) ?? []), f]);
+  }
+  // only a column with many texts is collapsed; a few texts of another column stay listed as any finding
+  const groups = new Map([...byColumn].filter(([, list]) => list.length > MANY_TEXTS));
+  const collapsed = new Set([...groups.values()].flat());
   return (
     <div className="convert-findings" data-kind={kind}>
       <h3>{t(titleKey, { n: findings.length })}</h3>
@@ -2201,7 +2208,7 @@ function FindingList({ titleKey, findings, kind, onUseReplicate, onReadAsMeasure
           ))}
         </div>
       )}
-      {items(grouped ? findings.filter((f) => !COUNT_TEXT_RULES.has(f.ruleId)) : findings)}
+      {items(collapsed.size === 0 ? findings : findings.filter((f) => !collapsed.has(f)))}
       {[...groups.entries()].map(([k, list]) => (
         <details key={k} className="convert-count-texts" data-testid="count-texts-group">
           <summary>{t('convert.countText.group', { column: list[0].field ?? '', n: list.length })}</summary>
