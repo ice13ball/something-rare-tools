@@ -94,7 +94,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'Some columns have a taxon, quantity, date, latitude or longitude role that the converter proposed and the file does not state by name. A stated name means an exact Darwin Core term, an exact vocabulary entry, a unit in the header or a PANGAEA geocode.',
     fires:
-      'Once per sheet when at least one column has such a proposed role. A column whose role the person changed is not listed. Nothing is re-roled and nothing about this finding is written to the archive or the companion file.',
+      'Once per sheet when at least one column has such a proposed role. A column whose role the person changed is not listed. Nothing is re-roled and nothing about this finding is written to the archive or the companion file. A species name used as a column header of a wide sheet is not listed here; the page handles those columns itself.',
     example:
       'A column headed "Latitude_dd" holds values from 54.1 to 54.9. The header is not an exact Darwin Core term, so the proposed latitude role is not confirmed. The finding lists "Latitude_dd" and asks to check it.',
     action:
@@ -124,7 +124,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'The sample code of every row is made of the columns the person picked. This note repeats the choice, so it is visible in the report: the columns, the number of samples, the number of rows and the name that starts every sample ID.',
     fires:
-      'Once per sheet whenever a sample key is in use, whether picked on the page or read from the companion file. Information only.',
+      'Once per sheet whenever a sample key is in use, whether picked on the page or read from the companion file. Information only. A profile sheet never gets this note.',
     example:
       'The person picks Station and Date. The note says: samples 14, rows 112, every sample ID starts with the name of the file (the name of the sheet for a workbook), then come the two values.',
     action:
@@ -134,7 +134,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'Another sheet seems to describe the samples of this results sheet and is linked to it by key columns. The converter shows how many samples it covers and joins nothing until the person confirms.',
     fires:
-      'When a sheet whose rows describe the samples of a results sheet is linked to it by a key, the description sheet holds at least half of the samples of the results sheet, the results sheet has a taxon and the description sheet has none (neither is a profile sheet), and the link is neither confirmed nor declined (sampleJoinNo). The note gives the number of samples found in the description sheet.',
+      'When a sheet whose rows describe the samples of a results sheet is linked to it by a key, the description sheet holds at least half of the samples of the results sheet, the results sheet has a taxon and the description sheet has none (neither is a profile sheet), and the link is neither confirmed nor declined (sampleJoinNo). The note gives the number of samples found in the description sheet. A results sheet that already has a confirmed join gets no further proposal; the results side of the key is the picked sample key or a sample ID, station or cruise column.',
     example:
       'A results sheet has 40 samples by station and date, and a sheet "Stations" has a row for 38 of them. The note proposes the link and says 38 of 40 samples were found.',
     action:
@@ -144,7 +144,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A sheet that seems to describe the samples is in the long layout, one row per parameter, or was turned by the person. Joining such a sheet is not supported yet.',
     fires:
-      'When the proposed description sheet (which holds at least half of the samples of the results sheet) has a parameter column and a value column, so that it was regrouped by the converter, or was turned by the person, instead of having one row per sample. Both sheets are then converted exactly as if there were no join.',
+      'When the proposed description sheet (which holds at least half of the samples of the results sheet) was regrouped by the converter from a parameter column and a value column, or was turned by the person, instead of having one row per sample. It replaces CONV-JOIN-PROPOSED for such a sheet and has the same conditions (no confirmed or declined join, a results sheet with a taxon); a long-looking sheet that was neither regrouped nor turned gets CONV-JOIN-PROPOSED instead. Both sheets are then converted exactly as if there were no join.',
     example:
       'A sheet "Environment" has the columns Station, Parameter and Value, with several rows per station. It is linked to the results by Station, but cannot be joined.',
     action:
@@ -186,7 +186,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     fires:
       'When the results sheet and the description sheet hold a different set of columns of the same text role, such as station, cruise or sample code (not one against one, and not the same set). A date, a position or a depth held in different column structures is merged into resolved columns and does not raise it.',
     example:
-      'The results sheet has two station columns (Station and Substation) and the description sheet has one Station column. The finding names both sets.',
+      'The person gave two results columns (Station and Substation) the role station, and the description sheet has one Station column. The finding names both sets. (Left on the recognised roles, Substation is ignored and this is not raised.)',
     action:
       'Use the same columns in both sheets, or set the columns of one of the sheets to ignore. In /convert this finding blocks the export.',
   },
@@ -194,7 +194,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'Some samples of the results sheet have no row in the description sheet. The converter will not invent a description for them.',
     fires:
-      'When a confirmed join leaves one or more results samples without a matching row (this includes results rows with a blank part of the key, named by their lines), and that has not been answered. The finding lists up to the first samples and, when the description sheet has samples without results, a few of them to show a near miss.',
+      'When a confirmed join leaves one or more results samples without a matching row (this includes results rows with a blank part of the key, named by their lines), and that has not been answered. The finding lists up to the first samples and, when the description sheet has samples without results, a few of them to show a near miss. When no key of the results sheet is in the description sheet at all, CONV-JOIN-NO-MATCH is raised instead. The description-only near miss is given only on the first results sheet that uses the description sheet.',
     example:
       'The results sheet has samples S1 to S40, and the description sheet lacks S39 and S40. The finding names both.',
     action:
@@ -214,7 +214,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'The person chose to convert the samples that have no description with only what the results sheet says. This note lists them. Nothing is invented for them.',
     fires:
-      'When the answer "results only" is given for the samples without a row in the description sheet. Information only.',
+      'When the answer "results only" is given for the samples without a row in the description sheet. It counts only for the same number of samples as now lack a description, and never when no key matches (then CONV-JOIN-NO-MATCH stands). Information only.',
     example:
       'Samples S39 and S40 have no description. The person chose to convert them from the results sheet only, and the note names both.',
     action:
@@ -244,7 +244,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A part of the join key is blank in some rows, so no row of the other sheet can be found for them.',
     fires:
-      'For every row of the results sheet (or of the description sheet, as the finding says) in which a column of the join key is empty. One finding per sheet lists the lines and the columns.',
+      'For every row of the results sheet (or of the description sheet, as the finding says) in which a column of the join key is empty. One finding per sheet lists the lines and the columns. The results-side finding is not raised once the "results only" answer is given for the same number of samples; a description row with every cell empty is skipped.',
     example:
       'The join key is station plus date, and lines 5 and 6 of the results sheet have a station but no date.',
     action:
@@ -284,9 +284,9 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A value contains a tab or a line break. The archive files are tab-separated with one record per line, so such a value would break them.',
     fires:
-      'For every cell with a tab or a line break inside it: a data value, but also a header (a taxon header, a variable name or a unit), an abundance class label, the sampling device label, or a value typed on the page and written to an output table. One finding per column lists the lines and shows the first value with the character shown as a space. The export is blocked and nothing is written until the character is removed.',
+      'For every cell with a tab or a line break inside it: a data value, but also a header (a taxon header, a variable name or a unit), an abundance class label, the sampling device label, or a value typed on the page and written to an output table. One finding per column lists the lines and shows the first value with the character shown as a space. The export is blocked and nothing is written until the character is removed. Cells of a column that is not written (one set to ignore, such as a free remarks column) are not read.',
     example:
-      'A remarks cell on line 18 holds two lines of text. The finding quotes it with a space in place of the break.',
+      "A station cell on line 18 holds two lines of text, 'north' and 'bay'. The finding names the column Station and quotes it as 'north bay'.",
     action:
       'Replace the character with a space in the sheet. In /convert this finding blocks the export.',
   },
@@ -342,11 +342,11 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
   },
   'CONV-BIOMASS-UNIT-UNCLEAR': {
     checks:
-      'The unit of a weight column is missing, unclear or in two kinds, so the unit is left empty. A partial or guessed unit would change the meaning of the number.',
+      'The unit of a weight column is missing or unclear, so the unit is left empty. A partial or guessed unit would change the meaning of the number.',
     fires:
-      'Three cases. The header holds a mass unit not in brackets followed by words the converter does not understand (neither a per-area or per-volume part nor a kind of mass); the finding quotes the unrecognised rest. The header has no unit at all (variant none). Or two different mass units appear in the weight columns. The lines are named.',
+      'Three cases. The header holds a mass unit not in brackets followed by words the converter does not understand (neither a per-area or per-volume part nor a kind of mass); the finding quotes the unrecognised rest. The header has no unit at all (variant none). Or one header names two different mass units (Weight kg g). Two columns that each have their own unit (Weight [g] and Weight [kg]) raise nothing: each keeps its unit. A unit in brackets or as a clear word of the name (weight_kg_total) also raises nothing. The lines are named.',
     example:
-      'A header "Weight kg of the best sample" holds the unit kg and unclear words. measurementUnit is left empty. A header "Weight" with no unit raises the none variant.',
+      'A header "Weight kg of the best sample" holds the unit kg and unclear words. measurementUnit is left empty. A header "Weight" with no unit raises the none variant, and one header "Weight kg g" raises the finding too.',
     action:
       'Put one unit in brackets in the header, for example [kg/km2], and load the file again. In /convert this warning must be accepted once.',
   },
@@ -354,7 +354,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A column looks like the total of a taxon in a sample, repeated on each size class row. Summed as it is, the number would be inflated by the number of size classes.',
     fires:
-      'When the value is the same on every row of at least 4 groups of rows that share sample, taxon, life stage and qualifier, those groups are at least half of the groups that count as evidence, and the column has at least 2 distinct values. A group counts as evidence only when its value is not smaller than the number of its rows (a count of 1 is not counted). The same pattern is also raised as variants for a weight and for groups that disagree, even after the answer one occurrence per sample and taxon.',
+      'When the value is the same on every row of at least 4 groups of rows that share sample, taxon, life stage and qualifier, those groups are at least half of the groups that count as evidence, and the column has at least 2 distinct values. A group counts as evidence only when its value is not smaller than the number of its rows (a count of 1 is not counted). The finding is not raised again after the answer one occurrence per sample and taxon (CONV-QUANTITY-REPEATED-ONCE instead) or after real counts held for the same number of rows (CONV-QUANTITY-REAL-COUNTS instead). The variants for a weight and for groups that disagree are raised even after that answer.',
     example:
       'A sheet has several samples, each with three size-class rows per taxon, and each row repeats the total of its taxon (120 in one sample, 80 in another). In at least 4 groups the sum would be three times the total. The finding names the column and the size column that differs.',
     action:
@@ -394,7 +394,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'Some rows are exact copies of another row in every column but a per-row identifier, with a quantity above 1. Written as they are, the quantity would be counted twice.',
     fires:
-      'For every row identical to an earlier one in every column but a per-row identifier, with a quantity above 1 for a count, above 0 for a density, a biomass or another quantity, or any identical row when the sheet is declared as its own records. The finding gives the sum of the quantity with the copies and without them. The sums are left out for a percent cover, an abundance class, or own records with no quantity column.',
+      'For every row identical to an earlier one in every column but a per-row identifier, with a quantity above 1 for a count, above 0 for a density, a biomass or another quantity, or any identical row when the sheet is declared as its own records. The finding gives the sum of the quantity with the copies and without them. The sums are left out for a percent cover, an abundance class, or own records with no quantity column. Not raised once the copies have been left out (CONV-ROW-COPIES-DROPPED instead), kept as records (CONV-ROW-COPIES-KEPT instead) or declared real counts.',
     example:
       'Lines 30 and 31 are identical, with the count 14. With both the sum is 28, without the copy 14.',
     action:
@@ -412,9 +412,9 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
   },
   'CONV-ROW-COPIES-SPECIMENS': {
     checks:
-      'Some rows are identical to another row and have a count of 1. A table of single specimens looks exactly like this, so nothing is blocked.',
+      'Some rows are identical to another row and have a count of 1. A table of single specimens looks exactly like this, so this note itself blocks nothing.',
     fires:
-      'For every row identical to an earlier one with a count of 1 when the sheet is not declared as its own records. The finding gives the sum as separate records and the sum if they were copies.',
+      'For every row identical to an earlier one with a count of 1 when the sheet is not declared as its own records. The finding gives the sum as separate records and the sum if they were copies. Without an occurrenceID column the same rows also raise the blocking CONV-ID-DUPLICATE (copies variant); with a unique occurrenceID column only this note is raised. Not raised under held real counts, and the leave-out-copies answer does not apply to rows with a count of 1.',
     example:
       'Five rows read Calanus, size 2, count 1. As specimens the sum is 5, as copies of one record it is 1.',
     action:
@@ -454,7 +454,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'As the person chose, rows that could not be placed were left out of the archive and are listed in the file beside it. Nothing was deleted from the source.',
     fires:
-      'When the answer to leave out the rows of one reason is applied, from the page or the companion file (leaveOut). Information only.',
+      'When the answer to leave out the rows of one reason is applied, from the page or the companion file (leaveOut). Information only. The answer holds only while the sheet has the same number of such rows as when it was given (a companion file also the same number of rows in all); with another number the question is asked again.',
     example:
       '5 rows with a count but no taxon name were left out and listed.',
     action:
@@ -476,7 +476,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     fires:
       'Superseded in /convert. The row is raised together with the fate no-taxon, and the question CONV-ROW-NOT-UNDERSTOOD (reason no-taxon) takes over the same lines, so this finding does not reach the report. For the rows with a quantity or a biomass and an empty taxon cell, the finding would list the lines and the column.',
     example:
-      'Line 52 has the count 6 and no taxon. It is not converted.',
+      'Line 52 has the count 6 and no taxon; the question CONV-ROW-NOT-UNDERSTOOD (reason no-taxon) lists line 52 and this finding stays hidden.',
     action:
       'Leave the rows out and list them (leaveOut) when CONV-ROW-NOT-UNDERSTOOD asks, or type the taxon name in the sheet. The export is blocked until one of them is done.',
   },
@@ -484,9 +484,9 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A column read as a time of day holds full dates, and no column is the date. The events would have no eventDate, and a date that is in the file is never dropped silently.',
     fires:
-      'When the sheet has a time column and no date column, and half or more of the filled cells of the time column are dates: full dates, spreadsheet serials in a date-formatted column, or date-looking text that the date parser does not read. A year part column also counts as a date. Placeholder dates of a spreadsheet (1899-12-30) or an epoch (1970-01-01) are times and are not counted.',
+      'When the sheet has a time column and no date column, and half or more of the filled cells of the time column are dates: full dates, spreadsheet serials in a date-formatted column, or date-looking text that the date parser does not read. A year part column also counts as a date. Placeholder dates of a spreadsheet (1899-12-30) or an epoch (1970-01-01) are times and are not counted. It does not fire when the sheet has a date column, a combined date and time column or a year part column. A column of full datetimes is read as date and time by itself, so the finding appears only for a column the person set to time of day (or one with enough real times).',
     example:
-      'The column "Time" holds 2024-05-03 10:15 in all rows, and no other column is a date.',
+      'The person gave the column "Time" the meaning time of day, but it holds 2024-05-03 10:15 in all rows, and no other column is a date.',
     action:
       'Give the column the meaning "Date and time" on the page. In /convert this finding blocks the export.',
   },
@@ -524,7 +524,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'The day and month order declared for a date column was used for its ambiguous dates. It applies to the date written, the date inside an identifier and the date compared in a join.',
     fires:
-      'When a declared order (dayMonthOrder, or yyOrder for NN-NN-NN dates) is applied to a column. Information only.',
+      'When a declared order (dayMonthOrder, or yyOrder for NN-NN-NN dates) is applied to a column. Information only. It is said only when the declaration decided at least one ambiguous cell. If the clear dates of the column already show the same order, or no cell is ambiguous, nothing is said; if they show the other order, CONV-DATE-ORDER-CONTRADICTED is raised instead.',
     example:
       'The person declared day first for the column "Date", so 03/04/2024 is 3 April everywhere.',
     action:
@@ -534,9 +534,9 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'The comma in the numbers of a column was read as the person declared, a decimal comma or a thousands separator, everywhere the column is used.',
     fires:
-      'When a declared reading (decimalReading) is applied to a column. Under thousands every cell written n,nnn is read without its commas; under decimal the column is read as it was. Other columns are not affected. Information only.',
+      'When a declared reading (decimalReading) is applied to a column that IN-DECIMAL-AMBIGUOUS asked about (a file with decimal commas, a column whose every comma value has three digits after the comma); a declaration for any other column is ignored. Under thousands every cell written n,nnn is read without its commas; under decimal the column is read as it was. Other columns are not affected. Information only.',
     example:
-      'The cells 1,250 of the column "Count" were declared a thousands separator and are read as 1250.',
+      'In a file that writes decimal commas (55,5), every comma value of the column "Count" is written n,nnn (1,250 and 2,000), so IN-DECIMAL-AMBIGUOUS asked; the person declared a thousands separator and 1,250 is read as 1250.',
     action:
       'Nothing to answer. "Ask again" takes the answer back. The saved answer holds only while the column and the same number of rows are found. In /convert this note is only shown.',
   },
@@ -544,7 +544,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'Cells holding exactly -99, -999 or -9999 in a number column were handled as the person declared: as missing values or as real values.',
     fires:
-      'When the answer to ROW-MISSING-CODE (missingCode) is applied to a column. Missing means the cells are left empty before the sheet is read and listed with the reason missing-code; real means they are written as they are. Other columns are not touched.',
+      'When the answer to ROW-MISSING-CODE (missingCode) is applied to a column. Missing means the cells are left empty before the sheet is read and listed with the reason missing-code; real means they are written as they are. Other columns are not touched. It is raised for a column that holds at least one such cell; an answer given for a column without one says nothing.',
     example:
       '4 cells of the column "Depth" hold -999, and the person answered missing. No depth is written for them.',
     action:
@@ -584,7 +584,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'Zero cells were left out because the species list was not declared complete. A zero means absent only when every species of the list was looked for in the sample.',
     fires:
-      'When a numeric 0 is in a quantity cell and the full species list tick is off, which is the default. In a presence list the same holds for marks of absence such as "-" or "absent" (variant presence). An empty or NA cell never becomes a record either.',
+      'When a numeric 0 is in a quantity cell and the full species list tick is off, which is the default. In a presence list the same holds for marks of absence such as "-" or "absent" (variant presence). An empty or NA cell never becomes a record either. A zero in a row of a long sheet that has a weight above zero belongs to CONV-ZERO-WITH-BIOMASS and is not counted here; a zero in a row with no taxon name is listed by CONV-ROW-NOT-UNDERSTOOD.',
     example:
       '37 zeros in a count table were not converted, because the full list was not ticked.',
     action:
@@ -594,9 +594,9 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'The rows of one sample differ in a value that must be the same for the whole sample. A sample is one event, and the first row is not silently preferred.',
     fires:
-      'For every sample whose rows differ in a sample-level value such as position, date or depth. The finding names what differs, the sample and the lines.',
+      'For every sample whose rows differ in a sample-level value such as position, date, depth, sample size, depth below the seafloor or a measured value. The finding names what differs, the sample and the lines. On a long sheet with a station column, rows of one sample code that differ in date or time are read as separate visits (CONV-ID-REVISIT) and do not raise this; a sample key declared on the page switches that reading off.',
     example:
-      'Sample S5 has two rows with different dates, 2024-05-03 and 2024-05-04.',
+      'Sample S5 has two rows (two taxa) with the depths 5 m and 10 m.',
     action:
       'Make the values equal in the source, or use a sample code that separates the samples. In /convert this finding blocks the export.',
   },
@@ -614,7 +614,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'Columns that give the same value for every row of one taxon (a species code, an identifier, a trophic group) are attributes of the taxon, not measurements, and were not written.',
     fires:
-      'For a numeric column that the tool itself proposed to ignore, whose value is a function of the taxon column but varies between samples, with at least two values overall, no unit and no size word, and either a name that says code, id, tsn, key, serial or trophic, or when at least 3 taxa are listed more than once and cover half of all taxa. A text column is never listed, and a column the person set is not listed.',
+      'For a numeric column that the tool itself proposed to ignore, whose value is a function of the taxon column but varies between samples, with at least two values overall, no unit and no size word, and either a name that says code, id, tsn, key, serial or trophic, or when at least 3 taxa are listed more than once and cover half of all taxa. A text column is never listed, and a column the person set is not listed. Only for a long sheet with a taxon column; a wide sheet never raises it.',
     example:
       'A column "TSN" holds the same number on every row of one species and is not written.',
     action:
@@ -676,7 +676,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     fires:
       'For a column to the right of the last named header cell (a blank cell in the middle of the header is left as it is) that is mapped as a variable still named Column N, or as a taxon header (IN-HEADER-SHORT). The internal name is Column N.',
     example:
-      'The header names stop at the fourth column, and the fifth column holds numbers, so it would be written as a variable named Column 5.',
+      'The header names stop at the fourth column, the data rows hold numbers in a fifth column, and the person maps that column as a variable but leaves its name Column 5, so it would be written as a variable named Column 5.',
     action:
       'Type a name for the variable, or choose another meaning for the column, for example Ignore. In /convert this finding blocks the export.',
   },
@@ -694,7 +694,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'The table looks transposed, with variables or species in rows. Row 1 would be read as the header, so the sheet was not read.',
     fires:
-      'When variables are in rows, or when species are in rows: at least 3 Latin names make up at least 60 percent of the first column, there are at least 2 other headers, and at least 80 percent of the cells are numbers or marks (+, x, *). A normal wide sheet with species as headers is never flagged. The sheet is not converted.',
+      'When variables are in rows, or when species are in rows: at least 3 Latin names make up at least 60 percent of the first column, there are at least 2 other headers, and at least 80 percent of the cells are numbers or marks (+, x, *). A normal wide sheet with species as headers is never flagged. The sheet is not converted. Not raised for a profile sheet, a sheet turned with the turn button, a long sheet that was regrouped, or a sheet ticked "Read as a normal table".',
     example:
       'The first column lists species and the other columns are the samples S1, S2, S3.',
     action:
@@ -702,11 +702,11 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
   },
   'CONV-SHEET-UNITS-ROW': {
     checks:
-      'The first row under the header looks like units (m, degrees_north) but could not be folded into the header, so the sheet was not read.',
+      'The first row under the header looks like units (m, degC) but could not be folded into the header, so the sheet was not read.',
     fires:
-      'Only when the units row could not be folded into the header: text or codes stand under some of the unit columns, or a row with a non-unit cell and at least two unit cells has numbers below. The clean case, units over numbers, is folded into the header silently and raises nothing.',
+      'Only when the units row could not be folded into the header: text or codes stand under some of the unit columns, or a row with a non-unit cell and at least two unit cells has numbers below. The clean case, units over numbers, is folded into the header silently and raises nothing. Not raised for a profile sheet, a turned sheet, a regrouped long sheet, or a sheet ticked "Read as a normal table"; at least two cells of the row must be units the converter knows (m, degC, PSU).',
     example:
-      'Line 2 holds m, degrees_north and a word under the header Depth, Latitude and Station, and the Station column holds text codes below. The row is not folded, so it is reported.',
+      'Line 2 holds m, degC and the word note under the header Depth, Temp and Station, and numbers stand under Depth and Temp. The row is not folded, so it is reported.',
     action:
       'Write the units into the column names, for example "depth [m]", and load the file again, or tick "Read as a normal table" if the row is data (kept as transposedAsTable). In /convert this finding blocks the export.',
   },
@@ -716,7 +716,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     fires:
       'When a sheet with a parameter column and a value column was regrouped; the regrouping is automatic. The note gives the number of samples and the parameter columns, one per parameter and unit, headed name [unit]. Information only.',
     example:
-      '240 rows with parameters Temperature and Salinity became 60 samples with two parameter columns.',
+      '120 rows with parameters Temperature and Salinity became 60 samples with two parameter columns.',
     action:
       'Nothing to answer. Check the parameter columns. To undo the regrouping, tick "read as a normal table" for the sheet (kept as longAsTable). In /convert this note is only shown.',
   },
