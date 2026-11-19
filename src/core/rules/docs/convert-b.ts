@@ -8,19 +8,19 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'Quality-flag columns of a long sheet are left out of the sample key and are not written. A flag says how good a value is, not which sample it belongs to, so using it in the key would split one sample into several.',
     fires:
-      'Fires once per long sheet that has one or more columns the converter reads as quality flags by their name (for example "flag" or "QC"). The columns are left out by name, not by your answer. Raised for long sheets only.',
+      'Fires once per long sheet that has one or more columns the converter reads as quality flags by their name: a prefix Q_, QC_ or QF_, a suffix _QC, _QF, _flag, _flags or _quality, the words "quality flag", or "X QC", "X flag" or "Q X" where X is the header of another column of the sheet. A bare "flag" or "QC" is not read as a flag. The columns are left out by name, not by your answer. Raised for long sheets only.',
     example:
       'A long sheet has the columns Station, Date, Parameter, Value and Value_flag. Value_flag holds the letters G and B. The column is left out and named in the message.',
     action:
-      'Nothing to answer. The outcome comes from a tool default, so it is accepted once before the export. If the column carries data you want in the archive, give it another meaning in the role table of the sheet.',
+      'Nothing to answer. The outcome comes from a tool default, so it is accepted once before the export. If the column carries data you want in the archive, rename it in the file so that it no longer reads as a flag; the flag test runs before the roles, so a role cannot override it.',
   },
   'CONV-LONG-FLAG-PARAMETERS': {
     checks:
       'Rows of a long sheet whose parameter name reads as a quality flag are skipped. A flag is not a measurement, so no column is made for it and nothing is written.',
     fires:
-      'Fires once per long sheet when one or more distinct parameter names read as flags (for example "QC flag"). All rows with those names are skipped, and the message counts both the names and the rows.',
+      'Fires once per long sheet when one or more distinct parameter names read as flags (for example "Salinity flag" next to a Salinity column, or "Salinity_QC"). All rows with those names are skipped, and the message counts both the names and the rows.',
     example:
-      'A long sheet has Parameter values Temperature, Salinity and Salinity QC flag. The 40 rows named Salinity QC flag are skipped; the other rows are converted.',
+      'A long sheet has Parameter values Temperature, Salinity and Salinity flag. The 40 rows named Salinity flag are skipped; the other rows are converted.',
     action:
       'Nothing to answer. The rows are left out because of the parameter name, not by your answer, so the outcome is accepted once before the export. To keep such rows, rename the parameter in the sheet so it no longer reads as a flag.',
   },
@@ -42,17 +42,17 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     example:
       'You marked the columns Analyst and Comment of a long sheet as describing the measurement. Their values are not in the archive and the message lists both.',
     action:
-      'Nothing to answer; the finding is only shown. It follows from your own choice. To write the values, remove the mark in the role table of the sheet.',
+      'Nothing to answer; the finding is only shown. It follows from your own choice. To write the values, remove the tick in the panel "Columns that describe the measurement, not the sample" of the long sheet. Identity columns such as station, date, depth and position cannot be marked there.',
   },
   'CONV-LONG-KEY-VARIES': {
     checks:
       'Rows of a long sheet that share station, date and depth but differ in another column are read as different samples. If the difference only describes the measurement (a comment, an analyst), you would get several samples where there is one.',
     fires:
-      'Fires when rows that share every position and identity column (station, cruise, sample, date, time, depth, pressure, position) differ in one or more other columns, in at least one sample. The message names the columns and counts the samples.',
+      'Fires when rows that share every position and identity column (station, cruise, sample, date, time, depth, pressure, position) differ in one or more other columns. Once any column varies, every group of two or more rows with the same identity counts as a sample. The message names the columns and counts the samples.',
     example:
       'Two rows of Station A on 2024-05-01 at 10 m differ only in a Comment column ("clear" and "turbid"). They become two samples.',
     action:
-      'If the column describes the measurement, mark it as such in the role table of the sheet: it leaves the key and is not written. If the samples really differ, accept the finding once. The split is a tool default, so the export needs the acceptance.',
+      'If the column describes the measurement, tick it in the panel "Columns that describe the measurement, not the sample" of the long sheet: it leaves the key and is not written. If the samples really differ, accept the finding once. The split is a tool default, so the export needs the acceptance.',
   },
   'CONV-LONG-DUPLICATE': {
     checks:
@@ -98,7 +98,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'In a turned sheet each source row becomes a column named by the name column. A row with values and no name cannot become a column.',
     fires:
-      'Fires when a source row of a turned sheet holds a value and nothing in the name column. The rows are listed with the reason turn-no-name.',
+      'Fires when a source row of a turned sheet holds a value in any other column (a unit or label column counts) and nothing in the name column. The rows are listed with the reason turn-no-name.',
     example:
       'A turned sheet has a row with the values 3 and 5 under S1 and S2 and an empty name cell.',
     action:
@@ -108,7 +108,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'In a turned sheet a row name must be unique, because it becomes a column name. A name is data, so the converter never renames it to make it unique.',
     fires:
-      'Fires when the trimmed, case-blind name is used by two or more source rows, or equals a column the turn adds (Sample, Date). None of those rows is turned. The message names the name and the lines.',
+      'Fires when the trimmed, case-blind name is used by two or more source rows, or equals a column the turn adds: Sample always, and Date only when the sheet is turned with dated headers (turned=...:dates). None of those rows is turned. The message names the name and the lines.',
     example:
       'A turned sheet has two rows named Temperature, or one row named Sample.',
     action:
@@ -132,27 +132,27 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     example:
       'A depth column is headed "Depth (cm)" in a water-column sheet.',
     action:
-      'Give metres, or correct the unit of the column in the role table. For a depth in sediment choose the meaning "Depth below seafloor". The export is blocked until then.',
+      'Give metres, or correct the unit in the header of the column. For a depth in sediment choose the meaning "Depth below seafloor". The export is blocked until then.',
   },
   'CONV-DEPTH-CONVERTED': {
     checks:
       'A depth in fathoms, feet or km was converted to metres with an exact factor. The original text is kept in verbatimDepth. You confirm that the unit in the header is right.',
     fires:
-      'Fires when a depth column has the unit fathom (fm), foot (ft) or km. The arithmetic is exact, on the digits of the cell. The message shows the factor and one example.',
+      'Fires once per depth column (plain, minimum or maximum) that has the unit fathom (fm), foot (ft) or km and at least one numeric cell. The arithmetic is exact, on the digits of the cell. The message shows the factor and one example.',
     example:
       'The cell "10 ft" is written as 3.048 m and verbatimDepth keeps "10 ft".',
     action:
-      'Check the unit in the header. Accept the conversion once before the export; the outcome is a tool step, not your answer. If the unit is wrong, correct it in the role table.',
+      'Check the unit in the header. Accept the conversion once before the export; the outcome is a tool step, not your answer. If the unit is wrong, correct it in the header of the column.',
   },
   'CONV-SEAFLOOR-UNIT': {
     checks:
       'A column with the meaning "Depth below seafloor" can be converted only from centimetres or metres. Another unit has no exact factor here.',
     fires:
-      'Fires when the unit of such a column is neither cm nor m. Nothing is written from the column.',
+      'Fires when the unit of such a column is neither cm nor m, or when it states no unit. Nothing is written from the column.',
     example:
       'A depth-below-seafloor column has the unit "inch".',
     action:
-      'Set the unit of the column in the role table to cm or m. The export is blocked until then.',
+      'Set the unit in the header of the column to cm or m. The export is blocked until then.',
   },
   'CONV-SEAFLOOR-VALUE': {
     checks:
@@ -168,11 +168,11 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'In a depth-below-seafloor column most cells have one sign. Cells with the opposite sign are written on the other side of the seafloor. You confirm the direction.',
     fires:
-      'Fires when some cells have the sign that most cells do not have. The direction is taken from the majority of signs (a tool default). The opposite cells are written as a distance above or below the seafloor (positive above, negative below).',
+      'Fires when some cells have the sign that most cells do not have. The direction is proposed from the majority of signs (negative numbers in the majority mean counted upwards from the seafloor); you can change it. On a tie the positive cells count as the minority. The opposite cells are written as a distance above or below the seafloor (positive above, negative below).',
     example:
       'Of 50 values, 48 are negative (below) and 2 are positive. The 2 are written as above the seafloor.',
     action:
-      'Check that the direction is right and correct the signs in the sheet if not. Otherwise accept once before the export.',
+      'Check the direction. Change it with the "Positive direction" (downwards or upwards) selector of the role of the column, or correct the signs in the sheet. Otherwise accept once before the export.',
   },
   'CONV-SEAFLOOR-NO-SITE-DEPTH': {
     checks:
@@ -188,7 +188,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'OBIS publishes species records. An archive with no occurrence record is not an OBIS dataset, however much environmental data it holds.',
     fires:
-      'Fires when the conversion produced zero occurrence records. A profile sheet with only levels and measurements gives none. It does not fire for a sheet where CONV-SPECIES-LIST-NO-COUNTS, CONV-TAXON-NO-QUANTITY or CONV-ENV-ONLY-SHEET already speaks.',
+      'Fires when the conversion produced zero occurrence records. A profile sheet with only levels and measurements gives none. It does not fire when a taxon sheet still waits for the kind of number (CONV-QUANTITY-UNDECLARED, CONV-TAXON-NO-QUANTITY, CONV-SPECIES-LIST-NO-COUNTS), or when every sheet is environmental only (CONV-ENV-ONLY-SHEET). It does fire, with its own wording, when all counts are 0 (tick the full species list) or when the quantity column is blank in every taxon row.',
     example:
       'The upload is a single profile sheet of temperature and salinity levels with no taxon sheet.',
     action:
@@ -240,25 +240,25 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     fires:
       'Fires when no column has the taxon role: for a wide sheet no taxon header columns, for a long sheet no taxon column. A long sheet with a taxon column and no quantity gets CONV-SPECIES-LIST-NO-COUNTS or CONV-TAXON-NO-QUANTITY instead.',
     example:
-      'A wide sheet has the columns Station, Date and Temperature only.',
+      'A wide sheet has only the columns Station, Date and Notes, with no measured variable and no species.',
     action:
-      'Mark the taxon columns (wide) or the taxon column (long) in the role table, and declare the quantity. The export is blocked until then.',
+      'Give the taxon columns (wide) or the taxon column (long) the taxon role in the role selector of the mapping editor, and declare the quantity. The export is blocked until then.',
   },
   'CONV-SPECIES-LIST-NO-COUNTS': {
     checks:
       'A long sheet has a taxon column and no numbers. It may be a list of species found. The converter does not guess that, because no count means nothing is quantified.',
     fires:
-      'Fires on a long sheet with a taxon column and no quantity column. It replaces CONV-NO-TAXON, CONV-QUANTITY-UNDECLARED and CONV-NO-OCCURRENCES for that sheet.',
+      'Fires on a long sheet with a taxon column, no quantity column and no measured-variable column (with a measured variable it is CONV-TAXON-NO-QUANTITY). It replaces CONV-NO-TAXON, CONV-QUANTITY-UNDECLARED and CONV-NO-OCCURRENCES for that sheet.',
     example:
       'A sheet lists Station A with the species Mytilus edulis and Macoma balthica, and nothing else.',
     action:
-      'Tick "This is a list of species found (presence only, no counts)" for the sheet (companion setting presenceOnly=<sheet>); each row then becomes a present occurrence with no quantity. Or add a quantity column and declare it. The export is blocked until then.',
+      'Tick "This is a list of species found (presence only, no counts)" for the sheet (companion setting presenceOnly=<sheet>); each row then becomes a present occurrence with no quantity. Or tick "each row is its own record", or add a quantity column and declare it. The export is blocked until then.',
   },
   'CONV-PRESENCE-VALUE': {
     checks:
       'In a species list ticked as presence only, a wide cell is read as a mark. A value that is not a mark is not guessed.',
     fires:
-      'Fires when a cell holds anything else than a mark or empty: for example a number above 1, a negative number or other text. Marks are x, X, +, *, a tick, 1, yes, y, tak, ja, oui, present and similar. Absence marks (0, -, absent, no, nie, nein, non) count only when the full-species-list tick is set.',
+      'Fires when a cell holds anything else than a mark or empty: for example a number above 1, a negative number or other text. Marks are x, X, +, *, a tick, 1, yes, y, tak, ja, oui, present and similar. Absence marks (0, -, absent, no, nie, nein, non) are never an error: they write an absence only when the full-species-list tick is set, otherwise the cell is skipped. 0 and 1 are read as numbers, so 1.0 is a presence.',
     example:
       'A cell holds 12 in a sheet ticked as presence only.',
     action:
@@ -272,7 +272,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     example:
       'A long sheet has Taxon, Station and Temperature, but no Count or Biomass column.',
     action:
-      'Mark the column with counts, density or biomass as the quantity, or add one. The sheet is not converted and the export is blocked until then.',
+      'Mark the column with counts, density or biomass as the quantity, or add one; or press "each row is its own record" on the finding, or tick presence only for the sheet (presenceOnly=<sheet>). The sheet is not converted and the export is blocked until then.',
   },
   'CONV-ENV-ONLY-SHEET': {
     checks:
@@ -412,15 +412,15 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     example:
       'A column of numbers has no verified concept and no declared meaning.',
     action:
-      'Declare what the numbers in the sheet mean in the role table. The export is blocked until then.',
+      'Declare what the numbers of the column mean, in the quantity declaration form or by the role of the column. The export is blocked until then.',
   },
   'CONV-COLUMN-NOT-EXPORTED': {
     checks:
       'Columns with data that the conversion does not read as the sheet is set up are not written. You are told which, so nothing disappears silently.',
     fires:
-      'Fires for columns with a role that is not read here (a pressure outside a profile file, a second column of a role read once, a role of the other sheet shape, the quantity type, a sample-size column when the sample size is not set to a column), for a column with data and an empty header (shown as its letter in brackets), and for a second quantity column. A column you set to ignore is CONV-COLUMN-IGNORED instead.',
+      'Fires for columns with a role that is not read here (a pressure outside a profile file, a second column of a role read once, a role of the other sheet shape, the quantity type, a sample-size column when the sample size is not set to a column), for a column with data and an empty header (shown as its letter in brackets), and for a column the tool left on ignore that holds data and has a quantity-like header (for example Biomass [g] next to a count) on a sheet that is not a profile sheet. A column you set to ignore is CONV-COLUMN-IGNORED instead.',
     example:
-      'A wide sheet has a Count column and a Biomass column, both as quantity. Only one is read; the second is named.',
+      'A long sheet has a Count column as the quantity and a column "Biomass [g]" left on ignore by the tool that holds numbers: the biomass column is named.',
     action:
       'Give the column a meaning that is read, or accept once that it is not written. The export needs the acceptance.',
   },
@@ -472,7 +472,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     example:
       'Twelve occurrences have a name and no ID column and no WoRMS lookup was done.',
     action:
-      'Turn on the WoRMS lookup for a wide sheet (companion setting worms=yes) and confirm results, or mark a column holding the IDs in a long sheet. Otherwise accept once.',
+      'Tick the WoRMS option (a companion row worms=yes only pre-ticks it; nothing is sent until you press Look up), and confirm each undecided result; or mark a column holding the IDs (scientificNameID or AphiaID). Otherwise accept once.',
   },
   'CONV-WORMS-UNDECIDED': {
     checks:
@@ -490,7 +490,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     fires:
       'Fires when the lookup returns no record for a name (an empty result, or HTTP 204 for a whole batch). The message names the names.',
     example:
-      'The name "Mytilus edulus" (misspelt) returns nothing.',
+      'The invented name "Zzyxia novella" has no near record in WoRMS and returns nothing. A near misspelling of a real name returns a near match instead (CONV-WORMS-UNDECIDED).',
     action:
       'Check the spelling, or write to WoRMS if the taxon is new. Otherwise accept once; the ID stays empty.',
   },
@@ -500,7 +500,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     fires:
       'Fires when the record has isMarine and isBrackish unset and isFreshwater or isTerrestrial set. A record with no habitat flag at all is unknown and does not fire. The ID is written as confirmed.',
     example:
-      'The confirmed name Perca fluviatilis is a freshwater fish.',
+      'The confirmed name Daphnia magna is a strictly freshwater crustacean.',
     action:
       'Check that these are the right taxa. Accept once; the IDs are written as confirmed.',
   },
@@ -548,7 +548,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A mesh size is written as MSHSIZE1 in micrometres. It must be a plain number above zero.',
     fires:
-      'Fires when the typed mesh size is refused, for example text, zero, a negative number or a number with a unit. The message gives the reason.',
+      'Fires when the typed mesh size is refused, for example text, a number with a unit, zero, a negative number, a number with more than one point or comma, or a pattern such as 1,500 or 12.345 that could be a thousands separator. The message gives the reason.',
     example:
       'You type "200 um" in the mesh size field.',
     action:
@@ -558,7 +558,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A column of whole numbers marked by hand as the taxon ID looks like WoRMS AphiaIDs, but the header does not say so. The values are written as given, not as WoRMS LSIDs.',
     fires:
-      'Fires when you gave a column the taxon ID role, every filled cell is a positive whole number and the header is none of AphiaID, aphia_id, Aphia ID.',
+      'Fires on a long sheet when a column has the taxon ID role, every filled cell is a positive whole number and the header is none of AphiaID, aphia_id, Aphia ID.',
     example:
       'A column headed "Code" holds 127160 and 140480.',
     action:
@@ -582,7 +582,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     example:
       'The profile sheet has the station "St 5" and the biology sheet has "St5".',
     action:
-      'Correct the spelling, or accept once if no biology was sampled there.',
+      'Correct the spelling, tick "Match the stations ignoring a trailing cast number (-N)" if the profile names end in a cast number, or accept once if no biology was sampled there.',
   },
   'CONV-PROFILE-STATION-FAR': {
     checks:
@@ -598,7 +598,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'Reports the profile stations matched to a biology station by ignoring the cast number at the end of the name, as you allowed.',
     fires:
-      'Fires when the ignore-cast option is ticked for the sheet and at least one station was matched that way. The message lists each pair as profile station and biology station.',
+      'Fires when the ignore-cast option is ticked for the sheet and at least one station was matched that way. A profile station matches only when its name ends in "-" and digits and exactly one biology station has the name without them; otherwise it stays unmatched. The message lists each pair as profile station and biology station.',
     example:
       'The profile station "St5-02" is matched to the biology station "St5".',
     action:
@@ -608,7 +608,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'In a PANGAEA file the parameter list in the header gives the long names of the columns. If it does not fit the columns, the table-header abbreviations are used as taxon names, and an abbreviation can stand for two taxa.',
     fires:
-      'Fires when the Parameter block of a PANGAEA header does not match the table columns (another number of columns, or an abbreviation that is not what the column header starts with).',
+      'Fires on a wide sheet of a PANGAEA file with at least one taxon column when the Parameter block of the header does not match the table columns (another number of parameters than of table columns without the event columns, or an abbreviation that is not what the column header starts with), or when the header has no Parameter block at all.',
     example:
       'The header lists 12 parameters and the table has 11 columns.',
     action:
@@ -628,7 +628,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A pressure column with no unit is written without a unit, and level IDs cannot be made from it because they need decibars.',
     fires:
-      'Fires when the pressure column of a profile sheet states no unit.',
+      'Fires when the pressure column of a profile sheet states no unit and at least one pressure value is written.',
     example:
       'A column headed "Pressure" with no unit in the name or in the unit field.',
     action:
@@ -638,11 +638,11 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'Every sample needs a latitude and a longitude, on itself or on a parent.',
     fires:
-      'Fires when samples have no position and the sheet has no column mapped as latitude or longitude. A mapped column that is blank in every row gives the empty-column variant. The empty decimalLatitude and decimalLongitude of the output are not repeated.',
+      'Fires when samples have no position and the sheet has no column mapped as latitude or longitude, or only one of them. A mapped column that is blank in every row gives the empty-column variant. The empty decimalLatitude and decimalLongitude of the output are not repeated.',
     example:
-      'A sheet has Station, Date and Count, with no position columns and no joined sheet.',
+      'A wide sheet has Station, Date and one column per species, with no position columns and no joined sheet.',
     action:
-      'Mark the latitude and longitude columns, join the sheet that describes the samples, or declare one position for the sheet (declaredPosition=<lat>:<lon>:<uncertainty>:<rows>:<sheet>). The export is blocked until then.',
+      'Mark the latitude and longitude columns, join the sheet that describes the samples, or, only when the sheet has no latitude or longitude column at all, declare one position for the sheet (declaredPosition=<lat>:<lon>:<uncertainty>:<rows>:<sheet>); with one of the two columns marked the declaration is refused. Profile sheets are not covered. The export is blocked until then.',
   },
   'CONV-POSITION-DECLARED': {
     checks:
@@ -650,7 +650,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     fires:
       'Fires when a declared position is applied. It is written on every sample event, with georeferenceRemarks saying it was declared by the person converting the data. It is never inferred, and only applied to a sheet with no latitude or longitude role.',
     example:
-      'You declare 54.5, 18.6 with an uncertainty of 500 m for a sheet of 20 samples.',
+      'You declare 10.5, 20.5 with an uncertainty of 500 m for a sheet of 20 samples.',
     action:
       'Check the position and accept once. To change it, edit the declaration in the sheet form; it is saved in the companion file as declaredPosition=<lat>:<lon>:<uncertainty>:<rows>:<sheet>.',
   },
@@ -658,11 +658,11 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A declared position that cannot be used is not applied, and nothing is written from it.',
     fires:
-      'Fires for one of these reasons: latitude outside -90 to 90, longitude outside -180 to 180, uncertainty not a plain number above zero, position-role (the sheet has a latitude or longitude column, even a blank one; a declaration never fills gaps), position-joined (the joined description sheet gives positions) or profile (a profile sheet takes positions from its own columns).',
+      'Fires for one of these reasons: latitude not a number or outside -90 to 90, longitude not a number or outside -180 to 180, uncertainty not a plain number above zero, position-role (the sheet has a latitude or longitude column, even a blank one; a declaration never fills gaps), position-joined (the joined description sheet gives positions) or profile (a profile sheet takes positions from its own columns; raised for profile sheets too).',
     example:
       'You declare latitude 95 for a sheet.',
     action:
-      'Correct the declaration or remove it. For the last three reasons use the columns of the sheet instead. The export is blocked until then.',
+      'Correct the declaration or remove it. For the last three reasons remove the declaration: the positions come from the own columns of the sheet, the joined sheet or the profile levels. The export is blocked until then.',
   },
   'CONV-DATE-DECLARED': {
     checks:
@@ -678,7 +678,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A date saved in the companion file no longer fits the sheet, so it is not applied. It does not block.',
     fires:
-      'Fires when a saved declaredDate cannot be applied for one of these reasons: some-dated (a sample now has a date), date-joined (the joined description sheet gives dates), date-turned (a turned sheet has dates in its rows or columns) or profile (a profile sheet takes dates from its own columns).',
+      'Fires when a saved declaredDate cannot be applied for one of these reasons: some-dated (a sample now has a date; a date column counts when it holds at least one non-blank cell), date-joined (the joined description sheet gives dates), date-turned (a turned sheet has dates in its rows or columns) or profile (a profile sheet takes dates from its own columns).',
     example:
       'The companion file holds declaredDate=2019:30:Sheet1, but Sheet1 now has a date column.',
     action:
@@ -698,11 +698,11 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'OBIS requires an eventDate on every sample. A station never gives its date to a sample; a replicate takes the date of its sample.',
     fires:
-      'Fires when sample events have no eventDate. With how=blank-cells a date column exists and these samples have empty cells. With how=no-date-role nothing on the sheet is marked as a date.',
+      'Fires when sample events have no eventDate. With how=blank-cells a date column exists and these samples have empty cells. With how=no-date-role nothing on the sheet is marked as a date. Turned sheets, sheets read as one row per sample out of a long one, and sheets whose date comes from a joined description sheet have their own wording and advice: a turned sample is a source column and a pivoted line is not a line of the file, so no leave-out is offered there, and on a joined sheet the empty date cells are in the description sheet.',
     example:
       'Five of 40 samples have an empty Date cell.',
     action:
-      'Fill the date cells, mark the date column, or declare one date for the sheet (declaredDate=<value>:<rows>:<sheet>). For empty cells the samples can also be left out and listed with the reason no-event-date. The export is blocked until then.',
+      'Fill the date cells, or mark the date column (or the Year, Month and Day columns). Only when no sample of the sheet has a date, and no date is lent by a joined sheet or a turned sheet, can you declare one date for the whole sheet (declaredDate=<value>:<rows>:<sheet>); when some samples are dated that declaration is refused (some-dated). Samples with empty cells on an ordinary sheet can instead be left out and listed with the reason no-event-date. On a turned or pivoted sheet fill the dates in the file, on a joined sheet in the description sheet. The export is blocked until then.',
   },
   'CONV-PROFILE-NO-STATION': {
     checks:
