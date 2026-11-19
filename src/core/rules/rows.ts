@@ -723,7 +723,7 @@ export const ROW_RULES: readonly RuleSpec[] = [
     exportPolicy: 'accept',
     params: ['header', 'negative', 'positive'],
     plain: {
-      pl: `W kolumnie głębokości „{header}” (arkusz „{sheet}”) są wartości obu znaków: ujemnych – {negative}, dodatnich – {positive}. Kierunek (w dół czy w górę) zostaje nierozstrzygnięty, a zakres sprawdzam na wartościach bez znaku. Napisz w opisie, w którą stronę liczona jest głębokość.`,
+      pl: `W kolumnie głębokości „{header}” (arkusz „{sheet}”) są wartości obu znaków: ujemnych – {negative}, dodatnich – {positive}. Kierunek (w dół czy w górę) zostaje nierozstrzygnięty, a zakres jest sprawdzany na wartościach bez znaku. Napisz w opisie, w którą stronę liczona jest głębokość.`,
       en: `The depth column "{header}" (sheet "{sheet}") has values of both signs: {negative} negative, {positive} positive. The direction (down or up) is not decided, and the range is checked on the values without their sign. State in the description which way depth is counted.`,
       de: `Die Tiefenspalte „{header}“ (Blatt „{sheet}“) hat Werte beider Vorzeichen: negativ – {negative}, positiv – {positive}. Die Richtung (nach unten oder oben) bleibt offen, der Bereich wird an den Werten ohne Vorzeichen geprüft. Geben Sie in der Beschreibung an, in welche Richtung die Tiefe gezählt wird.`,
       fr: `La colonne de profondeur « {header} » (feuille « {sheet} ») contient des valeurs des deux signes : négatives – {negative}, positives – {positive}. Le sens (vers le bas ou vers le haut) reste ouvert et la plage est contrôlée sur les valeurs sans signe. Indiquez dans la description dans quel sens la profondeur est comptée.`,
@@ -741,6 +741,12 @@ export const ROW_RULES: readonly RuleSpec[] = [
       en: `The column "{column}" has a possible missing-value code in {count} {+count:cell|cells}, e.g. {value} ({+lines:line|lines} {lines}). Values such as -99, -999 and -9999 often stand for "not measured". They are kept as written and left out of the depth direction and the range checks.`,
       de: `Die Spalte „{column}“ hat in {count} {+count:Zelle|Zellen} einen möglichen Code für einen fehlenden Wert, z. B. {value} ({+lines:Zeile|Zeilen} {lines}). Werte wie -99, -999 und -9999 stehen oft für „nicht gemessen“. Sie bleiben unverändert und gehen weder in die Tiefenrichtung noch in die Bereichsprüfungen ein.`,
       fr: `La colonne « {column} » contient dans {count} {+count:cellule|cellules} un code possible de valeur manquante, par ex. {value} ({+lines:ligne|lignes} {lines}). Les valeurs -99, -999 et -9999 signifient souvent « non mesuré ». Elles restent telles quelles, hors du sens de la profondeur et des contrôles de plage.`,
+    },
+    plainConvert: {
+      pl: `Kolumna „{column}” ma w {count} {+count:komórce|komórkach|komórkach} możliwy kod brakującej wartości, np. {value} ({+lines:wiersz|wiersze|wierszy} {lines}). Eksport czeka na Twoją odpowiedź: uznaj te komórki za brak (zostaną pominięte i wypisane) albo za prawdziwe wartości (zostaną zapisane).`,
+      en: `The column "{column}" has a possible missing-value code in {count} {+count:cell|cells}, e.g. {value} ({+lines:line|lines} {lines}). The export waits for your answer: treat them as missing (they are left out and listed) or as real values (they are written as they are).`,
+      de: `Die Spalte „{column}“ hat in {count} {+count:Zelle|Zellen} einen möglichen Code für einen fehlenden Wert, z. B. {value} ({+lines:Zeile|Zeilen} {lines}). Der Export wartet auf Ihre Antwort: als fehlend behandeln (ausgelassen und aufgelistet) oder als echte Werte (unverändert geschrieben).`,
+      fr: `La colonne « {column} » contient dans {count} {+count:cellule|cellules} un code possible de valeur manquante, par ex. {value} ({+lines:ligne|lignes} {lines}). L'export attend votre réponse : traiter comme absent (laissé de côté et listé) ou comme valeurs réelles (écrites telles quelles).`,
     },
     technical: `{file}, {sheet}:{lines} {count} cell(s) of column '{column}' (column {index} of the sheet in /convert) hold exactly -99, -999 or -9999 (numeric equality, first: {value}), a code often written for "no measurement". Checked: the depth column (the two bounds of a Darwin Core range) and every variable of the sheet. The cell is kept as written and never replaced; it is left out of the depth direction, ROW-DEPTH-RANGE and CHEM-RANGE.`,
   },

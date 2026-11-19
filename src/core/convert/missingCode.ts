@@ -34,6 +34,9 @@ export function carriesNumbers(role: ColumnRole): boolean {
   }
 }
 
+/** What the person answered for a column: the cells are missing (left out and listed) or real values (written as they are). */
+export type MissingCodeAnswer = 'missing' | 'real';
+
 /** A cell of a numeric column that holds a missing-value code: its line, its column and the cell as written. */
 export interface CodedCell {
   line: number;
@@ -84,25 +87,29 @@ export interface MissingCodeResult {
 export function applyMissingCodes(sin: ConvertSheetInput): MissingCodeResult {
   const columns = codedColumns(sin);
   if (columns.length === 0) return { sin, findings: [], coded: [] };
-  const answered = new Set(sin.missingCodes ?? []);
+  const answers = sin.missingCodes ?? {};
   const findings: Finding[] = [];
   const coded: CodedCell[] = [];
   const blank = new Map<number, Set<number>>();
   for (const c of columns) {
     const params = { column: c.header, index: c.index, count: c.cells.length };
-    if (!answered.has(c.index)) {
+    const answer = answers[c.index];
+    if (answer !== 'missing' && answer !== 'real') {
       findings.push(makeFinding('ROW-MISSING-CODE', { file: sin.file.fileName, sheet: sin.sheet, lines: c.cells.map((x) => x.line), field: c.header, value: c.value, params }));
       continue;
     }
+    // (the field lets the pivot's and the turn's line remaps name the lines of the file, as for the question)
     findings.push(
       makeConvertFinding('CONV-MISSING-CODE-DECLARED', {
         file: sin.file.fileName,
         sheet: sin.sheet,
         lines: c.cells.map((x) => x.line),
+        field: c.header,
         value: c.value,
-        params: { ...params, ...(sin.missingCodesFromFile?.includes(c.index) === true ? { fromFile: 'yes' } : {}) },
+        params: { ...params, answer, ...(answer === 'missing' ? { asMissing: 'yes' } : { asReal: 'yes' }), ...(sin.missingCodesFromFile?.includes(c.index) === true ? { fromFile: 'yes' } : {}) },
       }),
     );
+    if (answer === 'real') continue;
     coded.push(...c.cells);
     for (const x of c.cells) {
       const set = blank.get(x.line) ?? new Set<number>();
@@ -120,7 +127,9 @@ export function applyMissingCodes(sin: ConvertSheetInput): MissingCodeResult {
       for (const i of cols) cells[i] = null;
       return { ...r, cells };
     });
-    return { ...s, rows, missingSource: s.missingSource ?? s.decimalSource ?? s };
+    const missingCells: Record<number, number[]> = {};
+    for (const [line, cols] of blank) missingCells[line] = [...cols].sort((a, b) => a - b);
+    return { ...s, rows, missingSource: s.missingSource ?? s.decimalSource ?? s, missingCells };
   });
   return { sin: { ...sin, file: { ...sin.file, sheets } }, findings, coded };
 }

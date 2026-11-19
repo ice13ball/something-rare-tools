@@ -63,8 +63,37 @@ describe('the question and the answer', () => {
   });
 });
 
+describe('the second answer: these are real values', () => {
+  it('"These are real values" is its own answer: the note says so, "Ask again" opens the question, and the companion file keeps real', async () => {
+    const run = await load([{ name: 'hauls.csv', text: TEXT }]);
+    // neither answer is selected: both buttons are offered
+    expect(button(item('ROW-MISSING-CODE')!, T['convert.finding.realCode'])).not.toBeNull();
+    expect(item('ROW-MISSING-CODE')?.textContent).toContain('waits for your answer');
+    fireEvent.click(button(item('ROW-MISSING-CODE')!, T['convert.finding.realCode']));
+    await waitFor(() => expect(item('CONV-MISSING-CODE-DECLARED')).not.toBeNull());
+    await idle();
+    expect(item('ROW-MISSING-CODE')).toBeNull();
+    expect(item('CONV-MISSING-CODE-DECLARED')?.textContent).toContain('real values');
+    fireEvent.click(screen.getByRole('button', { name: T['convert.companion.button'] }));
+    expect(run.download.mock.calls[0][0]).toContain(`missingCode=real:hauls.csv:${keyHashes(HEADER, [DEPTH])}:3`);
+    fireEvent.click(button(item('CONV-MISSING-CODE-DECLARED')!, T['convert.finding.askAgain']));
+    await waitFor(() => expect(item('ROW-MISSING-CODE')).not.toBeNull());
+  });
+
+  it('a companion file with real is applied for the same column and rows, and says so', async () => {
+    await load([{ name: 'hauls.csv', text: TEXT }, { name: 'c.csv', text: writeConvertSidecar({ missingCode: [{ sheet: 'hauls.csv', answer: 'real', hash: keyHashes(HEADER, [DEPTH])!, rows: 3 }] }) }]);
+    await waitFor(() => expect(item('CONV-MISSING-CODE-DECLARED')?.textContent).toContain('real values'));
+    expect(item('CONV-MISSING-CODE-DECLARED')?.textContent).toContain('companion file');
+  });
+
+  it('the preview shows one question for the column, not a copy per output column', async () => {
+    await load([{ name: 'hauls.csv', text: TEXT }]);
+    expect(document.querySelectorAll('li[data-rule="ROW-MISSING-CODE"]').length).toBe(1);
+  });
+});
+
 describe('the companion file', () => {
-  const line = (rows: number, header = HEADER) => writeConvertSidecar({ missingCode: [{ sheet: 'hauls.csv', hash: keyHashes(header, [DEPTH])!, rows }] });
+  const line = (rows: number, header = HEADER, answer: 'missing' | 'real' = 'missing') => writeConvertSidecar({ missingCode: [{ sheet: 'hauls.csv', answer, hash: keyHashes(header, [DEPTH])!, rows }] });
   const parsed = (text: string, companion?: string): Promise<ConvertParseResult> =>
     createDirectConvertEngine().parse([{ name: 'hauls.csv', bytes: new TextEncoder().encode(text), source: 'dropped' }, ...(companion === undefined ? [] : [{ name: 'c.csv', bytes: new TextEncoder().encode(companion), source: 'dropped' as const }])]);
 
@@ -75,7 +104,7 @@ describe('the companion file', () => {
     await idle();
     fireEvent.click(screen.getByRole('button', { name: T['convert.companion.button'] }));
     const text = run.download.mock.calls[0][0] as string;
-    expect(text).toContain(`missingCode=hauls.csv:${keyHashes(HEADER, [DEPTH])}:3`);
+    expect(text).toContain(`missingCode=missing:hauls.csv:${keyHashes(HEADER, [DEPTH])}:3`);
     expect(text).not.toMatch(/Depth|-999/);
   });
 
@@ -99,7 +128,7 @@ describe('the companion file', () => {
   it('missingCodeSettingsOf keeps the answer for a sheet in use only', async () => {
     const p = await parsed(TEXT, line(3));
     const choices = initialChoices(p);
-    expect(missingCodeSettingsOf(p, choices)).toEqual([{ sheet: 'hauls.csv', hash: keyHashes(HEADER, [DEPTH])!, rows: 3 }]);
+    expect(missingCodeSettingsOf(p, choices)).toEqual([{ sheet: 'hauls.csv', answer: 'missing', hash: keyHashes(HEADER, [DEPTH])!, rows: 3 }]);
     const key = `${p.files[0].fileId}\u0000hauls.csv`;
     expect(missingCodeSettingsOf(p, { ...choices, [key]: { ...choices[key], use: false } })).toEqual([]);
   });

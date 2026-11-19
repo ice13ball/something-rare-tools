@@ -66,7 +66,7 @@ import type { RuleSpec } from './spec';
  *   CONV-DATE-ORDER-UNDECLARED count, examples, index, first, second, isoFirst, isoSecond (+ variant 'two-digit-year': readings = the orders that fit, machine list 'ymd,dmy'; answers = the same for the text, 'ymd, dmy'; shown = the dates of the first example in each, 'date (code)' joined with '; '; the cells are NN-NN-NN and the ROW-DATE-YY-AMBIGUOUS of the column is not said)   field = a date / datetime / time column (or a picked date key part), value = the first example, index = its column: it has dates such as 5/4/2023 that can be read either way, no date in it decides, and no order is declared (blocks; the ROW-DATE-UNPARSEABLE of those cells is not said)
  *   CONV-DATE-ORDER-CONTRADICTED declared, detected, index (+ variant 'two-digit-year': the answer for the NN-NN-NN dates, its own text)   the declared day/month order disagrees with the column's own dates (blocks; the declaration is not used)
  *   CONV-DATE-ORDER-DECLARED   order, index (+ variant 'two-digit-year': the answer for the NN-NN-NN dates, its own text)   info: the declared order was used for the ambiguous dates of the column (optional fromFile = yes: the answer came from the companion file)
- *   CONV-MISSING-CODE-DECLARED column, index, count   info: the person answered "treat as missing" for a depth or measurement column whose cells held -99, -999 or -9999 (ROW-MISSING-CODE asked); value = the first code, lines = the cells, which are left empty and listed with the reason missing-code (optional fromFile = yes)
+ *   CONV-MISSING-CODE-DECLARED column, index, count, answer   info: the person answered, for a depth or measurement column whose cells held -99, -999 or -9999 (ROW-MISSING-CODE asked), `missing` (the cells are left empty and listed with the reason missing-code) or `real` (they are written as they are); value = the first code, lines = the cells (optional fromFile = yes)
  *   CONV-DECIMAL-DECLARED      column, index, reading   info: the person declared what the comma is in a column that IN-DECIMAL-AMBIGUOUS asked about (reading = decimal | thousands); under thousands the column's cells written 1,250 or 1,250,000 are read as 1250 and 1250000 (optional fromFile = yes: the answer came from the companion file)
  *   CONV-ENCODING-DECLARED     encoding         info: the person picked how the 8-bit letters of the file are read (IN-ENCODING-AMBIGUOUS asked); encoding = windows-1250 | iso-8859-2 | windows-1252 (optional fromFile = yes: the answer came from the companion file)
  *   CONV-QUANTITY-BLANK-KEPT   count            field = the quantity column, lines = rows of a long sheet with a taxon, an empty / NA quantity and a biomass value above zero: written as present with no count (warning, accept)
@@ -1158,14 +1158,32 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     category: 'B',
     severity: 'info',
     exportPolicy: 'show',
-    params: ['column', 'index', 'count'],
+    params: ['column', 'index', 'count', 'answer'],
     plain: {
-      pl: `Jak podano, kod braku wartości (np. {value}) w kolumnie „{column}” ({count} {+count:komórka|komórki|komórek}, {+lineCount:wiersz|wiersze|wierszy} {lines}) jest traktowany jako brak: nie trafia do archiwum jako liczba, tylko na listę wierszy niezapisanych.`,
-      en: `As you declared, the missing-value code (e.g. {value}) in column "{column}" ({count} {+count:cell|cells}, {+lineCount:line|lines} {lines}) is treated as missing: it does not go into the archive as a number, but into the list of rows not written.`,
-      de: `Wie angegeben, gilt der Code für einen fehlenden Wert (z. B. {value}) in der Spalte „{column}“ ({count} {+count:Zelle|Zellen}, {+lineCount:Zeile|Zeilen} {lines}) als fehlend: Er kommt nicht als Zahl ins Archiv, sondern in die Liste der nicht geschriebenen Zeilen.`,
-      fr: `Comme indiqué, le code de valeur manquante (par ex. {value}) de la colonne « {column} » ({count} {+count:cellule|cellules}, {+lineCount:ligne|lignes} {lines}) est traité comme absent : il n'entre pas dans l'archive comme nombre, mais dans la liste des lignes non écrites.`,
+      pl: `Jak podano dla kolumny „{column}” ({count} {+count:komórka|komórki|komórek} z kodem -99, -999 lub -9999, np. {value}; {+lineCount:wiersz|wiersze|wierszy} {lines}):`,
+      en: `As you declared for column "{column}" ({count} {+count:cell|cells} with the code -99, -999 or -9999, e.g. {value}; {+lineCount:line|lines} {lines}):`,
+      de: `Wie für die Spalte „{column}“ angegeben ({count} {+count:Zelle|Zellen} mit dem Code -99, -999 oder -9999, z. B. {value}; {+lineCount:Zeile|Zeilen} {lines}):`,
+      fr: `Comme indiqué pour la colonne « {column} » ({count} {+count:cellule|cellules} avec le code -99, -999 ou -9999, par ex. {value} ; {+lineCount:ligne|lignes} {lines}) :`,
     },
     plainIf: [
+      {
+        param: 'asMissing',
+        plain: {
+          pl: `traktowane jako brak: nie trafiają do archiwum jako liczby, tylko na listę wierszy niezapisanych.`,
+          en: `treated as missing: they do not go into the archive as numbers, but into the list of rows not written.`,
+          de: `als fehlend behandelt: sie kommen nicht als Zahlen ins Archiv, sondern in die Liste der nicht geschriebenen Zeilen.`,
+          fr: `traitées comme absentes : elles n'entrent pas dans l'archive comme nombres, mais dans la liste des lignes non écrites.`,
+        },
+      },
+      {
+        param: 'asReal',
+        plain: {
+          pl: `to prawdziwe wartości: zapisane tak, jak są.`,
+          en: `real values: they are written as they are.`,
+          de: `echte Werte: sie werden unverändert geschrieben.`,
+          fr: `valeurs réelles : elles sont écrites telles quelles.`,
+        },
+      },
       {
         param: 'fromFile',
         plain: {
@@ -1176,7 +1194,7 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
         },
       },
     ],
-    technical: `{file}, {sheet}:{lines} column {index} "{column}": {count} cell(s) hold exactly -99, -999 or -9999 (first: {value}) and the column was declared "treat as missing" (ROW-MISSING-CODE asked). The cells are left empty before the sheet is read, so no depth, value or quantity, no station range and no sum is made of them; each is in the list of rows not written with the reason missing-code, as written. Other columns are not touched.`,
+    technical: `{file}, {sheet}:{lines} column {index} "{column}": {count} cell(s) hold exactly -99, -999 or -9999 (first: {value}) and the column was answered "{answer}" (ROW-MISSING-CODE asked): missing = the cells are left empty before the sheet is read, so no depth, value or quantity, no station range and no sum is made of them, and each is in the list of rows not written with the reason missing-code, as written; real = the cells are written as they are. Other columns are not touched.`,
   },
   {
     id: 'CONV-ENCODING-DECLARED',

@@ -290,8 +290,8 @@ function dateConflicts(A: Prep, B: Prep, out: Finding[]): void {
           dateB: example.b.day!,
           lineA: example.a.row.line,
           lineB: example.b.row.line,
-          // 1: one of the two dates is a NN-NN-NN date of a column whose order is open (read in the default order); 2: not
-          ambiguous: example.a.row.datetime?.orderOpen === true || example.b.row.datetime?.orderOpen === true ? 1 : 2,
+          // present ('yes') only when one of the two dates is a NN-NN-NN date of a column whose order is open (read in the default order): the text then says so
+          ...(example.a.row.datetime?.orderOpen === true || example.b.row.datetime?.orderOpen === true ? { ambiguous: 'yes' } : {}),
         },
         datasetIds: [A.ds.id, B.ds.id],
       }),

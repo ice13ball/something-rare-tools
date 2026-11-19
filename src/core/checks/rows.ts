@@ -686,7 +686,8 @@ function depthSignCounts(rows: readonly DataRow[]): { negative: number; positive
 function depthMixedSign(ds: Dataset, sheet: string, rows: readonly DataRow[], out: Finding[]): boolean {
   const { negative, positive } = depthSignCounts(rows);
   if (negative === 0 || positive === 0) return false;
-  out.push(makeFinding('ROW-DEPTH-MIXED-SIGN', { file: ds.file, sheet, field: headerOf(ds, sheet, 'depth') ?? 'depth', params: { header: headerOf(ds, sheet, 'depth') ?? 'depth', negative, positive } }));
+  const header = headerOf(ds, sheet, 'depth') ?? 'depth';
+  out.push(makeFinding('ROW-DEPTH-MIXED-SIGN', { file: ds.file, sheet, field: header, params: { header, negative, positive } }));
   return true;
 }
 

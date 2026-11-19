@@ -174,10 +174,10 @@ describe('XF-DATE-CONFLICT with an open depth direction and an open date order (
     const a = makeCDataset({ id: 'a', file: 'a.csv', vars }, rows('2023-07-30'));
     const b = makeCDataset({ id: 'b', file: 'b.csv', vars }, rows('2022-07-30'));
     const plain = byRule(checkCrossFile([a, b]), 'XF-DATE-CONFLICT')[0];
-    expect(plain.params.ambiguous).toBe(2);
+    expect(plain.params.ambiguous).toBeUndefined();
     for (const r of b.rows) r.datetime = { ...r.datetime!, orderOpen: true };
     const f = byRule(checkCrossFile([a, b]), 'XF-DATE-CONFLICT')[0];
-    expect(f.params.ambiguous).toBe(1);
+    expect(f.params.ambiguous).toBe('yes');
     for (const lang of LANGS) {
       const said = renderPlain(f, lang);
       const base = renderPlain(plain, lang);

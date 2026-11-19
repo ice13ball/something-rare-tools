@@ -387,7 +387,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   const own: OwnRecordsView = { offered: (f) => ownSheetOf(f).allowed, on: (f) => ownSheetOf(f).on };
 
   // CONV-QUANTITY-REPEATED / CONV-ROW-COPIES: the user's choice for the sheet of the finding; the conversion runs again with the sheet's tick
-  const chooseForSheet = (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'yyymd' | 'yydmy' | 'yymdy' | 'decimal' | 'thousands' | 'missingCode' | 'askAgain' | 'declarePosition' | 'declareDate' | 'openTurn' | 'ownRecords' | 'keepCopies'): void => {
+  const chooseForSheet = (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'yyymd' | 'yydmy' | 'yymdy' | 'decimal' | 'thousands' | 'missingCode' | 'realCode' | 'askAgain' | 'declarePosition' | 'declareDate' | 'openTurn' | 'ownRecords' | 'keepCopies'): void => {
     const file = files.find((x) => x.fileName === f.file);
     if (file === undefined || f.sheet === undefined) return;
     const key = sheetKey(file.fileId, f.sheet);
@@ -435,10 +435,10 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
         return { ...prev, [key]: { ...c, leaveOut: [...rest, { reason, count }] } };
       }
       // "Treat as missing": the person's own answer for the depth or measurement column the finding names (by its index on the sheet), after which its -99, -999 and -9999 cells are left out and listed
-      if (choice === 'missingCode') {
+      if (choice === 'missingCode' || choice === 'realCode') {
         const index = Number(f.params.index);
         if (!Number.isInteger(index) || index < 0) return prev;
-        return { ...prev, [key]: { ...c, missingCodes: [...(c.missingCodes ?? []).filter((i) => i !== index), index], missingCodesFile: (c.missingCodesFile ?? []).filter((i) => i !== index) } };
+        return { ...prev, [key]: { ...c, missingCodes: { ...(c.missingCodes ?? {}), [index]: choice === 'missingCode' ? 'missing' : 'real' }, missingCodesFile: (c.missingCodesFile ?? []).filter((i) => i !== index) } };
       }
       // "Day first" / "Month first": the person's own answer for the date column the finding names, by that column's own index on the sheet the finding names (a date lent by a description sheet is answered there)
       if (choice === 'dayFirst' || choice === 'monthFirst') {
@@ -491,9 +491,9 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
         }
         if (f.ruleId === 'CONV-MISSING-CODE-DECLARED') {
           const index = Number(f.params.index);
+          const { [index]: _gone, ...left } = c.missingCodes ?? {};
           const { missingCodes: _m, missingCodesFile: _mf, ...rest } = c;
-          const left = (c.missingCodes ?? []).filter((i) => i !== index);
-          return { ...prev, [key]: { ...rest, ...(left.length === 0 ? {} : { missingCodes: left, missingCodesFile: (c.missingCodesFile ?? []).filter((i) => i !== index) }) } };
+          return { ...prev, [key]: { ...rest, ...(Object.keys(left).length === 0 ? {} : { missingCodes: left as Record<number, 'missing' | 'real'>, missingCodesFile: (c.missingCodesFile ?? []).filter((i) => i !== index) }) } };
         }
         if (f.ruleId === 'CONV-ROW-LEFT-OUT') return reason === undefined ? prev : { ...prev, [key]: { ...c, leaveOut: (c.leaveOut ?? []).filter((a) => a.reason !== reason), leaveOutFile: (c.leaveOutFile ?? []).filter((g) => g.reason !== reason) } };
         if (f.ruleId === 'CONV-KEY-PICKED') {
@@ -1839,7 +1839,7 @@ interface OwnRecordsView {
   on: (f: Finding) => boolean;
 }
 
-function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin, own, enc }: { findings: Finding[]; own?: OwnRecordsView; enc?: EncodingView; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'yyymd' | 'yydmy' | 'yymdy' | 'decimal' | 'thousands' | 'missingCode' | 'askAgain' | 'declarePosition' | 'declareDate' | 'openTurn' | 'ownRecords' | 'keepCopies') => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement {
+function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin, own, enc }: { findings: Finding[]; own?: OwnRecordsView; enc?: EncodingView; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'yyymd' | 'yydmy' | 'yymdy' | 'decimal' | 'thousands' | 'missingCode' | 'realCode' | 'askAgain' | 'declarePosition' | 'declareDate' | 'openTurn' | 'ownRecords' | 'keepCopies') => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement {
   const { lang } = useLang();
   return (
     <ul>
@@ -2005,6 +2005,9 @@ function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose,
               {' '}
               <button type="button" className="button" data-testid="missing-code" onClick={() => onChoose(f, 'missingCode')}>
                 {t('convert.finding.missingCode')}
+              </button>{' '}
+              <button type="button" className="button" data-testid="real-code" onClick={() => onChoose(f, 'realCode')}>
+                {t('convert.finding.realCode')}
               </button>
             </>
           )}
@@ -2039,7 +2042,7 @@ function FindingItems({ findings, onUseReplicate, onReadAsMeasurement, onChoose,
   );
 }
 
-function FindingList({ titleKey, findings, kind, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin, own, enc }: { own?: OwnRecordsView; enc?: EncodingView; titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity']; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'yyymd' | 'yydmy' | 'yymdy' | 'decimal' | 'thousands' | 'missingCode' | 'askAgain' | 'declarePosition' | 'declareDate' | 'openTurn' | 'ownRecords' | 'keepCopies') => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement | null {
+function FindingList({ titleKey, findings, kind, onUseReplicate, onReadAsMeasurement, onChoose, onChooseJoin, own, enc }: { own?: OwnRecordsView; enc?: EncodingView; titleKey: 'convert.summary.blocking' | 'convert.summary.info'; findings: Finding[]; kind: Finding['severity']; onUseReplicate?: (f: Finding) => void; onReadAsMeasurement?: (f: Finding, at: number) => void; onChoose?: (f: Finding, choice: 'totalOnce' | 'realCounts' | 'dropCopies' | 'leaveOut' | 'dayFirst' | 'monthFirst' | 'yyymd' | 'yydmy' | 'yymdy' | 'decimal' | 'thousands' | 'missingCode' | 'realCode' | 'askAgain' | 'declarePosition' | 'declareDate' | 'openTurn' | 'ownRecords' | 'keepCopies') => void; onChooseJoin?: (f: Finding, choice: 'resultsOnly' | 'askAgain') => void }): React.ReactElement | null {
   if (findings.length === 0) return null;
   return (
     <div className="convert-findings" data-kind={kind}>

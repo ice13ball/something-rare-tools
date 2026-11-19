@@ -375,10 +375,10 @@ export interface ConvertSheetInput {
    */
   ignoreChosen?: readonly number[];
   /**
-   * The columns (by index on the sheet) the person answered "treat -99, -999 and -9999 as missing" for (ROW-MISSING-CODE): the cells of the column that hold exactly one of those numbers are left empty before the sheet is read and
-   * listed in the rows not written with the reason `missing-code`. A column with a code that is not here blocks the export; a column here with no code is untouched.
+   * The person's answer for a column (by index on the sheet) whose cells hold -99, -999 or -9999 (ROW-MISSING-CODE): `missing` = leave those cells empty before the sheet is read and list them in the rows not written with the
+   * reason `missing-code`; `real` = they are values and are written as they are. A column with a code and no answer blocks the export; an answer for a column with no code is untouched.
    */
-  missingCodes?: readonly number[];
+  missingCodes?: Readonly<Record<number, 'missing' | 'real'>>;
   /** The indexes among `missingCodes` that a companion file gave (it holds only for the same header and the same number of rows): said in the finding. */
   missingCodesFromFile?: readonly number[];
   /** The user's tick "read this sheet as a normal table": a sheet that looks transposed (CONV-SHEET-TRANSPOSED) is read as it stands, row 1 being the header. */
@@ -3366,6 +3366,8 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
   // the cells the person answered "treat as missing" for were left empty before the sheet was read: each is a cell of its line that has no record, with its own reason
   for (const [index, cells] of missingCoded) {
     const sin = rawInput.sheets[index];
+    // (a pivoted or turned sheet's ledger is kept in the lines of the file and names these cells itself)
+    if (sin?.file.sheets.find((x) => x.name === sin.sheet)?.pivot !== undefined || sin?.file.sheets.find((x) => x.name === sin.sheet)?.turn !== undefined) continue;
     const l = ledger.find((x) => x.inputIndex === index && x.kind !== 'description' && x.sheet === sin?.sheet);
     if (l === undefined) continue;
     for (const c of cells) {
@@ -3692,6 +3694,27 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
     if (sin.sampleJoin === undefined) continue;
     const own = turnedSheets.find((t) => t.file === sin.file.fileName && t.sheet.name === sin.sheet);
     pushAll(findings, own === undefined ? sin.sampleJoin.findings : turnedLines(sin.sampleJoin.findings, own.file, own.sheet));
+  }
+
+  // A -999 in a count cell is both a possible missing-value code and a negative count. While the column is unanswered the one question is ROW-MISSING-CODE (it has the answers: missing, or real values): the
+  // negative count is not said a second time for the same cells. Answered "real values", the cell stays a negative count and CONV-NEGATIVE-QUANTITY says so; answered "missing", the cell is empty.
+  {
+    const asked = findings.filter((f) => f.ruleId === 'ROW-MISSING-CODE');
+    if (asked.length > 0) {
+      const kept: Finding[] = [];
+      for (const f of findings) {
+        const q = f.ruleId === 'CONV-NEGATIVE-QUANTITY' ? asked.find((a) => a.file === f.file && a.sheet === f.sheet && a.field === f.field) : undefined;
+        if (q === undefined || f.lines === undefined) {
+          kept.push(f);
+          continue;
+        }
+        const codeLines = new Set(q.lines ?? []);
+        const left = f.lines.filter((l) => !codeLines.has(l));
+        if (left.length > 0) kept.push({ ...f, lines: left, params: { ...f.params, count: left.length } });
+      }
+      findings.length = 0;
+      pushAll(findings, kept);
+    }
   }
 
   // Nothing disappears (notWritten.ts): a row the converter could not place blocks until someone decides; a row the user left out is said, and the rule that blocked on its own for it gives way

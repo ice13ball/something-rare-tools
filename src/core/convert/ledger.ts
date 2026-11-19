@@ -209,6 +209,8 @@ export interface LineFate {
     taken?: string;
     other?: { sheet: string; line: number };
   }[];
+  /** 'missing-code' on a pivoted sheet: the header of the pivoted column whose cell was left empty (the list names it beside the reason). */
+  named?: string;
   /** A description line that repeats, value for value, this earlier line of the same sheet and key: the two count as one row, and this line says so. */
   sameAs?: number;
   /** 'join-results-not-written': the lines of the results sheets this description line was lent to, none of which wrote anything (so nothing of this line reached the archive). */
@@ -727,7 +729,16 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
         const line = cl[pi];
         const col = pv.index;
         const raw = row.cells[col];
-        if (isBlank(raw)) return put(line, 'nothing-to-record');
+        if (isBlank(raw)) {
+          // a cell the person answered "treat as missing" for was left empty before the sheet was read: it is named, with its column, not called blank
+          if (sheet.missingCells?.[row.line]?.includes(col) === true) {
+            put(line, 'missing-code');
+            const last = fates[fates.length - 1];
+            if (last !== undefined && last.line === line) last.named = (sheet.header[col] ?? '').trim() || `#${col + 1}`;
+            return;
+          }
+          return put(line, 'nothing-to-record');
+        }
         const to = toNow.get(col) ?? initialTo(col);
         if (to === 'not-written') return put(line, 'column-not-read', ['column-not-read']);
         const own = rowCode[pos] || fate.column(col)?.[pos] || 0;
@@ -818,15 +829,24 @@ export function buildSheetLedger(inp: SheetLedgerInput): SheetLedger {
       let wrote = false;
       let unexplained = false;
       const why: LedgerReason[] = [];
+      const missed: LostCell[] = [];
       for (const pos of turnedAt) {
         const raw = rows[pos].cells[col];
-        if (isBlank(raw)) continue;
+        if (isBlank(raw)) {
+          // a cell the person answered "treat as missing" for: the source cell is the one of this sample's column on this row's line
+          const sampleColumn = turn.sampleColumn[rows[pos].line];
+          if (sampleColumn !== undefined && sheet.missingCells?.[rows[pos].line]?.includes(col) === true) {
+            missed.push({ index: sampleColumn, reason: 'missing-code' });
+            if (!why.includes('missing-code')) why.push('missing-code');
+          }
+          continue;
+        }
         const v = cellVerdict(pos, col, raw);
         if (v === 'written') wrote = true;
         else if (v === undefined) unexplained = true;
         else if (!why.includes(v)) why.push(v);
       }
-      const labels: LostCell[] = turn.labelColumns.filter((c) => !isBlank(r.cells[c])).map((index) => ({ index, reason: 'turned-label' }));
+      const labels: LostCell[] = [...turn.labelColumns.filter((c) => !isBlank(r.cells[c])).map((index): LostCell => ({ index, reason: 'turned-label' })), ...missed];
       if (wrote) {
         writtenLines++;
         if (labels.length > 0) fates.push({ line: r.line, fate: 'written', lostCells: labels });

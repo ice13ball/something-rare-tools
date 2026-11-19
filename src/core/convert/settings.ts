@@ -59,9 +59,9 @@ import type { ParsedFile } from '../types';
  *   encoding=<windows-1250|iso-8859-2|windows-1252>:<hash>  the person picked how the 8-bit letters of a file are read (IN-ENCODING-AMBIGUOUS), the hash being the FNV-1a of the file's BYTES
  *                     (core/convert/keySetting.ts `bytesHash`). A PRE-PICK that holds only for a file whose bytes give that hash AND whose reading is still ambiguous between code pages that include the one
  *                     named; the page then says the answer came from the file, with "Ask again". A code page name and a hash, never a word of the file.
- *   missingCode=<sheet>:<hash>:<rows>  the person answered "treat as missing" (ROW-MISSING-CODE) for the number column with that header hash (core/convert/keySetting.ts) of the sheet of that name, for a sheet of <rows> rows.
- *                     Holds only when the column is found again by its hash and the sheet has the same number of rows; the converter then leaves the cells of that column that hold -99, -999 or -9999 empty and says
- *                     the answer came from the file. A sheet name, a hash and a count, never a value.
+ *   missingCode=<missing|real>:<sheet>:<hash>:<rows>  the person answered "treat as missing" or "these are real values" (ROW-MISSING-CODE) for the number column with that header hash (core/convert/keySetting.ts) of the sheet of that name, for a sheet of <rows> rows.
+ *                     Holds only when the column is found again by its hash and the sheet has the same number of rows; the converter then leaves the cells of that column that hold -99, -999 or -9999 empty (missing) or
+ *                     writes them (real) and says the answer came from the file. A sheet name, a hash and a count, never a value.
  *   sampleJoin=<rRows>:<dRows>:<rHashes>:<dHashes>:<["rFile","rSheet","dFile","dSheet"]>  the person confirmed that a results sheet takes its samples' description from another sheet (core/convert/sampleJoin.ts):
  *                     the rows of both sheets, the hashes of the key columns of each (core/convert/keySetting.ts, as for sampleKey) and the four names as a JSON array, so a `:` in a name is safe.
  *                     A PRE-CONFIRMATION that holds only when both sheets are found again with the same rows and the key columns are found by their hashes; otherwise the page asks again. No value.
@@ -168,7 +168,7 @@ export interface ConvertSettings {
   /** What the person declared a comma to be in a number column, by sheet, the column's header hash and the number of rows the answer was given for. Holds only for the same column and the same number of rows. */
   decimalReading?: { sheet: string; reading: 'decimal' | 'thousands'; hash: string; rows: number }[];
   /** The columns the person answered "treat -99, -999, -9999 as missing" for, by sheet, the column's header hash and the number of rows the answer was given for. Holds only for the same column and the same number of rows. */
-  missingCode?: { sheet: string; hash: string; rows: number }[];
+  missingCode?: { sheet: string; answer: 'missing' | 'real'; hash: string; rows: number }[];
   /** The 8-bit encoding the person picked for a file whose letters read differently in the code pages, by the hash of the file's bytes. Holds only for a file with the same bytes. */
   encoding?: { encoding: 'windows-1250' | 'iso-8859-2' | 'windows-1252'; hash: string }[];
   /**
@@ -254,7 +254,7 @@ const ORDER_LINES = [
   { slot: 'dayMonthOrder', prefix: DAY_MONTH_ORDER_SETTING, pattern: /^(dmy|mdy):(.+):([0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?):(\d{1,9})$/s },
   { slot: 'yyOrder', prefix: YY_ORDER_SETTING, pattern: /^(ymd|dmy|mdy):(.+):([0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?):(\d{1,9})$/s },
 ] as const;
-const MISSING_CODE = /^(.+):([0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?):(\d{1,9})$/s;
+const MISSING_CODE = /^(missing|real):(.+):([0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?):(\d{1,9})$/s;
 const DECIMAL_READING = /^(decimal|thousands):(.+):([0-9a-f]{8}(?:\.\d{1,4}of\d{1,4})?):(\d{1,9})$/s;
 const ENCODING_PICK = /^(windows-1250|iso-8859-2|windows-1252):([0-9a-f]{8})$/;
 const DATE_PART = '\\d{4}(?:-\\d{2}(?:-\\d{2})?)?';
@@ -321,7 +321,7 @@ export function readConvertSettings(parsed: ParsedFile): ConvertSettings | undef
     } else if (v.startsWith(MISSING_CODE_SETTING)) {
       const m = MISSING_CODE.exec(v.slice(MISSING_CODE_SETTING.length));
       const list = (settings.missingCode ??= []);
-      if (m !== null && m[1].length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS * 8 && !list.some((x) => x.sheet === m[1] && x.hash === m[2])) list.push({ sheet: m[1], hash: m[2], rows: Number(m[3]) });
+      if (m !== null && m[2].length <= MAX_SETTING_NAME && list.length < MAX_SETTING_SHEETS * 8 && !list.some((x) => x.sheet === m[2] && x.hash === m[3])) list.push({ answer: m[1] as 'missing' | 'real', sheet: m[2], hash: m[3], rows: Number(m[4]) });
     } else if (v.startsWith(DECLARED_POSITION_SETTING)) {
       const m = DECLARED_POSITION.exec(v.slice(DECLARED_POSITION_SETTING.length));
       const list = (settings.declaredPosition ??= []);
@@ -416,7 +416,7 @@ export function writeConvertSidecar(settings: Partial<ConvertSettings>): string 
       ...ORDER_LINES.flatMap((l) => (settings[l.slot] ?? []).filter((d) => l.pattern.test(`${d.order}:x:${'0'.repeat(8)}:0`) && d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && /^[0-9a-f]{8}/.test(d.hash) && Number.isInteger(d.rows) && d.rows >= 0).slice(0, MAX_SETTING_SHEETS * 8).map((d) => line([SETTING_ROW, `${l.prefix}${d.order}:${d.sheet}:${d.hash}:${d.rows}`, '', '', '']))),
       ...(settings.decimalReading ?? []).filter((d) => (d.reading === 'decimal' || d.reading === 'thousands') && d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && /^[0-9a-f]{8}/.test(d.hash) && Number.isInteger(d.rows) && d.rows >= 0).slice(0, MAX_SETTING_SHEETS * 8).map((d) => line([SETTING_ROW, `${DECIMAL_READING_SETTING}${d.reading}:${d.sheet}:${d.hash}:${d.rows}`, '', '', ''])),
       ...(settings.encoding ?? []).filter((e) => (e.encoding === 'windows-1250' || e.encoding === 'iso-8859-2' || e.encoding === 'windows-1252') && /^[0-9a-f]{8}$/.test(e.hash)).slice(0, MAX_SETTING_SHEETS).map((e) => line([SETTING_ROW, `${ENCODING_SETTING}${e.encoding}:${e.hash}`, '', '', ''])),
-      ...(settings.missingCode ?? []).filter((d) => d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && /^[0-9a-f]{8}/.test(d.hash) && Number.isInteger(d.rows) && d.rows >= 0).slice(0, MAX_SETTING_SHEETS * 8).map((d) => line([SETTING_ROW, `${MISSING_CODE_SETTING}${d.sheet}:${d.hash}:${d.rows}`, '', '', ''])),
+      ...(settings.missingCode ?? []).filter((d) => (d.answer === 'missing' || d.answer === 'real') && d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && /^[0-9a-f]{8}/.test(d.hash) && Number.isInteger(d.rows) && d.rows >= 0).slice(0, MAX_SETTING_SHEETS * 8).map((d) => line([SETTING_ROW, `${MISSING_CODE_SETTING}${d.answer}:${d.sheet}:${d.hash}:${d.rows}`, '', '', ''])),
       ...(settings.declaredPosition ?? []).filter((d) => d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && [d.lat, d.lon, d.uncertaintyM].every((x) => /^[^:\r\n]{1,40}$/.test(x.trim()) && x.trim() !== '')).slice(0, MAX_SETTING_SHEETS).map((d) => line([SETTING_ROW, `${DECLARED_POSITION_SETTING}${d.lat.trim()}:${d.lon.trim()}:${d.uncertaintyM.trim()}:${Math.max(0, Math.floor(d.rows))}:${d.sheet}`, '', '', ''])),
       ...(settings.declaredDate ?? []).filter((d) => d.sheet !== '' && d.sheet.length <= MAX_SETTING_NAME && DECLARED_DATE_SHAPE.test(d.value.trim())).slice(0, MAX_SETTING_SHEETS).map((d) => line([SETTING_ROW, `${DECLARED_DATE_SETTING}${d.value.trim()}:${Math.max(0, Math.floor(d.rows))}:${d.sheet}`, '', '', ''])),
       ...(settings.sampleJoin ?? []).filter((j) => SHEET_NAMES([...j.results, ...j.description]) && /^[0-9a-f]{8}/.test(j.resultsHashes) && /^[0-9a-f]{8}/.test(j.descriptionHashes) && Number.isInteger(j.resultsRows) && j.resultsRows >= 0 && Number.isInteger(j.descriptionRows) && j.descriptionRows >= 0).slice(0, MAX_SETTING_SHEETS).flatMap((j) => [

@@ -8,6 +8,15 @@ import { judge, policyOf } from '../../src/core/convert/policy';
 import { convert } from '../../src/core/convert/build';
 import { countNotWritten, notWrittenRows } from '../../src/core/convert/notWritten';
 import { exportSheet, objects, readBack } from './exportHelpers';
+import { pivotConvertFile } from '../../src/core/convert/pivot';
+import { turnConvertFile } from '../../src/core/convert/turn';
+import { renderConvertPlain } from '../../src/core/rules/convert';
+import { renderPlain } from '../../src/core/report';
+import { validateTables } from '../../src/core/convert/validate';
+import { toDataset } from '../../src/core/convert/model';
+import { EMPTY_METADATA } from '../../src/core/convert/metadata';
+import { xlsxFile } from '../helpers/files';
+import type { ParsedFile } from '../../src/core/types';
 import { fileOf, sheetInput } from './helpers';
 import type { Cell } from './helpers';
 
@@ -59,7 +68,7 @@ describe('a depth or a measurement of -999 through the converter', () => {
 
   it('lists the cells not written with the reason missing-code (understood, no decision needed), with the original line and the cells as written', () => {
     const file = fileOf(header, rows([5, -999, 10], [7.5, -99, 7.7]), 'S');
-    const sin = sheetInput(file, { quantity: Q, missingCodes: [DEPTH, TEMP] });
+    const sin = sheetInput(file, { quantity: Q, missingCodes: { [DEPTH]: 'missing', [TEMP]: 'missing' } });
     const result = convert({ sheets: [sin], options: { today: '2026-10-25' }, approvedSplits: {} });
     const list = [...notWrittenRows(result.ledger, [sin])].filter((r) => r.kind === 'lost-cells');
     expect(list).toHaveLength(1);
@@ -88,5 +97,108 @@ describe('a depth or a measurement of -999 through the converter', () => {
   it('-998 and -99.5 are values, not codes', async () => {
     const e = await exportSheet(header, rows([5, 6, 10], [-998, -99.5, 7.7]), { quantity: Q });
     expect(e.findings.some((x) => x.ruleId === 'ROW-MISSING-CODE')).toBe(false);
+  });
+});
+
+describe('"these are real values": the second answer', () => {
+  it('writes the values as they are, says which answer was given, and raises no question', async () => {
+    const e = await exportSheet(header, rows([-98, -99, -100]), { quantity: Q, realCodes: [DEPTH] });
+    expect(e.findings.some((x) => x.ruleId === 'ROW-MISSING-CODE')).toBe(false);
+    const said = e.findings.filter((x) => x.ruleId === 'CONV-MISSING-CODE-DECLARED');
+    expect(said).toHaveLength(1);
+    expect(said[0].params).toMatchObject({ column: 'Depth', answer: 'real', count: 1 });
+    expect(renderConvertPlain(said[0], 'en')).toMatch(/real values/);
+    expect(judge(e.findings).blocking).toEqual([]);
+    const b = await readBack(e.zip);
+    const samples = objects(b.tables['event.txt']).filter((r) => r.eventType === 'sample');
+    expect(samples.map((r) => r.minimumDepthInMeters)).toContain('99');
+  });
+
+  it('neither answer is preselected: with no answer the column blocks, whatever its values', async () => {
+    const e = await exportSheet(header, rows([-98, -99, -100]), { quantity: Q });
+    expect(judge(e.findings).blocking.map((x) => x.ruleId)).toContain('ROW-MISSING-CODE');
+  });
+
+  it('"missing" says missing in the note', async () => {
+    const e = await exportSheet(header, rows([5, -999, 10]), { quantity: Q, missingCodes: [DEPTH] });
+    const said = e.findings.find((x) => x.ruleId === 'CONV-MISSING-CODE-DECLARED')!;
+    expect(said.params.answer).toBe('missing');
+    expect(renderConvertPlain(said, 'en')).toMatch(/treated as missing/);
+  });
+});
+
+describe('the preview and the wording', () => {
+  it('validateTables (the page preview) raises no output-table copy of ROW-MISSING-CODE', () => {
+    const file = fileOf(header, rows([5, -999, 10], [7.5, -99, 7.7]), 'S');
+    const r = convert({ sheets: [sheetInput(file, { quantity: Q })], options: { today: '2026-10-25' }, approvedSplits: {} });
+    const ds = toDataset(r, EMPTY_METADATA, {} as never);
+    const all = [...r.findings, ...validateTables(ds, r.findings, { today: '2026-10-25' })].filter((f) => f.ruleId === 'ROW-MISSING-CODE');
+    expect(all.map((f) => f.field).sort()).toEqual(['Depth', 'Temp [°C]']);
+  });
+
+  it('on /convert (the finding has an index) the text says the export waits for the answer; on /check it does not', () => {
+    const file = fileOf(header, rows([5, -999, 10]), 'S');
+    const f = convert({ sheets: [sheetInput(file, { quantity: Q })], options: { today: '2026-10-25' }, approvedSplits: {} }).findings.find((x) => x.ruleId === 'ROW-MISSING-CODE')!;
+    expect(renderPlain(f, 'en')).toMatch(/waits for your answer/);
+    expect(renderPlain(f, 'en')).not.toMatch(/kept as written/);
+    expect(renderPlain({ ...f, params: { column: f.params.column, count: 1 } }, 'en')).toMatch(/kept as written/);
+  });
+});
+
+describe('a -999 count is one finding', () => {
+  it('a wide sheet: ROW-MISSING-CODE only while unanswered (the negative count is not said again); answered "real" the negative count blocks', async () => {
+    const H = ['Station', 'Sample', 'Date', 'Latitude', 'Longitude', 'Calanus finmarchicus', 'Oithona similis'];
+    const R: Cell[][] = [['S1', 's1', '2023-06-14', 55.5, 2.5, -999, 3], ['S1', 's2', '2023-06-14', 55.5, 2.5, 4, 2]];
+    const e = await exportSheet(H, R, { quantity: Q });
+    expect(e.findings.filter((x) => x.ruleId === 'ROW-MISSING-CODE')).toHaveLength(1);
+    expect(e.findings.some((x) => x.ruleId === 'CONV-NEGATIVE-QUANTITY')).toBe(false);
+    const real = await exportSheet(H, R, { quantity: Q, realCodes: [5] });
+    expect(real.findings.some((x) => x.ruleId === 'CONV-NEGATIVE-QUANTITY')).toBe(true);
+  });
+});
+
+describe('a pivoted and a turned sheet name the lines of the file', () => {
+  it('pivoted long sheet: the note and the list name the long file\'s lines, the column and the reason', () => {
+    const H = ['Station', 'Date', 'Latitude', 'Longitude', 'Depth_m', 'Parameter', 'Unit', 'Value'];
+    const R: Cell[][] = [
+      ['ZL1', '2023-06-14', 55.5, 2.5, 5, 'Temperature', 'degC', 8.1],
+      ['ZL1', '2023-06-14', 55.5, 2.5, 5, 'Salinity', 'PSU', -999],
+      ['ZL1', '2023-06-14', 55.5, 2.5, 10, 'Temperature', 'degC', -99],
+      ['ZL1', '2023-06-14', 55.5, 2.5, 10, 'Salinity', 'PSU', 34.4],
+    ];
+    const file = pivotConvertFile(fileOf(H, R, 'S'));
+    const base = { profile: { depthIds: true } };
+    const asked = convert({ sheets: [sheetInput(file, base)] }).findings.filter((f) => f.ruleId === 'ROW-MISSING-CODE');
+    const idx = Object.fromEntries(asked.map((f) => [String(f.field), Number(f.params.index)]));
+    expect(asked.map((f) => f.lines).sort()).toEqual([[3], [4]]);
+    const sin = sheetInput(file, { ...base, missingCodes: Object.fromEntries(Object.values(idx).map((i) => [i, 'missing' as const])) });
+    const r = convert({ sheets: [sin] });
+    const said = r.findings.filter((f) => f.ruleId === 'CONV-MISSING-CODE-DECLARED');
+    expect(said.map((f) => f.lines).sort()).toEqual([[3], [4]]);
+    expect(r.measurements.map((m) => String((m as { value?: unknown }).value ?? '')).join(' ')).not.toMatch(/-999|-99\b/);
+    const list = [...notWrittenRows(r.ledger, [sin])].filter((x) => x.kind === 'line' && x.reason === 'missing-code');
+    expect(list.map((x) => x.line)).toEqual([3, 4]);
+    expect(list.every((x) => x.status === 'understood')).toBe(true);
+    expect(list.map((x) => x.detail).join(' ')).toMatch(/Salinity.*missing-code/);
+    expect([...notWrittenRows(r.ledger, [sin])].some((x) => x.reason === 'nothing-to-record' || x.detail.includes('Unit'))).toBe(false);
+    expect(countNotWritten(r.ledger).rows).toBe(2);
+  });
+
+  it('turned sheet: the note and the list name the source line and the sample column, not a synthetic line', () => {
+    const raw = xlsxFile('book.xlsx', { Taxa: [['Taxon', 'S1', 'S2', 'Total'], ['Calanus finmarchicus', 4, -999, 4], ['Oithona similis', 1, 2, 3]] });
+    const file = turnConvertFile(raw, { Taxa: { nameColumn: 0, notSamples: [3] } });
+    const of: ParsedFile = { ...file, sheets: file.sheets.filter((s) => s.name === 'Taxa') };
+    const base = { shape: 'wide' as const, quantity: { kind: 'count' as const } };
+    const asked = convert({ sheets: [sheetInput(of, base)] }).findings.filter((f) => f.ruleId === 'ROW-MISSING-CODE');
+    expect(asked).toHaveLength(1);
+    expect(asked[0].lines).toEqual([2]);
+    const sin = sheetInput(of, { ...base, missingCodes: { [Number(asked[0].params.index)]: 'missing' } });
+    const r = convert({ sheets: [sin] });
+    expect(r.findings.find((f) => f.ruleId === 'CONV-MISSING-CODE-DECLARED')!.lines).toEqual([2]);
+    const all = [...notWrittenRows(r.ledger, [sin])];
+    const list = all.filter((x) => x.detail.includes('missing-code'));
+    expect(list.map((x) => x.line)).toEqual([2]);
+    expect(list[0].detail).toContain('S2 (missing-code)');
+    expect(list.every((x) => (x.line ?? 0) < 1000)).toBe(true);
   });
 });

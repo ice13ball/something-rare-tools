@@ -38,6 +38,8 @@ export interface RawSheet {
   decimalSource?: RawSheet;
   /** Set only by the converter's missing-value answer (core/convert/missingCode.ts): the sheet as it was read before the cells the person said are missing codes (-99, -999, -9999) were left empty (the list of rows not written shows them as written). */
   missingSource?: RawSheet;
+  /** Set with `missingSource`: the cells left empty by that answer, by line of this sheet -> column indexes (the ledger names them instead of calling them blank). */
+  missingCells?: Record<number, number[]>;
 }
 /** The person's declaration that a sheet's columns are samples: which column names the rows (the left-hand labels), which columns right of it are not samples, and whether the header gives the date as well as the sample code. */
 export interface TurnDeclaration {
@@ -383,6 +385,8 @@ export interface RuleDef {
    */
   plainTime?: Record<Lang, string>;
   technicalTime?: string;
+  /** The text /convert shows instead of `plain` (chosen when the finding has the param `index`, which only the converter sets): there the export waits for the person's answer. */
+  plainConvert?: Record<Lang, string>;
   /** Sentences appended, in order, when the finding has the named param (set and non-empty). */
   plainIf?: readonly { param: string; plain: Record<Lang, string> }[];
   technical: string;             // English, template with {param}

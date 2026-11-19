@@ -119,6 +119,7 @@ export function renderPlain(f: Finding, lang: Lang): string {
   }
   if (rule.plainDataciteNotCompared && f.params.dataciteCompared === 'no') texts = rule.plainDataciteNotCompared;
   if (rule.plainCollection && f.params.scope === 'collection') texts = rule.plainCollection;
+  if (rule.plainConvert && f.params.index !== undefined) texts = rule.plainConvert;
   if (rule.plainTime && (f.params.role === 'time' || valuesAreTimes(f.value))) texts = rule.plainTime;
   // The layout reason is the English phrase in `reason`; the codes in `reasons` are rendered in the reader's language.
   const reasons = f.ruleId === 'IN-LAYOUT-UNSUPPORTED' ? decodeReasons(f.params.reasons) : undefined;

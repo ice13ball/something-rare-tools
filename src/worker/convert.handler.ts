@@ -527,12 +527,18 @@ export function createConvertHandler(): ConvertHandler {
     };
   }
 
-  /** The columns a request sheet answered "treat as missing" for: whole-number indexes within the sheet; a from-file mark only for an index that is kept. Nothing, when nothing is left. */
+  /** The answers of a request sheet for columns with a missing-value code (`missing` | `real`): whole-number indexes within the sheet; a from-file mark only for an index that is kept. Nothing, when nothing is left. */
   function missingCodesOf(s: ConvertRequestBody['sheets'][number]): Pick<ConvertSheetInput, 'missingCodes' | 'missingCodesFromFile'> {
     const width = held(s.fileId).parsed.sheets.find((x) => x.name === s.sheet)?.header.length ?? 0;
-    const kept = Array.isArray(s.missingCodes) ? [...new Set((s.missingCodes as unknown[]).filter((i): i is number => typeof i === 'number' && Number.isInteger(i) && i >= 0 && i < width))] : [];
-    if (kept.length === 0) return {};
-    const fromFile = Array.isArray(s.missingCodesFromFile) ? [...new Set((s.missingCodesFromFile as unknown[]).filter((i): i is number => typeof i === 'number' && kept.includes(i)))] : [];
+    const kept: Record<number, 'missing' | 'real'> = {};
+    if (s.missingCodes !== undefined && s.missingCodes !== null && typeof s.missingCodes === 'object') {
+      for (const [k, v] of Object.entries(s.missingCodes)) {
+        const i = Number(k);
+        if (/^\d+$/.test(k) && Number.isInteger(i) && i < width && (v === 'missing' || v === 'real')) kept[i] = v;
+      }
+    }
+    if (Object.keys(kept).length === 0) return {};
+    const fromFile = Array.isArray(s.missingCodesFromFile) ? [...new Set((s.missingCodesFromFile as unknown[]).filter((i): i is number => typeof i === 'number' && kept[i] !== undefined))] : [];
     return { missingCodes: kept, ...(fromFile.length === 0 ? {} : { missingCodesFromFile: fromFile }) };
   }
 

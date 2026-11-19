@@ -109,8 +109,8 @@ export interface SheetChoice {
   yyOrder?: Record<number, 'ymd' | 'dmy' | 'mdy'>;
   /** The columns whose yyOrder was read from a companion file and has not been changed since. */
   yyOrderFile?: number[];
-  /** The columns (by index) the person answered "treat -99, -999 and -9999 as missing" for (ROW-MISSING-CODE). Never prefilled except by a companion file that still holds (same header hash, same number of rows). */
-  missingCodes?: number[];
+  /** The columns (by index) the person answered "treat -99, -999 and -9999 as missing" for (ROW-MISSING-CODE): `missing`, or `real` (these are values, keep them). Neither is ever preselected, and never prefilled except by a companion file that still holds (same header hash, same number of rows). */
+  missingCodes?: Record<number, 'missing' | 'real'>;
   /** The columns among `missingCodes` that were read from a companion file and have not been changed since. */
   missingCodesFile?: number[];
   /** The one position the person typed for this sheet (it has no latitude / longitude column), as typed. Empty strings = none. Sent only when all three are filled. */
@@ -338,10 +338,10 @@ const orderRequest = (c: SheetChoice): Pick<ConvertRequestBody['sheets'][number]
 
 /** The columns the person answered "treat as missing" for, and those among them a companion file gave. */
 const missingCodeRequest = (c: SheetChoice): Pick<ConvertRequestBody['sheets'][number], 'missingCodes' | 'missingCodesFromFile'> => {
-  const columns = c.missingCodes ?? [];
-  if (columns.length === 0) return {};
-  const fromFile = (c.missingCodesFile ?? []).filter((i) => columns.includes(i));
-  return { missingCodes: columns, ...(fromFile.length > 0 ? { missingCodesFromFile: fromFile } : {}) };
+  const answers = c.missingCodes;
+  if (answers === undefined || Object.keys(answers).length === 0) return {};
+  const fromFile = (c.missingCodesFile ?? []).filter((i) => answers[i] !== undefined);
+  return { missingCodes: answers, ...(fromFile.length > 0 ? { missingCodesFromFile: fromFile } : {}) };
 };
 
 /** A column of this sheet has a latitude or longitude role (even one blank in every row): a declared position never applies to it. */
@@ -500,13 +500,14 @@ const savedOrders = (settings: ConvertParseResult['settings'], sheet: { name: st
 
 /** The "treat as missing" answers a companion file recorded for a sheet: a pre-pick only for a column found again by its header hash, in a sheet with the same number of rows. */
 function savedMissingCodes(settings: ConvertParseResult['settings'], sheet: { name: string; header: string[]; rowCount: number }): Pick<SheetChoice, 'missingCodes' | 'missingCodesFile'> {
-  const columns: number[] = [];
+  const answers: Record<number, 'missing' | 'real'> = {};
   for (const d of settings.missingCode ?? []) {
     if (d.sheet !== sheet.name || d.rows !== sheet.rowCount) continue;
     const at = resolveKeyHashes(sheet.header, d.hash);
-    if (at?.length === 1 && !columns.includes(at[0])) columns.push(at[0]);
+    if (at?.length === 1 && answers[at[0]] === undefined) answers[at[0]] = d.answer;
   }
-  return columns.length === 0 ? {} : { missingCodes: columns, missingCodesFile: columns };
+  const columns = Object.keys(answers).map(Number);
+  return columns.length === 0 ? {} : { missingCodes: answers, missingCodesFile: columns };
 }
 
 /** The answers a companion file recorded for a sheet, with the own-records pair kept together: the copies answer is "under each row is its own record", so it is kept only while that choice holds for this sheet today (the same name and number of rows). */
@@ -595,10 +596,11 @@ export function missingCodeSettingsOf(parsed: ConvertParseResult, choices: Recor
     for (const sh of f.sheets) {
       const c = choices[sheetKey(f.fileId, sh.name)];
       if (!c || !c.use) continue;
-      for (const index of c.missingCodes ?? []) {
+      for (const [k, answer] of Object.entries(c.missingCodes ?? {})) {
+        const index = Number(k);
         const said = declared === undefined || declared.some((x) => x.ruleId === 'CONV-MISSING-CODE-DECLARED' && x.file === f.fileName && x.sheet === sh.name && Number(x.params.index) === index);
         const hash = keyHashes(sh.header, [index]);
-        if (hash !== undefined && said && !out.some((o) => o.sheet === sh.name && o.hash === hash)) out.push({ sheet: sh.name, hash, rows: sh.rowCount });
+        if (hash !== undefined && said && !out.some((o) => o.sheet === sh.name && o.hash === hash)) out.push({ sheet: sh.name, answer, hash, rows: sh.rowCount });
       }
     }
   }

@@ -378,7 +378,7 @@ export function* notWrittenRows(ledger: readonly SheetLedger[], sheets: readonly
       if (isUnwritten(f)) {
         const others = (f.chain ?? []).filter((c) => c !== f.fate);
         const lentTo = (f.lentTo ?? []).map((t) => `lent to ${t.sheet} line ${t.lines.join(', ')}`).join('; ');
-        yield { file: l.file, sheet: l.sheet, line: f.line, reason: f.fate, status: statusOf(f.fate, l, left), detail: join(join(others.join(' '), lentTo), dated(rows.get(f.line))), cells, kind: 'line' };
+        yield { file: l.file, sheet: l.sheet, line: f.line, reason: f.fate, status: statusOf(f.fate, l, left), detail: join(join(join(f.named === undefined ? '' : `${f.named} (${f.fate})`, others.join(' ')), lentTo), dated(rows.get(f.line))), cells, kind: 'line' };
       } else {
         const header = source?.header ?? [];
         const named = (f.lostCells ?? []).map((c) => {
