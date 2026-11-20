@@ -120,7 +120,10 @@ function structure(file: ParsedFile, sheet: RawSheet, t: DwcTable, terms: Map<st
     if (index === undefined || rows === 0 || skip) return;
     const blank = column(sheet, index).filter((c) => c.v === '').map((c) => c.line);
     if (blank.length === 0 || (onlyWhenAllEmpty && blank.length < rows)) return;
-    out.push(makeFinding('DWC-TERM-EMPTY', { file: file.fileName, sheet: sheet.name, lines: blank, field: sheet.header[index], params: { count: blank.length } }));
+    // an eventDate empty in every row of an archive whose eml.xml states a time span: the sentence names the span, so the dataset is not told it has no dates at all
+    const span = file.dwca?.timeSpan;
+    const spanText = index === terms.get('eventdate') && span && (span.start || span.end) ? (span.start && span.end && span.start !== span.end ? `${span.start} – ${span.end}` : (span.start ?? span.end)) : undefined;
+    out.push(makeFinding('DWC-TERM-EMPTY', { file: file.fileName, sheet: sheet.name, lines: blank, field: sheet.header[index], params: { count: blank.length, ...(spanText ? { archiveSpan: spanText } : {}) } }));
   };
   emptyCheck(idIndex, false);
   // a position blank in some rows is ROW-NO-COORD; a date blank in some rows is ROW-DATE-MISSING, and none at all in the data or the

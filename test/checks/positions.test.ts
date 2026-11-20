@@ -6,10 +6,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
-import { checkRows } from '../../src/core/checks/rows';
+import { checkRows, checkStationRows } from '../../src/core/checks/rows';
 import { runChecks } from '../../src/core/checks/run';
 import { decodeLandMask, type LandMask } from '../../src/core/geo/land';
-import { renderPlain } from '../../src/core/report';
+import { renderPlain, renderTechnical } from '../../src/core/report';
 import type { Finding } from '../../src/core/types';
 import { dataset, rows } from './rows.helpers';
 
@@ -78,6 +78,50 @@ describe('ROW-ON-LAND', () => {
   });
 });
 
+describe('ROW-ON-LAND and ROW-ON-LAND-NEAR: every position is reachable', () => {
+  // a controlled mask: east of the prime meridian and at latitude 1..N is land, the rest is sea, so every flipped sign lands at sea
+  const mask = (km: number): LandMask => ({ width: 0, height: 0, place: (la, lo) => (lo > 0 && la >= 1 && la <= 400 ? { kind: 'land', atLeastKm: km } : { kind: 'sea' }) });
+  // 12 positions: lat 1..12; the first has 3 rows (lines 2-4), the others one row each (lines 5..15)
+  const many = () => dataset([...rows(2, 3, { lat: 1, lon: 5 }), ...Array.from({ length: 11 }, (_, i) => rows(5 + i, 1, { lat: i + 2, lon: 5 })).flat()]);
+
+  it('the sentence shows the five largest positions and counts the rest instead of "…+N"', () => {
+    const f = only(checkRows(many(), { land: mask(100) }), 'ROW-ON-LAND')[0];
+    expect(String(f.params.places).split(/(?<=\)); /)).toHaveLength(5);
+    expect(f.params.places).not.toContain('…');
+    expect(f.params.rest).toBe(7);
+    expect(renderPlain(f, 'en')).toContain('7 more positions');
+    expect(renderPlain(f, 'en')).toContain('technical details');
+    expect(renderPlain(only(checkRows(many(), { land: mask(100) }), 'ROW-ON-LAND')[0], 'pl')).toMatch(/Jeszcze 7 pozycji/);
+  });
+
+  it('the details list every position with its row count, distance, line numbers and sign hint', () => {
+    const f = only(checkRows(many(), { land: mask(100) }), 'ROW-ON-LAND')[0];
+    const all = String(f.params.allPlaces).split(' | ');
+    expect(all).toHaveLength(12);
+    expect(all[0]).toBe('5 E, 1 N (3 rows; ≥100 km; lines 2–4) → 5 W, 1 N');
+    expect(all[11]).toMatch(/^5 E, 12 N \(1 row; ≥100 km; line 15\) → 5 W, 12 N$/);
+    expect(renderTechnical(f)).toContain(String(f.params.allPlaces));
+    expect(f.lines).toHaveLength(14);
+  });
+
+  it('a short list has no "more" sentence and the same positions in both', () => {
+    const ds = dataset([...rows(2, 1, { lat: 1, lon: 5 }), ...rows(3, 1, { lat: 2, lon: 5 })]);
+    const f = only(checkRows(ds, { land: mask(100) }), 'ROW-ON-LAND')[0];
+    expect(f.params.rest).toBeUndefined();
+    expect(renderPlain(f, 'en')).not.toContain('more position');
+    expect(String(f.params.allPlaces).split(' | ')).toHaveLength(2);
+  });
+
+  it('ROW-ON-LAND-NEAR shares the path: rest and every position, no sign hint', () => {
+    const f = only(checkRows(many(), { land: mask(20) }), 'ROW-ON-LAND-NEAR')[0];
+    expect(f.params.rest).toBe(7);
+    expect(String(f.params.allPlaces).split(' | ')).toHaveLength(12);
+    expect(String(f.params.allPlaces)).not.toContain('→');
+    expect(renderPlain(f, 'de')).toContain('7 weitere Positionen');
+    expect(renderPlain(f, 'fr')).toContain('7 autres positions');
+  });
+});
+
 describe('ROW-ON-LAND-NEAR (10-50 km inland, note)', () => {
   // (33.35, -117.3) of the acceptance table lies exactly on a cell edge: 90 - 33.35 = 56.649999… puts it in the bucket-5 cell, like
   // the stored float position of Grey Whale Carcass; (33.36, -117.29), inside the neighbouring cell, is the bucket-10 case
@@ -111,7 +155,7 @@ describe('ROW-ON-LAND-NEAR (10-50 km inland, note)', () => {
     const f = checkRows(ds, { land: fake });
     expect(only(f, 'ROW-ON-LAND')[0].lines).toEqual([2]);
     expect(only(f, 'ROW-ON-LAND-NEAR')[0].lines).toEqual([3]);
-    expect(Object.keys(only(f, 'ROW-ON-LAND-NEAR')[0].params).sort()).toEqual(['count', 'places']);
+    expect(Object.keys(only(f, 'ROW-ON-LAND-NEAR')[0].params).sort()).toEqual(['allPlaces', 'count', 'places']);
     expect(renderPlain(only(f, 'ROW-ON-LAND-NEAR')[0], 'pl')).toContain('pozycja wypada na mapie lądu Natural Earth (1:10m) na lądzie lub w jeziorze');
     expect(renderPlain(only(f, 'ROW-ON-LAND-NEAR')[0], 'pl')).toContain('Jeśli to próbka z rzeki, estuarium, zatoki pływowej, jeziora albo laguny przy brzegu, pomiń tę uwagę: w takich miejscach mapa bywa niedokładna.');
   });
@@ -375,5 +419,88 @@ describe('station findings on collection exports: generic names are grouped by c
       const ds = dataset([...at(2, 2, 45.5, -121.43, name, '1991-05-01'), ...at(5, 2, 45.5, -130.43, name, '1991-05-01')]);
       expect(stationIds(checkRows(ds)), name).toEqual([]);
     }
+  });
+});
+
+describe('ROW-STATION-MOVED: line numbers for every position, no verdict, and the land finding named', () => {
+  // 6 rows (lines 2-7) of one station at one position and 1 row (line 8) at a longitude with the other sign; the second is far inland, the first at sea
+  const ds = () => dataset([...rows(2, 6, { lat: 37.8417, lon: -31.525, date: '2021-05-01', station: 'S1' }), ...rows(8, 1, { lat: 37.8417, lon: 31.525, date: '2021-05-02', station: 'S1' })]);
+
+  it('/check lists the lines of each position, majority and minority alike', () => {
+    const f = only(checkRows(ds(), { land }), 'ROW-STATION-MOVED')[0];
+    expect(f.lines).toEqual([8]); // unchanged: the rows of the smaller group
+    expect(f.params.groups).toBe('31.525 W, 37.8417 N (6 rows, 2021-05-01): 2–7; 31.525 E, 37.8417 N (1 row, 2021-05-02): 8');
+    const en = renderPlain(f, 'en');
+    expect(renderTechnical(f)).toContain('Lines of each position, larger group first');
+    expect(en).toContain('not necessarily the wrong one');
+    expect(en).not.toContain('2–7'); // the lists are in the technical details, not in the sentence
+  });
+
+  it('says where ROW-ON-LAND already judges a position, and only that one', () => {
+    const f = only(checkRows(ds(), { land }), 'ROW-STATION-MOVED')[0];
+    expect(f.params.onLand).toBe('31.525 E, 37.8417 N');
+    expect(f.params.onLandCount).toBe(1);
+    expect(renderPlain(f, 'en')).toContain('ROW-ON-LAND');
+    expect(only(checkRows(ds(), { land }), 'ROW-ON-LAND')).toHaveLength(1);
+    expect(renderPlain(f, 'pl')).toContain('ROW-ON-LAND');
+  });
+
+  it('without a land map there is no land sentence, the lines are still given', () => {
+    const f = only(checkRows(ds()), 'ROW-STATION-MOVED')[0];
+    expect(f.params.onLand).toBeUndefined();
+    expect(f.params.groups).toBeDefined();
+  });
+
+  it('a conversion (codesAreValues) and checkStationRows get the finding exactly as before: no groups, no land', () => {
+    const f = only(checkRows(ds(), { land, codesAreValues: true }), 'ROW-STATION-MOVED')[0];
+    expect(Object.keys(f.params).sort()).toEqual(['positions', 'signLon', 'station']);
+    const g = checkStationRows('x.csv', 'S', ds().rows)[0];
+    expect(g.params.groups).toBeUndefined();
+  });
+});
+
+describe('bounded line lists and a land tail that is true (review of the first fix)', () => {
+  const sea = { kind: 'sea' } as const;
+  // alternating rows at two positions: lines 2,4,6,... and 3,5,7,...
+  const alternating = (n: number) => dataset(Array.from({ length: n }, (_, i) => rows(2 + i, 1, { lat: 37.8417, lon: i % 2 === 0 ? -31.525 : -32.525, date: '2021-05-01', station: 'S1' })).flat());
+
+  it('ROW-STATION-MOVED: 400 alternating rows keep the sentence short, and the technical details hold bounded line lists', () => {
+    const f = only(checkRows(alternating(400), { land }), 'ROW-STATION-MOVED')[0];
+    expect(renderPlain(f, 'en').length).toBeLessThan(700);
+    expect(renderPlain(f, 'en')).not.toContain('2–');
+    const tech = renderTechnical(f);
+    expect(tech).toContain('Lines of each position');
+    expect(tech).toMatch(/\(\+\d+\)/);
+    expect(tech.length).toBeLessThan(1500);
+  });
+
+  it('ROW-STATION-MOVED: a short case still gives the lines in the technical details', () => {
+    const f = only(checkRows(dataset([...rows(2, 6, { lat: 37.8417, lon: -31.525, date: '2021-05-01', station: 'S1' }), ...rows(8, 1, { lat: 37.8417, lon: 31.525, date: '2021-05-02', station: 'S1' })]), { land }), 'ROW-STATION-MOVED')[0];
+    expect(renderTechnical(f)).toContain('31.525 W, 37.8417 N (6 rows, 2021-05-01): 2–7');
+  });
+
+  it('ROW-ON-LAND: one position with 3000 scattered rows stays a few hundred characters per position', () => {
+    const scattered = dataset(Array.from({ length: 3000 }, (_, i) => rows(2 + 2 * i, 1, { lat: 37.85, lon: 31.517 })).flat());
+    const f = only(checkRows(scattered, { land }), 'ROW-ON-LAND')[0];
+    expect(String(f.params.allPlaces).length).toBeLessThan(400);
+    expect(String(f.params.allPlaces)).toMatch(/… \(\+\d+\)/);
+    expect(f.lines).toHaveLength(3000);
+  });
+
+  it('ROW-ON-LAND: 400 positions give a bounded text per position', () => {
+    const wide: LandMask = { width: 0, height: 0, place: (la, lo) => (lo > 0 ? { kind: 'land', atLeastKm: 100 } : sea) };
+    const many = dataset(Array.from({ length: 400 }, (_, i) => rows(2 + i, 1, { lat: 1 + i / 10, lon: 5 })).flat());
+    const f = only(checkRows(many, { land: wide }), 'ROW-ON-LAND')[0];
+    for (const p of String(f.params.allPlaces).split(' | ')) expect(p.length).toBeLessThan(300);
+  });
+
+  it('ROW-STATION-MOVED: when every position of the station is on land the sentence does not speak of "the other positions"', () => {
+    const both = dataset([...rows(2, 3, { lat: 37.85, lon: 31.517, date: '2021-05-01', station: 'S1' }), ...rows(5, 1, { lat: 37.85, lon: -31.517, date: '2021-05-02', station: 'S1' })]);
+    const allLand: LandMask = { width: 0, height: 0, place: () => ({ kind: 'land', atLeastKm: 100 }) };
+    const f = only(checkRows(both, { land: allLand }), 'ROW-STATION-MOVED')[0];
+    expect(f.params.onLandCount).toBe(2);
+    expect(renderPlain(f, 'en')).toContain('ROW-ON-LAND');
+    expect(renderPlain(f, 'en')).not.toMatch(/other positions/);
+    for (const lang of ['pl', 'de', 'fr'] as const) expect(renderPlain(f, lang), lang).toContain('ROW-ON-LAND');
   });
 });

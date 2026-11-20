@@ -9,7 +9,7 @@ import type { RuleSpec } from './spec';
  * an ordinary measurement sheet.
  * Declared params per rule:
  *   DWC-TERM-MISSING          core, terms     core = Occurrence | Event; terms = the required terms that have no column, comma-separated
- *   DWC-TERM-EMPTY            count           field = the required column, lines = the rows without a value, count = how many
+ *   DWC-TERM-EMPTY            count, archiveSpan?  field = the required column, lines = the rows without a value, count = how many
  *   DWC-RECOMMENDED           core, terms     terms = recommended terms with no column or no value in any row, comma-separated
  *   DWC-VOCAB-VALUE           allowed         field = column, value = the value not in the list (one finding per value), lines = its rows
  *   DWC-EVENTID-DUPLICATE     count           value = an example eventID, lines = every row of a repeated eventID, count = repeated eventIDs
@@ -47,6 +47,17 @@ export const DWC_RULES: readonly RuleSpec[] = [
       de: `Die Spalte „{field}“, die OBIS verlangt, hat in den Zeilen {lines} keinen Wert (insgesamt {count}). Ergänzen Sie sie.`,
       fr: `La colonne « {field} », exigée par OBIS, n'a pas de valeur aux lignes {lines} ({count} au total). Complétez-les.`,
     },
+    plainIf: [
+      {
+        param: 'archiveSpan',
+        plain: {
+          pl: `Metadane archiwum (eml.xml) podają zakres czasu {archiveSpan}, ale OBIS wymaga daty przy każdym rekordzie, nie tylko w opisie zbioru.`,
+          en: `The archive's metadata (eml.xml) gives the time span {archiveSpan}, but OBIS wants a date for each record, not only in the description of the dataset.`,
+          de: `Die Metadaten des Archivs (eml.xml) nennen den Zeitraum {archiveSpan}, aber OBIS verlangt ein Datum für jeden Datensatz, nicht nur in der Beschreibung des Datensatzes.`,
+          fr: `Les métadonnées de l'archive (eml.xml) donnent la période {archiveSpan}, mais OBIS veut une date pour chaque enregistrement, pas seulement dans la description du jeu de données.`,
+        },
+      },
+    ],
     technical: `{file}:{lines} field {field}: {count} empty value(s) in a column OBIS requires (obistools check_fields: "Empty value for required field"). For decimalLatitude, decimalLongitude and eventDate only a column empty in every row is reported here (single missing positions are ROW-NO-COORD, single missing dates ROW-DATE-MISSING; where no date exists anywhere, data or metadata, META-NO-DATES says it instead).`,
   },
   {

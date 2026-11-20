@@ -106,7 +106,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     fires:
       'For rows of one station name, compared within one cruise or, without a cruise column, within one calendar year, when two positions differ in one of three ways. A typed digit: one coordinate differs by a whole number of degrees and the other keeps its whole degree; the shifted coordinate needs two written decimals (one inside a cruise, not .0 or .5) and there is no distance limit. Exchanged axes: each position is the other with latitude and longitude swapped. A sign: as written the positions are at least 100 km apart, and with one sign flipped they are within 50 km and at least ten times closer. Placeholder names such as unknown do not count. Among rows with neither a cruise nor a date a typed digit is not looked for; such a station gets ROW-STATION-SPREAD instead.',
     example:
-      'Station A3 is at 76.9 N 15.5 E on 9 rows and at 76.9 N -15.5 E on 14 rows. The finding lists both positions and says that the longitude differs only by its sign.',
+      'Station A3 is at 76.9 N 15.5 E on 9 rows and at 76.9 N -15.5 E on 14 rows. The finding lists both positions and says that the longitude differs only by its sign. In /check it also gives the lines of each position, and it does not take the position with fewer rows to be the wrong one.',
     action:
       'Decide which position is right and correct the other rows. In /convert this finding does not block the export, but it needs your acceptance, one tick for the rule, before the export button works.',
   },
@@ -134,7 +134,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A position lies on land 10 to 50 km from the sea, by a coarse coastline map. For a marine sample that is suspicious but can be a river mouth, a fjord or the limit of the map.',
     fires:
-      'When the position is on land by the Natural Earth 1:10m map and its nearest sea is 10 to 50 km away. It is an information note and carries no hint about a flipped sign. Within 10 km of the sea, near rivers and canals, nothing is judged. It runs only when a land map is available.',
+      'When the position is on land by the Natural Earth 1:10m map and its nearest sea is 10 to 50 km away. It is an information note and carries no hint about a flipped sign. Within 10 km of the sea, near rivers and canals, nothing is judged. The sentence names the five positions with most rows and counts the rest; the technical details list every position with its rows, distance and line numbers. It runs only when a land map is available.',
     example:
       'A sample at 53.0 N 8.0 E, in Lower Saxony near Bremen, is on land by the map and at least 20 km from the sea. The note gives the position.',
     action:
@@ -144,7 +144,7 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     checks:
       'A position lies on land at least 50 km from the sea. A marine sample cannot be taken there, so a coordinate or its sign is probably wrong.',
     fires:
-      'When the position is on land by the Natural Earth 1:10m map and the nearest sea is at least 50 km away. The finding adds a hint when a flipped sign or exchanged latitude and longitude would put the position at sea. It runs only when a land map is available.',
+      'When the position is on land by the Natural Earth 1:10m map and the nearest sea is at least 50 km away. The finding adds a hint when a flipped sign or exchanged latitude and longitude would put the position at sea. The sentence names the five positions with most rows and counts the rest; the technical details list every position with its rows, distance, line numbers and hint. It runs only when a land map is available.',
     example:
       'A position of 52.2 N 19.4 E is in central Poland, far from any sea. With the longitude as 19.4 W it is in the Atlantic, and the finding says so.',
     action:

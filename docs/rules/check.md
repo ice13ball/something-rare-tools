@@ -760,7 +760,7 @@ Severity: error
 
 **What it checks.** Neither the table nor the record holds any date. Data without a date cannot be placed in time, and OBIS and most repositories require one.
 
-**When it fires.** For a table with rows and a supported layout, when no row has a date (a date cell that exists but cannot be read counts as a date column, and is reported by ROW-DATE-UNPARSEABLE) and no record has a temporal extent or a collection date. Publication dates are not used. A lookup table of the same file, which holds no measurement while another sheet of the file does, is skipped. For a workbook the sheets that lack a date are listed in one finding. When a join left rows without a date the finding names the joined sheet as the likely cause. For an empty eventDate column of a Darwin Core table only this rule speaks, and DWC-TERM-EMPTY stays silent.
+**When it fires.** For a table with rows and a supported layout, when no row has a date (a date cell that exists but cannot be read counts as a date column, and is reported by ROW-DATE-UNPARSEABLE) and no record has a temporal extent or a collection date (the eml.xml time span of a Darwin Core Archive counts). Publication dates are not used. With no metadata given at all (an eml.xml in a Darwin Core Archive is metadata), the text says only that no row has a date. A lookup table of the same file, which holds no measurement while another sheet of the file does, is skipped. For a workbook the sheets that lack a date are listed in one finding. When a join left rows without a date the finding names the joined sheet as the likely cause. For an empty eventDate column of a Darwin Core table only this rule speaks, and DWC-TERM-EMPTY stays silent.
 
 **Example.** A table of temperature and salinity by depth with no date column, described by a record without a temporal extent.
 
@@ -920,7 +920,7 @@ Severity: warning
 
 **When it fires.** For rows of one station name, compared within one cruise or, without a cruise column, within one calendar year, when two positions differ in one of three ways. A typed digit: one coordinate differs by a whole number of degrees and the other keeps its whole degree; the shifted coordinate needs two written decimals (one inside a cruise, not .0 or .5) and there is no distance limit. Exchanged axes: each position is the other with latitude and longitude swapped. A sign: as written the positions are at least 100 km apart, and with one sign flipped they are within 50 km and at least ten times closer. Placeholder names such as unknown do not count. Among rows with neither a cruise nor a date a typed digit is not looked for; such a station gets ROW-STATION-SPREAD instead.
 
-**Example.** Station A3 is at 76.9 N 15.5 E on 9 rows and at 76.9 N -15.5 E on 14 rows. The finding lists both positions and says that the longitude differs only by its sign.
+**Example.** Station A3 is at 76.9 N 15.5 E on 9 rows and at 76.9 N -15.5 E on 14 rows. The finding lists both positions and says that the longitude differs only by its sign. In /check it also gives the lines of each position, and it does not take the position with fewer rows to be the wrong one.
 
 **What you can do.** Decide which position is right and correct the other rows. In /convert this finding does not block the export, but it needs your acceptance, one tick for the rule, before the export button works.
 
@@ -954,7 +954,7 @@ Severity: info
 
 **What it checks.** A position lies on land 10 to 50 km from the sea, by a coarse coastline map. For a marine sample that is suspicious but can be a river mouth, a fjord or the limit of the map.
 
-**When it fires.** When the position is on land by the Natural Earth 1:10m map and its nearest sea is 10 to 50 km away. It is an information note and carries no hint about a flipped sign. Within 10 km of the sea, near rivers and canals, nothing is judged. It runs only when a land map is available.
+**When it fires.** When the position is on land by the Natural Earth 1:10m map and its nearest sea is 10 to 50 km away. It is an information note and carries no hint about a flipped sign. Within 10 km of the sea, near rivers and canals, nothing is judged. The sentence names the five positions with most rows and counts the rest; the technical details list every position with its rows, distance and line numbers. It runs only when a land map is available.
 
 **Example.** A sample at 53.0 N 8.0 E, in Lower Saxony near Bremen, is on land by the map and at least 20 km from the sea. The note gives the position.
 
@@ -971,7 +971,7 @@ Severity: warning
 
 **What it checks.** A position lies on land at least 50 km from the sea. A marine sample cannot be taken there, so a coordinate or its sign is probably wrong.
 
-**When it fires.** When the position is on land by the Natural Earth 1:10m map and the nearest sea is at least 50 km away. The finding adds a hint when a flipped sign or exchanged latitude and longitude would put the position at sea. It runs only when a land map is available.
+**When it fires.** When the position is on land by the Natural Earth 1:10m map and the nearest sea is at least 50 km away. The finding adds a hint when a flipped sign or exchanged latitude and longitude would put the position at sea. The sentence names the five positions with most rows and counts the rest; the technical details list every position with its rows, distance, line numbers and hint. It runs only when a land map is available.
 
 **Example.** A position of 52.2 N 19.4 E is in central Poland, far from any sea. With the longitude as 19.4 W it is in the Atlantic, and the finding says so.
 
@@ -1481,7 +1481,7 @@ Severity: error
 
 **What it checks.** A column that OBIS requires exists but has empty cells. A record without a required value cannot be published, so the empty rows must be filled or dealt with before submission.
 
-**When it fires.** Only on Darwin Core input, one finding per column. The identifier column (occurrenceID or eventID, or the archive id) and, for an Occurrence core, scientificName, occurrenceStatus and basisOfRecord fire when any cell is blank after trimming. eventDate, decimalLatitude and decimalLongitude fire only when the column is blank in every row: a few missing positions are ROW-NO-COORD, a few missing dates are ROW-DATE-MISSING, and a date missing everywhere in the data and the metadata is reported by META-NO-DATES alone. Those three are not checked on the occurrence side of an event and occurrence pair. Sources: obistools check_fields and the OBIS Manual.
+**When it fires.** Only on Darwin Core input, one finding per column. The identifier column (occurrenceID or eventID, or the archive id) and, for an Occurrence core, scientificName, occurrenceStatus and basisOfRecord fire when any cell is blank after trimming. eventDate, decimalLatitude and decimalLongitude fire only when the column is blank in every row: a few missing positions are ROW-NO-COORD, a few missing dates are ROW-DATE-MISSING, and a date missing everywhere in the data and the metadata is reported by META-NO-DATES alone. When the eml.xml of the Darwin Core Archive states a time span and eventDate is blank everywhere, the sentence names that span and says OBIS wants a date for each record. Those three are not checked on the occurrence side of an event and occurrence pair. Sources: obistools check_fields and the OBIS Manual.
 
 **Example.** A table of 40 rows whose scientificName column is blank on lines 7, 8, 19 and 33 gets one finding naming those four lines.
 

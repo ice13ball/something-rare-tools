@@ -181,8 +181,12 @@ async function readXml(zip: ZipArchive, name: string, inflate: Inflate): Promise
 }
 
 interface Eml {
+  /** the archive has an eml.xml that could be read */
+  present?: boolean;
   title?: string;
   version?: string;
+  /** temporalCoverage of the dataset: a range of dates or one date */
+  timeSpan?: { start?: string; end?: string };
 }
 
 /** Title and version/date of the dataset from eml.xml; a missing or unreadable eml.xml is not an error. */
@@ -199,9 +203,27 @@ async function readEml(zip: ZipArchive, name: string, inflate: Inflate): Promise
     const v = pkg?.includes('/') ? pkg.slice(pkg.lastIndexOf('/') + 1) : undefined;
     const pub = text('pubDate');
     const parts = [v ? (/^\d/.test(v) ? `v${v}` : v) : undefined, pub ? `published ${pub}` : undefined].filter((x): x is string => !!x);
-    return { title: text('title'), version: parts.length > 0 ? parts.join(', ') : undefined };
+    // coverage/temporalCoverage, every block: rangeOfDates (beginDate, endDate) or singleDateTime, each with a calendarDate. An ISO date (year, month or day) is used; a date-time or a
+    // zone-suffixed date ("1977-01-01T00:00:00", "2025-09-15Z") gives its date part; anything else is not used. The span is the union of the blocks that have a usable date.
+    const day = (n: Element | undefined): string | undefined => {
+      const t = n ? byLocal(n, 'calendarDate')[0]?.textContent?.trim() : undefined;
+      const m = t ? /^(\d{4}(?:-\d{2}(?:-\d{2})?)?)(?:T[\d:.]+)?(?:Z|[+-]\d{2}(?::?\d{2})?)?$/.exec(t) : null;
+      return m ? m[1] : undefined;
+    };
+    const blocks = dataset ? byLocal(dataset, 'coverage').flatMap((c) => byLocal(c, 'temporalCoverage')) : [];
+    let start: string | undefined;
+    let end: string | undefined;
+    for (const cover of new Set(blocks)) {
+      const range = byLocal(cover, 'rangeOfDates')[0];
+      const single = byLocal(cover, 'singleDateTime')[0];
+      const b = range ? day(byLocal(range, 'beginDate')[0]) : day(single);
+      const e = range ? day(byLocal(range, 'endDate')[0]) : b;
+      if (b && (start === undefined || b < start)) start = b;
+      if (e && (end === undefined || e > end)) end = e;
+    }
+    return { present: true, title: text('title'), version: parts.length > 0 ? parts.join(', ') : undefined, ...(start || end ? { timeSpan: { ...(start ? { start } : {}), ...(end ? { end } : {}) } } : {}) };
   } catch {
-    return {};
+    return zip.find(name) ? { present: true } : {};
   }
 }
 
@@ -345,5 +367,5 @@ async function read(fileName: string, bytes: Uint8Array, inflate: Inflate, opts:
   const sheet = { name: core.location, header, headerLine: core.ignoreHeaderLines, rows };
   const rag = raggedFinding(fileName, sheet.name, indexed.length, rows);
   if (rag) findings.push(rag);
-  return { fileName, kind: 'csv', sheets: [sheet], date1904: false, decimalComma: false, encoding, findings, dwca: { core: core.type, partial: total > rows.length } };
+  return { fileName, kind: 'csv', sheets: [sheet], date1904: false, decimalComma: false, encoding, findings, dwca: { core: core.type, partial: total > rows.length, ...(eml.present ? { hasEml: true } : {}), ...(eml.timeSpan ? { timeSpan: eml.timeSpan } : {}) } };
 }

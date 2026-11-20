@@ -76,6 +76,15 @@ describe('ReportView', () => {
     expect(container.querySelectorAll('li[data-severity]').length).toBe(2);
   });
 
+  it('the position count of a long list is said in the language of the page', () => {
+    setLang('pl');
+    const f = makeFinding('ROW-ON-LAND', { file: 'a.csv', lines: [2, 3], params: { count: 2, places: 'x', allPlaces: '5 E, 1 N (1 row; ≥100 km; line 2) | 6 E, 1 N (1 row; ≥100 km; line 3)' } });
+    const { container } = render(<ReportView report={buildReport([f])} />);
+    const text = container.textContent ?? '';
+    expect(text).toContain('2 pozycje wypisane poniżej');
+    expect(text).not.toContain('positions, listed below');
+  });
+
   it('does not crash on an unknown rule id', () => {
     const report = buildReport([]);
     report.findings.push({ ruleId: 'NOPE', severity: 'info', params: {} });

@@ -123,6 +123,12 @@ export const METADATA_RULES: readonly RuleSpec[] = [
       de: `Weder die Daten noch die Metadaten enthalten ein Datum. Ergänzen Sie das Probenahmedatum in der Tabelle oder einen Zeitraum in den Metadaten.`,
       fr: `Ni les données ni les métadonnées ne contiennent de date. Ajoutez la date de prélèvement dans le tableau ou une période dans les métadonnées.`,
     },
+    plainNoMetadata: {
+      pl: `Żaden wiersz nie ma daty. Dodaj datę pobrania próbek do tabeli albo dołącz plik metadanych z zakresem czasu.`,
+      en: `No row has a date. Add the sampling date to the table, or add a metadata file that gives a time span.`,
+      de: `Keine Zeile hat ein Datum. Ergänzen Sie das Probenahmedatum in der Tabelle oder fügen Sie eine Metadatendatei mit einem Zeitraum hinzu.`,
+      fr: `Aucune ligne n'a de date. Ajoutez la date de prélèvement dans le tableau, ou ajoutez un fichier de métadonnées qui donne une période.`,
+    },
     plainIf: [
       {
         param: 'sheets',

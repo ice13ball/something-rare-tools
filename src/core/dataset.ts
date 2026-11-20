@@ -1831,7 +1831,7 @@ export function buildDataset(
     tables.push({ sheet, long: table.long, lookup, reps: built.reps, sourceRow: built.sourceRow, start: rows.length, count: built.rows.length });
     for (const r of built.rows) rows.push(r);
     // META-NO-DATES (checks/metadata.ts) fires when neither a row nor a metadata record has a date: the empty-eventDate finding leaves that case to it
-    const noDateSaid = !built.rows.some((r) => r.datetime !== undefined || (r.dateRaw !== undefined && r.dateRaw !== null && String(r.dateRaw).trim() !== '')) && !metadata.some((m) => m.temporalExtent && (m.temporalExtent.start || m.temporalExtent.end));
+    const noDateSaid = !built.rows.some((r) => r.datetime !== undefined || (r.dateRaw !== undefined && r.dateRaw !== null && String(r.dateRaw).trim() !== '')) && !metadata.some((m) => m.temporalExtent && (m.temporalExtent.start || m.temporalExtent.end)) && !(file.dwca?.timeSpan?.start || file.dwca?.timeSpan?.end);
     pushAll(findings, checkRawTable(file, sheet, [specs.station, specs.cruise, specs.sampleId].filter((x): x is Spec => x !== undefined).map((x) => x.index), { noDateSaid }));
     pushAll(variables, built.variables);
     pushAll(positives, built.positives);
@@ -1870,7 +1870,7 @@ export function buildDataset(
 
   const several = file.sheets.length > 1 || layout.tables.length > 1;
   const label = opts.label ?? (several ? `${file.fileName} (${layout.tables.map((t) => t.sheet).join(', ')})` : file.fileName);
-  const dataset: Dataset = { id, label, file: file.fileName, rows, variables, mappings: used, layout, metadata, depthPositive, decimalComma: file.decimalComma, ...(typeof joinLost === 'string' ? { joinLost } : {}), ...(extraKeyColumns.length > 0 ? { extraKeyColumns } : {}), readColumns: [...readBy].map(([sheet, cols]) => ({ sheet, columns: [...cols].sort((a, b) => a - b), partial: [...(partialBy.get(sheet) ?? [])].filter(([i]) => !cols.has(i)).map(([index, v]) => ({ index, ...v })) })), ...(yearColumns.length > 0 ? { yearColumns } : {}), ...(roundedTimes.length > 0 ? { roundedTimes: mergeRounded(roundedTimes) } : {}) };
+  const dataset: Dataset = { id, label, file: file.fileName, rows, variables, mappings: used, layout, metadata, ...(file.dwca?.timeSpan ? { archiveSpan: file.dwca.timeSpan } : {}), ...(file.dwca?.hasEml ? { archiveMetadata: true } : {}), depthPositive, decimalComma: file.decimalComma, ...(typeof joinLost === 'string' ? { joinLost } : {}), ...(extraKeyColumns.length > 0 ? { extraKeyColumns } : {}), readColumns: [...readBy].map(([sheet, cols]) => ({ sheet, columns: [...cols].sort((a, b) => a - b), partial: [...(partialBy.get(sheet) ?? [])].filter(([i]) => !cols.has(i)).map(([index, v]) => ({ index, ...v })) })), ...(yearColumns.length > 0 ? { yearColumns } : {}), ...(roundedTimes.length > 0 ? { roundedTimes: mergeRounded(roundedTimes) } : {}) };
   if (opts.descriptive !== false) addDescriptive(file, layout, mappings, dataset, tables);
   return { dataset, findings };
 }

@@ -120,6 +120,7 @@ export function renderPlain(f: Finding, lang: Lang): string {
   if (rule.plainVariants && typeof f.params.kind === 'string' && Object.hasOwn(rule.plainVariants, f.params.kind)) texts = rule.plainVariants[f.params.kind];
   if (rule.plainDataciteNotCompared && f.params.dataciteCompared === 'no') texts = rule.plainDataciteNotCompared;
   if (rule.plainCollection && f.params.scope === 'collection') texts = rule.plainCollection;
+  if (rule.plainNoMetadata && f.params.noMetadata === 'yes') texts = rule.plainNoMetadata;
   if (rule.plainConvert && f.params.index !== undefined) texts = rule.plainConvert;
   if (rule.plainTime && (f.params.role === 'time' || valuesAreTimes(f.value))) texts = rule.plainTime;
   // The layout reason is the English phrase in `reason`; the codes in `reasons` are rendered in the reader's language.
@@ -138,5 +139,10 @@ export function renderPlain(f: Finding, lang: Lang): string {
 export function renderTechnical(f: Finding): string {
   const rule = getRule(f.ruleId);
   const byKind = rule.technicalVariants && typeof f.params.kind === 'string' && Object.hasOwn(rule.technicalVariants, f.params.kind) ? rule.technicalVariants[f.params.kind] : undefined;
-  return fill(rule.technicalTime !== undefined && (f.params.role === 'time' || valuesAreTimes(f.value)) ? rule.technicalTime : (byKind ?? rule.technical), f);
+  let base = fill(rule.technicalTime !== undefined && (f.params.role === 'time' || valuesAreTimes(f.value)) ? rule.technicalTime : (byKind ?? rule.technical), f);
+  for (const extra of rule.technicalIf ?? []) {
+    const v = f.params[extra.param];
+    if (v !== undefined && v !== '') base = `${base} ${fill(extra.text, f)}`;
+  }
+  return base;
 }
