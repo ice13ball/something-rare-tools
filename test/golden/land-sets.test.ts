@@ -60,9 +60,10 @@ describe.skipIf(!GOLDEN_DIR || !existsSync(CHESSBASE))('ChEssBase: the OBIS and 
   it('a complete Occurrence core: no Darwin Core, vocabulary, identifier, depth, zero-position or hidden-character finding', async () => {
     const fs = await check('chessbase.zip', archive());
     const mine = fs.filter((f) => /^(DWC-|ROW-ZERO-COORD|ROW-NO-COORD|ROW-DEPTH-|ROW-DATE-FUTURE|ROW-INVISIBLE-CHAR)/.test(f.ruleId));
-    expect(mine.map((f) => f.ruleId)).toEqual([]);
-    // the empty eventDate column (all 3 715 rows) is said by META-NO-DATES, not a second time by a Darwin Core rule
-    expect(fs.filter((f) => f.ruleId === 'META-NO-DATES')).toHaveLength(1);
+    // the only one is the empty eventDate column (all 3 715 rows): eml.xml gives a time span, so META-NO-DATES stays silent (it was a false error)
+    // and the Darwin Core rule says the rows lack a date, naming the archive's span
+    expect(mine.map((f) => [f.ruleId, f.field, f.params.count, typeof f.params.archiveSpan])).toEqual([['DWC-TERM-EMPTY', 'eventDate', 3715, 'string']]);
+    expect(fs.filter((f) => f.ruleId === 'META-NO-DATES')).toEqual([]);
     expect(fs.filter((f) => f.ruleId === 'IN-DWCA-VERSION')).toHaveLength(1);
   }, 120_000);
 });
