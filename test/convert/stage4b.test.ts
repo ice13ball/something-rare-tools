@@ -250,6 +250,7 @@ describe('the copy says what is sent', () => {
     'tip.convertMetaContact.logic', // the e-mail address of the contact
     'tip.convertMetaFiles.logic', // no link or DOI of a metadata file is followed (no request for a record)
     'tip.convertArchiveDesc.logic', // an eml.xml / meta.xml dropped with the data is only listed
+    'convert.tables.note', // says what the tables-only zip lacks (no eml.xml, no meta.xml); nothing about sending
   ]);
   const EXEMPT_PREFIXES = ['convert.worms.', 'tip.convertWorms', 'convert.nvs.', 'tip.convertNvs'];
   const claimsNothingSent = (lang: (typeof LANGS)[number], text: string): boolean => CLAIMS[lang].some((p) => p.test(text));

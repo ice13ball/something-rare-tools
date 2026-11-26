@@ -2,6 +2,7 @@
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { archiveFileName, buildZip, judge, streamDeflate } from '../core/convert';
 import { asIsArchiveFiles } from '../core/convert/dwcAsIsArchive';
+import { tablesOnlyFiles, tablesZipName, withoutDescription } from '../core/convert/tablesOnly';
 import { asIsChecks } from '../core/convert/dwcAsIsChecks';
 import { packDwcAsIs } from '../core/convert/dwcAsIsTables';
 import type { AsIsResult, ColumnReason, RowReason, SheetAccount } from '../core/convert/dwcAsIsTables';
@@ -44,7 +45,8 @@ export function createDwcAsIs(s: DwcSession) {
     const proposal = proposeDwcAsIs(files);
     if (proposal === null) throw new Error('These files are not Darwin Core Event, Occurrence and measurement tables: nothing to pack as it is.');
     const r = packDwcAsIs(files, proposal, { basisOfRecord: body.metadata.basisOfRecord });
-    const findings = [...r.findings, ...asIsChecks(r, body.metadata, s.today()), ...licenceDiffersFindings(body.metadata.licence, s.licenceSource())];
+    const all = [...r.findings, ...asIsChecks(r, body.metadata, s.today()), ...licenceDiffersFindings(body.metadata.licence, s.licenceSource())];
+    const findings = body.tablesOnly === true ? withoutDescription(all) : all;
     return { r, findings, files, proposal };
   }
 
@@ -69,9 +71,9 @@ export function createDwcAsIs(s: DwcSession) {
     if (open.length > 0) throw new Error(`Export refused: ${open.join(', ')} not accepted. Nothing was written.`);
     if (r.accounts.some((a) => a.lost !== 0)) throw new Error('Export refused: a row is neither written nor listed. Nothing was written.');
     const deflate = streamDeflate();
-    const bytes = await buildZip(asIsArchiveFiles(r, body.metadata, body.generated), deflate);
+    const bytes = await buildZip(body.tablesOnly === true ? tablesOnlyFiles(r.tables, { dropEmptyFormColumns: false }) : asIsArchiveFiles(r, body.metadata, body.generated), deflate);
     return {
-      fileName: archiveFileName({ metadata: body.metadata }),
+      fileName: body.tablesOnly === true ? tablesZipName(archiveFileName({ metadata: body.metadata })) : archiveFileName({ metadata: body.metadata }),
       bytes,
       counts: { events: r.tables.event.rows.length, occurrences: r.tables.occurrence.rows.length, measurements: r.tables.emof?.rows.length ?? 0 },
       deflated: deflate !== undefined,

@@ -15,6 +15,8 @@ import type { CodeProposalView, ConvertEngine, ConvertFileSummary, ConvertParseR
 import { formatNumber } from '../tips';
 import { ConvertMetadataForm } from '../components/ConvertMetadataForm';
 import { ConvertDwcAsIs, type DwcChoice } from '../components/ConvertDwcAsIs';
+import { ConvertTablesOnly } from '../components/ConvertTablesOnly';
+import { tablesOnlyJudge } from '../../core/convert/tablesOnly';
 import { ConvertSheetForm } from '../components/ConvertSheetForm';
 import { sentenceWithList } from '../components/CollapsibleList';
 import { ConvertLedger, NotWrittenList } from '../components/ConvertLedger';
@@ -1047,6 +1049,9 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   // what stops the export for a reason that is not the page being busy: the ledger says "would be written" while this is true
   const exportBlocked = view === null || judged.blocking.length > 0 || metaFindings.length > 0 || !allAccepted || nothingToWrite;
   const canExport = view !== null && !working && !exporting && judged.blocking.length === 0 && metaFindings.length === 0 && allAccepted && !nothingToWrite;
+  // the data tables only (no description, no licence asked for): the same judgement of the data, see core/convert/tablesOnly.ts
+  const tablesJudged = useMemo(() => tablesOnlyJudge(view?.findings ?? [], meta), [view, meta]);
+  const canExportTables = view !== null && !working && !exporting && tablesJudged.blocking.length === 0 && tablesJudged.acceptRules.every(isAccepted) && unconfirmedAccepted && !nothingToWrite;
   // the shape of the sheets that have one: a profile sheet has none (it is not wide or long)
   const shapes = useMemo(() => Object.entries(choices).filter(([, c]) => c.use && !c.profile).map(([, c]) => c.shape), [choices]);
 
@@ -1060,15 +1065,15 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     void doExport();
   };
 
-  const doExport = async (): Promise<void> => {
-    if (!parsed || !canExport) return;
+  const doExport = async (tablesOnly = false): Promise<void> => {
+    if (!parsed || !(tablesOnly ? canExportTables : canExport)) return;
     setExporting(true);
     setExportError(null);
     setExported(null);
     try {
       const body = requestOf({ parsed, mappings, choices, options: { fullList, prefixStation, flatten: { station: flattenStation, cruise: flattenCruise } }, approved, confirmed, joins, ...(wormsLookup ? { worms: wormsLookup } : {}), nerc: nercPicks });
       const acceptedRules = judged.acceptRules.filter(isAccepted);
-      const res = await engine.export({ body, metadata: meta, accepted: acceptedRules, generated: new Date().toISOString().replace(/\.\d+Z$/, 'Z') });
+      const res = await engine.export({ body, metadata: meta, accepted: acceptedRules, generated: new Date().toISOString().replace(/\.\d+Z$/, 'Z'), ...(tablesOnly ? { tablesOnly: true } : {}) });
       downloadFile(new Blob([res.bytes as unknown as BlobPart], { type: 'application/zip' }), res.fileName);
       setExported({ fileName: res.fileName, counts: res.counts, deflated: res.deflated });
       track('convert_exported', {
@@ -1078,6 +1083,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
         // whether at least one profile level went into the archive (the count of the conversion that was exported); never a name
         profile: (view?.tree.levels ?? 0) > 0 ? 'used' : 'none',
         meta_source: parsed.metadataFiles.length > 0 ? 'file' : 'none',
+        ...(tablesOnly ? { export_kind: 'tables' as const } : {}),
         // whether at least one WoRMS ID was actually written to the archive (the count of the conversion that was exported); never a name or an ID
         worms: (view?.worms.applied ?? 0) > 0 ? 'used' : 'none',
         // whether at least one identifier that came from an NVS search was actually written (the count of the conversion that was exported); never a word, a code or a label
@@ -1857,6 +1863,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
                   {t('convert.export.button')}
                 </button>
               </div>
+              <ConvertTablesOnly enabled={canExportTables} busy={exporting || working} onPress={() => void doExport(true)} showBlocked={view !== null} />
               {notWrittenProps !== undefined && <NotWrittenList {...notWrittenProps} />}
               <p id="convert-export-note" className="muted" role="note" aria-live="polite">
                 {view !== null && !canExport && !exporting && !working ? t('convert.export.blocked') : ''}

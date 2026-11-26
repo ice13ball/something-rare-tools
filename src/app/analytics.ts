@@ -44,6 +44,8 @@ export interface TrackParams {
   shape?: ConvertShapeParam;
   profile?: ConvertProfileParam;
   meta_source?: ConvertMetaSourceParam;
+  /** convert_exported: present only when the data tables were exported without the description */
+  export_kind?: 'tables';
   worms?: ConvertWormsParam;
   nvs?: ConvertNvsParam;
   /** convert_exported: how many events, occurrences and measurement rows the archive has */
@@ -58,6 +60,7 @@ const EVENTS: readonly string[] = ['check_started', 'check_finished', 'convert_s
 const SHAPES: readonly string[] = ['wide', 'long', 'mixed'];
 const PROFILES: readonly string[] = ['none', 'used'];
 const META_SOURCES: readonly string[] = ['none', 'file'];
+const EXPORT_KINDS: readonly string[] = ['tables'];
 const WORMS_PARAMS: readonly string[] = ['none', 'used'];
 const NVS_PARAMS: readonly string[] = ['none', 'used'];
 const COUNT_KEYS = ['n_errors', 'n_warnings', 'n_info', 'n_events', 'n_occurrences', 'n_measurements'] as const;
@@ -213,6 +216,7 @@ export function track(event: TrackEvent, params: TrackParams): void {
   if (typeof p.shape === 'string' && SHAPES.includes(p.shape)) clean.shape = p.shape;
   if (typeof p.profile === 'string' && PROFILES.includes(p.profile)) clean.profile = p.profile;
   if (typeof p.meta_source === 'string' && META_SOURCES.includes(p.meta_source)) clean.meta_source = p.meta_source;
+  if (typeof p.export_kind === 'string' && EXPORT_KINDS.includes(p.export_kind)) clean.export_kind = p.export_kind;
   if (typeof p.worms === 'string' && WORMS_PARAMS.includes(p.worms)) clean.worms = p.worms;
   if (typeof p.nvs === 'string' && NVS_PARAMS.includes(p.nvs)) clean.nvs = p.nvs;
   for (const k of COUNT_KEYS) {

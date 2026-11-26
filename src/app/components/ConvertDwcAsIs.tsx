@@ -13,6 +13,8 @@ import { downloadBlob } from '../download';
 import { t, useLang } from '../i18n';
 import { sentenceWithList } from './CollapsibleList';
 import { ConvertMetadataForm } from './ConvertMetadataForm';
+import { ConvertTablesOnly } from './ConvertTablesOnly';
+import { withoutDescription } from '../../core/convert/tablesOnly';
 
 export type DwcChoice = 'ask' | 'asIs' | 'map';
 
@@ -55,7 +57,8 @@ export function ConvertDwcAsIs({ engine, proposal, choice, onChoice, meta, onMet
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<string | null>(null);
   const token = useRef(0);
-  const body = (): { metadata: DatasetMetadata; accepted: string[]; generated: string } => ({
+  const body = (tablesOnly = false): { metadata: DatasetMetadata; accepted: string[]; generated: string; tablesOnly?: boolean } => ({
+    ...(tablesOnly ? { tablesOnly: true } : {}),
     metadata: meta,
     accepted: Object.keys(accepted).filter((k) => accepted[k]),
     generated: new Date().toISOString().replace(/\.\d+Z$/, 'Z'),
@@ -114,12 +117,14 @@ export function ConvertDwcAsIs({ engine, proposal, choice, onChoice, meta, onMet
   const judged = view ? judge(view.findings) : null;
   const isOn = (rule: string): boolean => accepted[rule] === true;
   const canExport = view !== null && judged !== null && judged.blocking.length === 0 && view.lost === 0 && judged.acceptRules.every(isOn) && !busy;
-  const exportNow = async (): Promise<void> => {
+  const judgedTables = view ? judge(withoutDescription(view.findings)) : null;
+  const canExportTables = view !== null && judgedTables !== null && judgedTables.blocking.length === 0 && view.lost === 0 && judgedTables.acceptRules.every(isOn) && !busy;
+  const exportNow = async (tablesOnly = false): Promise<void> => {
     setBusy(true);
     setError(null);
     setDone(null);
     try {
-      const res = await engine.dwcExport(body());
+      const res = await engine.dwcExport(body(tablesOnly));
       downloadFile(new Blob([res.bytes as unknown as BlobPart], { type: 'application/zip' }), res.fileName);
       setDone(t('convert.export.done', { name: res.fileName, events: res.counts.events, occurrences: res.counts.occurrences, measurements: res.counts.measurements }));
     } catch (e) {
@@ -199,6 +204,7 @@ export function ConvertDwcAsIs({ engine, proposal, choice, onChoice, meta, onMet
               {t('convert.export.button')}
             </button>
           </p>
+          <ConvertTablesOnly enabled={canExportTables} busy={busy} onPress={() => void exportNow(true)} />
         </div>
       )}
       {error !== null && <p className="notice" role="alert">{error}</p>}

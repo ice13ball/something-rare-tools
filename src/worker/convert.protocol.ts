@@ -97,6 +97,8 @@ export interface DwcAsIsBody {
   metadata: DatasetMetadata;
   accepted: string[];
   generated: string;
+  /** The data tables only (no eml.xml, no meta.xml); the description and the licence are not required. */
+  tablesOnly?: boolean;
 }
 
 /** What the page shows of the as-is packing: rows written and listed per sheet (lost is 0 or the page says so), the counts and the findings. */
@@ -241,6 +243,8 @@ export interface ExportBody {
   accepted: string[];
   /** UTC timestamp of the export, for pubDate and dateStamp of the EML (the core reads no clock). */
   generated: string;
+  /** The data tables only (no eml.xml, no meta.xml): the description and the licence are not required. Everything about the data is still checked. */
+  tablesOnly?: boolean;
 }
 
 /** The archive, built in the worker. `bytes` moves to the page instead of being copied. */

@@ -6,7 +6,8 @@
 // and exposing them would change /check's worker. This session reads files with the same core functions (parseFile, readMappingFile,
 // proposeLayout is not needed: a converter sheet is one table) and proposes columns with the converter overlay over the shared proposer.
 import { licenceDiffersFindings } from '../core/convert/validate';
-import { archiveFileName, archiveFiles, buildEml, buildZip, convert, countNotWritten, judge, notWrittenCsv, listSplits, pivotConvertFile, proposeConvertColumns, proposeSampleCodes, streamDeflate, suggestConvertProfile, suggestConvertShape, toDataset, validateDataset, validateTables } from '../core/convert';
+import { tablesOnlyFiles, tablesOnlyMetaFindings, tablesZipName } from '../core/convert/tablesOnly';
+import { archiveFileName, archiveFiles, buildEml, buildTables, buildZip, convert, countNotWritten, judge, notWrittenCsv, listSplits, pivotConvertFile, proposeConvertColumns, proposeSampleCodes, streamDeflate, suggestConvertProfile, suggestConvertShape, toDataset, validateDataset, validateTables } from '../core/convert';
 import type { ConvertSheetInput, EventRec, PivotChoice, PivotNote } from '../core/convert';
 import { joinInputs } from '../core/convert/sampleJoin';
 import type { ConflictAnswer, JoinOutcome, SampleJoinRequestCore } from '../core/convert/sampleJoin';
@@ -820,18 +821,19 @@ export function createConvertHandler(): ConvertHandler {
   async function exportArchive(req: ExportBody): Promise<ExportResult> {
     const { r } = compute(req.body);
     const dataset = toDataset(r, req.metadata, decisionsOf(req.body));
-    const findings = [...r.findings, ...validateDataset(dataset, r.findings, { today: today() }), ...licenceDiffersFindings(req.metadata.licence, licenceSource)];
+    const findings = req.tablesOnly === true
+      ? [...r.findings, ...validateTables(dataset, r.findings, { today: today() }), ...tablesOnlyMetaFindings(req.metadata)]
+      : [...r.findings, ...validateDataset(dataset, r.findings, { today: today() }), ...licenceDiffersFindings(req.metadata.licence, licenceSource)];
     const j = judge(findings);
     if (j.blocking.length > 0) throw new Error(`Export refused: ${j.blocking.length} finding(s) block it (${[...new Set(j.blocking.map((f) => f.ruleId))].join(', ')}). Nothing was written.`);
     const open = j.acceptRules.filter((id) => !req.accepted.includes(id));
     if (open.length > 0) throw new Error(`Export refused: ${open.join(', ')} not accepted. Nothing was written.`);
     if (dataset.events.length === 0 || dataset.occurrences.length === 0) throw new Error('Export refused: there is nothing to write (no event or no occurrence).');
-    const eml = buildEml(dataset, { generated: req.generated });
-    const files = archiveFiles(dataset, eml);
+    const files = req.tablesOnly === true ? tablesOnlyFiles(buildTables(dataset), { dropEmptyFormColumns: true }) : archiveFiles(dataset, buildEml(dataset, { generated: req.generated }));
     const deflate = streamDeflate();
     const bytes = await buildZip(files, deflate);
     return {
-      fileName: archiveFileName(dataset),
+      fileName: req.tablesOnly === true ? tablesZipName(archiveFileName(dataset)) : archiveFileName(dataset),
       bytes,
       counts: { events: dataset.events.length, occurrences: dataset.occurrences.length, measurements: dataset.measurements.length },
       deflated: deflate !== undefined,
