@@ -17,7 +17,8 @@ import { P01, P06, PRESSURE, VARIABLE_CONCEPTS } from '../core/convert/vocab';
 import { NAME_PARTICLES, ORGANISATION_WORDS } from '../core/convert/metadata';
 import { QUALIFIER_TOKENS, STAGE_TOKENS } from '../core/convert/taxon';
 import { WORMS_BATCH_MAX, wormsLsid } from '../core/convert/worms';
-import { CONVERT_ROLE_CHOICES, ROLE_KINDS, roleChoiceLabelKey, roleLabelKey, type RoleKind } from './mappingModel';
+import { roleOptionText } from './roleTerms';
+import { CONVERT_ROLE_CHOICES, ROLE_KINDS, roleLabelKey, type RoleKind } from './mappingModel';
 import { ACCEPTED_EXTENSIONS } from './types';
 
 /*
@@ -130,7 +131,7 @@ const convertRolesList = (): React.ReactNode => (
   <span className="infotip-list" role="list">
     {CONVERT_ROLE_CHOICES.map((k) => (
       <span key={k} className="infotip-item" role="listitem">
-        <strong>{t(roleChoiceLabelKey(k))}</strong> — {t((k === 'pressure' ? 'tip.role.pressureConvert' : `tip.role.${k}`) as UiKey)}
+        <strong>{roleOptionText(k)}</strong> — {t((k === 'pressure' ? 'tip.role.pressureConvert' : `tip.role.${k}`) as UiKey)}
       </span>
     ))}
   </span>

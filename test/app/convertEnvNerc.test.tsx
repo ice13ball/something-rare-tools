@@ -110,7 +110,7 @@ describe('the role "Depth below seafloor"', () => {
     await screen.findByRole('heading', { name: T['convert.columns.title'] });
     const role = screen.getByLabelText('Depth_cm: Meaning') as HTMLSelectElement;
     expect(role.value).toBe('depthBelowSeafloor');
-    expect([...role.options].find((o) => o.value === 'depthBelowSeafloor')!.textContent).toBe(T['role.depthBelowSeafloor']);
+    expect([...role.options].find((o) => o.value === 'depthBelowSeafloor')!.textContent).toBe(`${T['role.depthBelowSeafloor']} — minimumDistanceAboveSurfaceInMeters / maximumDistanceAboveSurfaceInMeters`);
     // the unit the sheet states is in the unit field of the row (it is the user's to change)
     const unit = screen.getAllByDisplayValue('cm');
     expect(unit.length).toBeGreaterThan(0);

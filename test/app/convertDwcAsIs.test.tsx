@@ -53,6 +53,13 @@ describe('the Darwin Core as-is panel', () => {
     expect(screen.getByRole('button', { name: T['convert.dwc.map'] })).toBeTruthy();
     expect(screen.queryByRole('heading', { name: T['convert.columns.title'] })).toBeNull();
   });
+  it('says which sheet was read as which table', async () => {
+    await drop();
+    const p = screen.getByTestId('dwc-proposal');
+    expect(p.textContent).toContain('Event → Event');
+    expect(p.textContent).toContain('Occurrence → Occurrence');
+    expect(p.textContent).toContain('eMoF → measurements (eMoF)');
+  });
   it('after one confirmation: no role dropdowns, no kind of number, EML form stays, the download works', async () => {
     const { downloadFile } = await drop();
     fireEvent.click(screen.getByTestId('dwc-as-is'));

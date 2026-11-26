@@ -5,6 +5,7 @@ import { judge } from '../../core/convert';
 import type { DatasetMetadata } from '../../core/convert/metadata';
 import type { ConvertPrefill } from '../../core/convert/prefill';
 import { MAX_LINE_RANGES, formatLines } from '../../core/lines';
+import type { UiKey } from '../../core/i18n/ui';
 import type { Finding } from '../../core/types';
 import type { ConvertEngine, DwcAsIsProposal, DwcAsIsView } from '../../worker/convert.protocol';
 import { plainOf } from '../convertModel';
@@ -86,6 +87,17 @@ export function ConvertDwcAsIs({ engine, proposal, choice, onChoice, meta, onMet
       <section className="confirm-step" aria-labelledby="convert-dwc-title" data-testid="dwc-proposal">
         <h2 id="convert-dwc-title">{t('convert.dwc.title')}</h2>
         <p>{t('convert.dwc.intro', { sheets: sheets.map((s) => (s.sheet === s.file ? s.file : `${s.file}: ${s.sheet}`)).join('; ') })}</p>
+        <p data-testid="dwc-reads">
+          {t('convert.dwc.reads', {
+            map: [
+              [proposal.event, 'event'],
+              [proposal.occurrence, 'occurrence'],
+              ...(proposal.emof ? [[proposal.emof, 'emof']] : []),
+            ]
+              .map(([s, table]) => `${(s as typeof proposal.event).sheet} → ${t(`convert.dwc.table.${table as string}` as UiKey)}`)
+              .join(', '),
+          })}
+        </p>
         <p className="muted">{t('convert.dwc.hint')}</p>
         <p>
           <button type="button" className="button primary" data-testid="dwc-as-is" onClick={() => onChoice('asIs')}>

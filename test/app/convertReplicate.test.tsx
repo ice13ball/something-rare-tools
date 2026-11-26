@@ -47,7 +47,7 @@ describe('the replicate role on the page', () => {
     await load(CSV);
     const frame = screen.getByLabelText(/Frame/, { selector: 'select' }) as HTMLSelectElement;
     expect(frame.value).toBe('ignore');
-    expect(within(frame).getByRole('option', { name: T['role.replicate'] })).toBeTruthy();
+    expect(within(frame).getByRole('option', { name: `${T['role.replicate']} — eventID / parentEventID` })).toBeTruthy();
     await waitFor(() => expect(document.body.textContent).toMatch(/differ in the ignored column "Frame"/));
     expect(treeText()).not.toMatch(/replicate event/);
     fireEvent.click(screen.getByRole('button', { name: 'Use "Frame" as replicate / sub-sample' }));

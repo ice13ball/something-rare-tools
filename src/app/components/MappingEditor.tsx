@@ -7,6 +7,7 @@ import type { ColumnProposal, ColumnRole, SheetMapping } from '../../core/types'
 import { MAX_SAMPLES } from '../../worker/protocol';
 import { t, useLang } from '../i18n';
 import { FieldLabel, InfoTip } from './InfoTip';
+import { roleOptionText } from '../roleTerms';
 import { ROLE_KINDS, mappingWith, roleChoiceLabelKey, roleChoiceOf, roleFromChoice, roleUnit, setBound, setHemisphereAxis, setPerOccurrence, setPositive, setUnit, setVariableName, type RoleChoice } from '../mappingModel';
 import type { TipId } from '../tips';
 
@@ -155,7 +156,7 @@ function RoleCell({ label, role, proposed, cleanHeader, reason, reasonTip, roleK
       >
         {roleKinds.map((k) => (
           <option key={k} value={k}>
-            {t(roleChoiceLabelKey(k))}
+            {converter ? roleOptionText(k) : t(roleChoiceLabelKey(k))}
           </option>
         ))}
       </select>
