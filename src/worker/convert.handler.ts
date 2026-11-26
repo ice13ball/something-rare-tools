@@ -34,6 +34,7 @@ import { toMapping } from '../core/recognize/columns';
 import type { ColumnProposal, LayoutPlan, MetadataRecord, ParsedFile, RawCell, SheetMapping, TurnDeclaration } from '../core/types';
 import type { ConvertEngine, ConvertFileSummary, ConvertParseResult, ConvertRequest, ConvertRequestBody, ConvertResultOf, ConvertRequestType, ConvertView, CodeProposalView, ExportBody, ExportResult, NotWrittenBody, NotWrittenResult, SheetRef } from './convert.protocol';
 import { makeConvertEngine } from './convert.engine';
+import { createDwcAsIs } from './convert.dwc';
 import { MAX_SAMPLES, type InputFile } from './protocol';
 
 interface Held {
@@ -105,6 +106,8 @@ export function createConvertHandler(): ConvertHandler {
   let biomassPick = new Map<string, 'wet' | 'dry' | 'afdw'>();
   // the ticks "of each organism" a companion file of this drop sets or takes back, by sheet and column header
   let occurrencePick = new Map<string, Map<string, boolean>>();
+
+  const dwcAsIs = createDwcAsIs({ files: () => [...files.values()].map((h) => h.parsed), licenceSource: () => licenceSource, today: () => new Date().toISOString().slice(0, 10) });
 
   const held = (fileId: string): Held => {
     const h = files.get(fileId);
@@ -262,6 +265,8 @@ export function createConvertHandler(): ConvertHandler {
     result.prefillInfo = buildPrefill(records) ?? null;
     result.prefill = prefillValues(result.prefillInfo ?? undefined);
     licenceSource = licenceSourceOf(result.prefillInfo);
+    const dwc = dwcAsIs.proposal();
+    if (dwc) result.dwcAsIs = dwc;
     oldAnswers = (settings.realCounts?.length ?? 0) + (settings.dropCopies?.length ?? 0) + (settings.totalOnce?.length ?? 0);
     return result;
   }
@@ -908,6 +913,12 @@ export function createConvertHandler(): ConvertHandler {
           return exportArchive(req.export);
         case 'notWritten':
           return notWritten(req.notWritten);
+        case 'dwcView':
+          return dwcAsIs.view(req.dwc);
+        case 'dwcExport':
+          return dwcAsIs.exportArchive(req.dwc);
+        case 'dwcNotWritten':
+          return dwcAsIs.notWritten(req.dwc);
         case 'previewKey':
           return previewKey(req);
       }

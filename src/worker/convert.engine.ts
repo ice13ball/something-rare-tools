@@ -15,6 +15,9 @@ export function makeConvertEngine(send: <K extends ConvertRequestType>(req: Extr
     encodingChoice: (fileId, encoding) => send({ type: 'encodingChoice', fileId, encoding }),
     export: (body) => send({ type: 'export', export: body }),
     notWritten: (body) => send({ type: 'notWritten', notWritten: body }),
+    dwcView: (dwc) => send({ type: 'dwcView', dwc }),
+    dwcExport: (dwc) => send({ type: 'dwcExport', dwc }),
+    dwcNotWritten: (dwc) => send({ type: 'dwcNotWritten', dwc }),
     previewKey: (body, fileId, sheet, columns, prefix) => send({ type: 'previewKey', body, fileId, sheet, columns, ...(prefix === undefined ? {} : { prefix }) }),
   };
 }

@@ -274,3 +274,11 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-DATE-DECLARED-INVALID | error | block | B | — | —<a id="CONV-DATE-DECLARED-INVALID"></a> |
 | CONV-EVENT-DATE-MISSING | error | block | B | — | —<a id="CONV-EVENT-DATE-MISSING"></a> |
 | CONV-PROFILE-NO-STATION | error | block | B | — | —<a id="CONV-PROFILE-NO-STATION"></a> |
+| CONV-ASIS-EVENT-ID-DUPLICATE | error | block | B | — | —<a id="CONV-ASIS-EVENT-ID-DUPLICATE"></a> |
+| CONV-ASIS-OCC-ID-DUPLICATE | error | block | B | — | —<a id="CONV-ASIS-OCC-ID-DUPLICATE"></a> |
+| CONV-ASIS-OCC-ORPHAN | error | block | B | — | —<a id="CONV-ASIS-OCC-ORPHAN"></a> |
+| CONV-ASIS-COLUMN-REPEATED | error | block | B | — | —<a id="CONV-ASIS-COLUMN-REPEATED"></a> |
+| CONV-ASIS-EMOF-ROWS-NOT-WRITTEN | warning | accept | B | — | —<a id="CONV-ASIS-EMOF-ROWS-NOT-WRITTEN"></a> |
+| CONV-ASIS-COLUMNS-NOT-TERM | info | show | B | — | —<a id="CONV-ASIS-COLUMNS-NOT-TERM"></a> |
+| CONV-ASIS-COLUMNS-OTHER-LEVEL | warning | accept | B | — | —<a id="CONV-ASIS-COLUMNS-OTHER-LEVEL"></a> |
+| CONV-ASIS-EMOF-REDUNDANT | info | show | B | — | —<a id="CONV-ASIS-EMOF-REDUNDANT"></a> |

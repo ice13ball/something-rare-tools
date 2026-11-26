@@ -177,7 +177,7 @@ const en = {
   'convert.reason.p01-declared-unverified': `the header declares a P01 code that the converter could not verify: it is offered as declared by the file and written only after you confirm it`,
   'convert.reason.dwc-scientificnameid': `Darwin Core scientificNameID (written as given)`,
   'convert.reason.name-aphiaid': `a WoRMS AphiaID column of whole numbers: written as the urn:lsid of the taxon`,
-  'convert.reason.dwc-measurement': `Darwin Core measurement term of an eMoF sheet (one measurement per row, written as given)`,
+  'convert.reason.dwc-measurement': `Darwin Core measurement term of an eMoF sheet (written as given, one measurement per row)`,
   'role.measurementValue': `Measurement value (measurementValue)`,
   'role.measurementType': `Measurement type (measurementType)`,
   'role.measurementUnit': `Measurement unit (measurementUnit)`,

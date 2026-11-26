@@ -68,7 +68,7 @@ export function licenceDiffersFindings(chosen: string, source: { ids: readonly s
 }
 
 /** The Event table through the Event checks of /check. */
-function eventFindings(t: Table, opts: ValidateOptions): Finding[] {
+export function eventFindings(t: Table, opts: ValidateOptions): Finding[] {
   const file = fileOf(t, 'Event');
   // the Event table is the converter's own output, never a transposed table: its first column holds the user's station names, and a name that reads like a column name ("stn A") must not turn it into one
   const layout = proposeLayout(file, { skipTransposed: true });
@@ -83,6 +83,11 @@ function eventFindings(t: Table, opts: ValidateOptions): Finding[] {
     const rest = f.params.headers.split(', ').filter((h) => h !== 'sampleSizeValue');
     return rest.length === 0 ? [] : [{ ...f, params: { ...f.params, headers: rest.join(', ') } }];
   });
+}
+
+/** The Occurrence table through the Occurrence checks of /check (the same call validateTables makes). */
+export function occurrenceTableFindings(t: Table): Finding[] {
+  return checkRawTable(fileOf(t, 'Occurrence'), sheetOf(t), []);
 }
 
 /** The eMoF checks (orphan, event mismatch, empty value, empty type): the eMoF table against the Event and Occurrence tables. */
@@ -126,7 +131,7 @@ function emofFindings(ds: ConvertedDataset, t: Table): Finding[] {
  * A tab or line break in a cell of the OUTPUT tables, for a case the input checks did not see (a unit typed on the page, say). Where the sheet's
  * own CONV-TAB-IN-VALUE already stands, this is not repeated: the same cause would be reported twice.
  */
-function tabFindings(tables: ArchiveTables): Finding[] {
+export function tabFindings(tables: ArchiveTables): Finding[] {
   const out: Finding[] = [];
   for (const t of [tables.event, tables.occurrence, ...(tables.emof ? [tables.emof] : [])]) {
     t.columns.forEach((c, k) => {

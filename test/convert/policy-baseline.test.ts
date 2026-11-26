@@ -282,13 +282,21 @@ const BASELINE: Readonly<Record<string, 'block' | 'accept' | 'show'>> = {
   'CONV-DATE-DECLARED-INVALID': 'block',
   'CONV-EVENT-DATE-MISSING': 'block',
   'CONV-PROFILE-NO-STATION': 'block',
+  'CONV-ASIS-EVENT-ID-DUPLICATE': 'block',
+  'CONV-ASIS-OCC-ID-DUPLICATE': 'block',
+  'CONV-ASIS-OCC-ORPHAN': 'block',
+  'CONV-ASIS-COLUMN-REPEATED': 'block',
+  'CONV-ASIS-EMOF-ROWS-NOT-WRITTEN': 'accept',
+  'CONV-ASIS-COLUMNS-NOT-TERM': 'show',
+  'CONV-ASIS-COLUMNS-OTHER-LEVEL': 'accept',
+  'CONV-ASIS-EMOF-REDUNDANT': 'show',
 };
 
 describe('the export policy of every rule', () => {
   it('every rule has the policy it had before the lists moved', () => {
     const now = Object.fromEntries(RULES.map((r) => [r.id, policyOf({ ruleId: r.id, severity: r.severity })]));
     expect(now).toEqual(BASELINE);
-    expect(Object.keys(BASELINE).length).toBe(267);
+    expect(Object.keys(BASELINE).length).toBe(275);
   });
 
   it('the field of each rule definition is its baseline policy', () => {

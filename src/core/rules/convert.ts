@@ -8,6 +8,7 @@ import { MAX_PAIRS } from '../convert/pivotLimits';
 import { MAX_LINE_RANGES, formatLines } from '../lines';
 import { CITE, NVS_CODE_SHAPE } from './citations';
 import type { RuleSpec } from './spec';
+import { DWC_AS_IS_RULES } from './convertDwc';
 
 /*
  * Rules of the converter (/convert, src/core/convert), category 'B', raised only by src/core/convert.
@@ -202,7 +203,7 @@ const BIOCHECK_EFFORT = {
   locator: 'if (sum(grepl(paste(BODCeffort, collapse="|"), unique(eMoF$measurementTypeID))) == 0) -> level "warning", field "measurementType", message "No sampling descriptors/effort present"',
 };
 
-export const CONVERT_RULES: readonly RuleSpec[] = [
+const BASE_CONVERT_RULES: readonly RuleSpec[] = [
   {
     id: 'CONV-SPLIT-UNDECIDED',
     category: 'B',
@@ -2575,6 +2576,8 @@ export const CONVERT_RULES: readonly RuleSpec[] = [
     technical: `{file}, {sheet}:{lines}: {count} profile row(s) hold data but no station text (station column: {column}). A level event needs its station as its parent, so these rows were not converted.`,
   },
 ];
+
+export const CONVERT_RULES: readonly RuleSpec[] = [...BASE_CONVERT_RULES, ...DWC_AS_IS_RULES];
 
 /** Declared params per CONV rule id. */
 export const CONVERT_RULE_PARAMS: Readonly<Record<string, readonly string[]>> = Object.fromEntries(CONVERT_RULES.map((s) => [s.id, s.params]));

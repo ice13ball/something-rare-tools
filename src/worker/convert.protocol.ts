@@ -14,6 +14,7 @@ import type { SheetKeyReport } from '../core/convert/sampleKey';
 import type { ConflictGroup } from '../core/convert/sampleJoin';
 import type { DecimalReading } from '../core/convert/decimalReading';
 import type { LegacyEncoding } from '../core/values/encoding';
+import type { SheetAccount } from '../core/convert/dwcAsIsTables';
 import type { Finding, SheetMapping, TurnDeclaration } from '../core/types';
 import type { FileProblem, FileSummary, InputFile } from './protocol';
 
@@ -80,6 +81,32 @@ export interface ConvertParseResult {
   prefill: Partial<DatasetMetadata>;
   /** The same metadata, with its sources, the choices where files disagree, the licence case and the coverage they state. Null without a metadata file. */
   prefillInfo: ConvertPrefill | null;
+  /** The files read as Darwin Core Event + Occurrence (+ measurements) tables already: a PROPOSAL from the column names, never entered without the person's confirmation (worker/convert.dwc.ts). Absent for any other drop. */
+  dwcAsIs?: DwcAsIsProposal;
+}
+
+/** The sheets that read as the three Darwin Core tables, by file name and sheet name. */
+export interface DwcAsIsProposal {
+  event: { file: string; sheet: string };
+  occurrence: { file: string; sheet: string };
+  emof?: { file: string; sheet: string };
+}
+
+/** The request of the as-is mode: the description form, what the person accepted, the export time. The worker proposes the sheets itself from the files it holds. */
+export interface DwcAsIsBody {
+  metadata: DatasetMetadata;
+  accepted: string[];
+  generated: string;
+}
+
+/** What the page shows of the as-is packing: rows written and listed per sheet (lost is 0 or the page says so), the counts and the findings. */
+export interface DwcAsIsView {
+  ok: boolean;
+  proposal: DwcAsIsProposal;
+  accounts: SheetAccount[];
+  counts: { events: number; occurrences: number; measurements: number };
+  lost: number;
+  findings: Finding[];
 }
 
 export interface ConvertSheetRequest {
@@ -317,6 +344,10 @@ export interface ConvertProtocol {
   export: { req: { export: ExportBody }; res: ExportResult };
   notWritten: { req: { notWritten: NotWrittenBody }; res: NotWrittenResult };
   /** What a sample key made of the sheet if it were picked now: the converter's own report for the request with this key in place of the sheet's, nothing else changes. Null when the key is no key. */
+  /** Darwin Core as it is: the packing of the proposed sheets, nothing mapped. `dwcExport` re-checks everything; `dwcNotWritten` is the list beside the archive. */
+  dwcView: { req: { dwc: DwcAsIsBody }; res: DwcAsIsView };
+  dwcExport: { req: { dwc: DwcAsIsBody }; res: ExportResult };
+  dwcNotWritten: { req: { dwc: DwcAsIsBody }; res: NotWrittenResult };
   previewKey: { req: { body: ConvertRequestBody; fileId: string; sheet: string; columns: number[]; prefix?: string }; res: SheetKeyReport | null };
 }
 
@@ -342,4 +373,7 @@ export interface ConvertEngine {
   export(body: ExportBody): Promise<ExportResult>;
   notWritten(body: NotWrittenBody): Promise<NotWrittenResult>;
   previewKey(body: ConvertRequestBody, fileId: string, sheet: string, columns: number[], prefix?: string): Promise<SheetKeyReport | null>;
+  dwcView(body: DwcAsIsBody): Promise<DwcAsIsView>;
+  dwcExport(body: DwcAsIsBody): Promise<ExportResult>;
+  dwcNotWritten(body: DwcAsIsBody): Promise<NotWrittenResult>;
 }
