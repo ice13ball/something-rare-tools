@@ -117,6 +117,9 @@ export interface MofIntent {
   measurementUnitId?: string;
   /** Free text about the measurement (eMoF measurementRemarks); a biomass column next to a declared sample size says "per sample of <size>" here and nowhere else. */
   measurementRemarks?: string;
+  /** Read from the file as given by an eMoF sheet (core/convert/emofSheet.ts); no other source writes them. */
+  measurementAccuracy?: string;
+  measurementMethod?: string;
   /** Set when `measurementType` is empty because no concept is verified: the declared meaning in words, for the export (never an id). */
   measurementTypeFallback?: string;
   source: SourceRef;
@@ -290,6 +293,8 @@ export interface ModelMeasurement {
   unit?: string;
   unitId?: string;
   remarks?: string;
+  accuracy?: string;
+  method?: string;
   source: SourceRef;
 }
 
@@ -383,6 +388,8 @@ export function toDataset(result: Pick<ConvertResult, 'events' | 'occurrences' |
     if (x.measurementUnit !== undefined && x.measurementUnit !== '') m.unit = x.measurementUnit;
     if (x.measurementUnitId !== undefined) m.unitId = x.measurementUnitId;
     if (x.measurementRemarks !== undefined) m.remarks = x.measurementRemarks;
+    if (x.measurementAccuracy !== undefined) m.accuracy = x.measurementAccuracy;
+    if (x.measurementMethod !== undefined) m.method = x.measurementMethod;
     return m;
   });
   return { events, occurrences, measurements, metadata, decisions, ...(result.repeatedOccurrenceIds === undefined ? {} : { repeatedOccurrenceIds: result.repeatedOccurrenceIds }), ...(result.methodSteps.length === 0 ? {} : { methodSteps: result.methodSteps }), ...(result.undatedEventIds === undefined || result.undatedEventIds.length === 0 ? {} : { undatedEventIds: result.undatedEventIds }) };

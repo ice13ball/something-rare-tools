@@ -34,6 +34,7 @@ export const REASON_KIND: Record<LedgerReason, ReasonKind> = {
   'value-no-taxon': 'blocks',
   'taxon-no-quantity': 'covered',
   'empty-parameter': 'blocks',
+  'measurement-no-target': 'blocks',
   'repeated-parameter': 'blocks',
   'not-in-event': 'blocks',
   // a row with only the taxon inside a group whose total is taken once: it would be joined to the group silently or written as one more occurrence with the whole total again, so it is asked, once per sheet

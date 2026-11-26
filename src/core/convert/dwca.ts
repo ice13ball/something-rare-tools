@@ -109,6 +109,9 @@ const EMOF_COLUMNS: { col: Column; always: boolean }[] = [
   { col: obis('measurementUnitID'), always: true },
   // only when a measurement has remarks (a biomass column next to a declared sample size)
   { col: dwc('measurementRemarks'), always: false },
+  // only when an eMoF sheet of the file gives them
+  { col: dwc('measurementAccuracy'), always: false },
+  { col: dwc('measurementMethod'), always: false },
 ];
 
 /** Keeps the columns that are always written and those with at least one non-empty cell. */
@@ -181,7 +184,7 @@ export function buildTables(ds: ConvertedDataset): ArchiveTables {
       name: EMOF_FILE,
       ...prune(
         EMOF_COLUMNS,
-        ds.measurements.map((m) => [m.eventId, m.occurrenceId ?? '', m.type, m.typeId ?? '', m.value, m.valueId ?? '', m.unit ?? '', m.unitId ?? '', m.remarks ?? '']),
+        ds.measurements.map((m) => [m.eventId, m.occurrenceId ?? '', m.type, m.typeId ?? '', m.value, m.valueId ?? '', m.unit ?? '', m.unitId ?? '', m.remarks ?? '', m.accuracy ?? '', m.method ?? '']),
       ),
     };
   }

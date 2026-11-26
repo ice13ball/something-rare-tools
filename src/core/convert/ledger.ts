@@ -70,14 +70,16 @@ export type LedgerReason =
   | 'turn-no-name'
   | 'turn-name-repeated'
   | 'missing-code'
-  | 'summary-undecided';
+  | 'summary-undecided'
+  /** A row of an eMoF sheet that names an occurrence or an event the converted data does not have (or a taxon that is no single occurrence of its event): core/convert/emofSheet.ts. */
+  | 'measurement-no-target';
 
 export const LEDGER_REASONS: readonly LedgerReason[] = [
   'ragged', 'summary-row', 'no-code', 'no-replicate', 'no-taxon', 'value-no-taxon', 'taxon-no-quantity', 'quantity-blank', 'nothing-to-record', 'duplicate-event', 'repeat-total', 'copy-dropped', 'zero', 'zero-with-biomass',
   'negative', 'not-integer', 'cover-range', 'class-value', 'na-cell', 'absent-mark', 'bad-mark', 'count-text', 'text-left-out', 'text-cell', 'no-station', 'duplicate-level', 'repeat-in-sample', 'absent-record', 'column-not-read', 'sheet-not-read', 'sheet-not-used',
   'empty-parameter', 'repeated-parameter', 'quality-flag', 'position-no-taxon', 'sample-no-taxon', 'not-in-event',
   'taxon-only-in-total', 'one-specimen-total', 'join-not-chosen', 'join-no-key', 'join-ambiguous', 'join-results-not-written', 'join-no-match', 'no-event-date',
-  'turned-label', 'turn-no-name', 'turn-name-repeated', 'missing-code', 'summary-undecided',
+  'turned-label', 'turn-no-name', 'turn-name-repeated', 'missing-code', 'summary-undecided', 'measurement-no-target',
 ];
 // (the reasons a CELL can have are all among the first 31: the chain of a wide row keeps them as bits of an Int32; the last ones belong to whole lines, or to a lost cell named beside its line, never to FateLog.cell)
 const CODE_OF: Record<string, number> = Object.fromEntries(LEDGER_REASONS.map((r, i) => [r, i + 1]));
@@ -90,7 +92,7 @@ const BIT_OF = (code: number): number => (code >= 1 && code <= 31 ? 1 << (code -
  */
 /** Of those, the rows that name a position, a depth, a sample or a date and no taxon or number: the panel says that plainly, not as "a value". */
 export const UNPLACED: readonly LedgerReason[] = ['position-no-taxon', 'sample-no-taxon'];
-export const NOT_UNDERSTOOD: readonly LedgerReason[] = ['ragged', 'no-code', 'no-taxon', 'value-no-taxon', 'taxon-no-quantity', 'position-no-taxon', 'sample-no-taxon', 'empty-parameter', 'repeated-parameter', 'join-no-key', 'turn-no-name', 'turn-name-repeated'];
+export const NOT_UNDERSTOOD: readonly LedgerReason[] = ['ragged', 'no-code', 'no-taxon', 'value-no-taxon', 'taxon-no-quantity', 'position-no-taxon', 'sample-no-taxon', 'empty-parameter', 'measurement-no-target', 'repeated-parameter', 'join-no-key', 'turn-no-name', 'turn-name-repeated'];
 
 /**
  * The reasons the conversion records while it reads a sheet. Created per sheet; the builder writes into it, the ledger reads it. A cell's reason is kept in one byte per cell and column

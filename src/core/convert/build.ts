@@ -53,6 +53,7 @@ import type { ApprovedSplits, SplitEntry, TaxonSplit } from './taxon';
 import { isWritableName, wormsEntry, wormsLsid } from './worms';
 import type { WormsLookup } from './worms';
 import { pushAll } from '../util/arrays';
+import { isEmofSheet, readEmofSheets } from './emofSheet';
 import { FateLog, buildSheetLedger, combineDescriptionLedgers, joinLedgers, notReadLedger, settleEventColumns } from './ledger';
 import type { LedgerReason, SheetLedger } from './ledger';
 import { MAX_FINDING_LINES, decideRows, leaveOutHolds } from './notWritten';
@@ -1995,9 +1996,15 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
   const longFindings: Finding[] = [...missingFindings];
   const ledger: SheetLedger[] = [];
   const keyReports: SheetKeyReport[] = [];
+  const emofInputs: ConvertSheetInput[] = [];
   const input: ConvertInput = {
     ...rawInput,
     sheets: rawInput.sheets.filter((sin) => {
+      // an eMoF long sheet (measurementValue named by the author) is read after the biology sheets, onto what they wrote (emofSheet.ts)
+      if (isEmofSheet(sin)) {
+        emofInputs.push(sin);
+        return false;
+      }
       const header = sin.file.sheets.find((x) => x.name === sin.sheet)?.header;
       const long = header === undefined ? undefined : longEnvironmentalHeaders(sin, header);
       if (long === undefined) {
@@ -3438,6 +3445,7 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
     matchedAt: new Map(),
   };
   for (const sin of profileSheets) readProfileSheet(sin, profile);
+  readEmofSheets(emofInputs, { ledger, inputIndexOf: (sin) => rawInput.sheets.indexOf(sin), findings, measurements, occurrences, samples });
   // a matched profile station far from the biology station it sits under: said, naming both (the position of each is its first level / first sample that has one)
   {
     const far = new Map<string, { file: string; sheet: string; names: string[] }>();
