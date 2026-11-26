@@ -36,7 +36,14 @@ fi
 nice -n 15 npx vitest run --maxWorkers=2 || refuse "tests failed"
 # The wall-clock test is not part of the full suite (under its parallel load the 2 s threshold measures the machine): it runs here, ALONE,
 # after the suite, with its threshold unchanged. A failure refuses the deploy like any other test.
-nice -n 15 npm run test:perf || refuse "performance test failed"
+# It waits first (at most 10 minutes) until the laptop has cooled after the suite: a 1-minute load under 2.5. It runs at normal priority, so it
+# measures the code and not the other processes of the machine (at nice 15 any other session's job came first: 26.11, three refusals at 1301-1351 ms
+# while the same test alone passed). The threshold is unchanged.
+for _ in $(seq 1 20); do
+  [[ "$(sysctl -n vm.loadavg 2>/dev/null | awk '{print ($2 < 2.5)}')" == 1 ]] && break
+  sleep 30
+done
+npm run test:perf || refuse "performance test failed"
 nice -n 15 npm run typecheck || refuse "type check failed"
 
 gcloud builds submit --project="$PROJECT" --config=cloudbuild.yaml --gcs-source-staging-dir=gs://something-rare-cloudbuild-src/source --substitutions="_IMAGE=${IMAGE_REPO},_SHA=${SHA}" .
