@@ -236,6 +236,13 @@ export type ConverterRole =
    * Depth BELOW THE SEAFLOOR of a sediment or porewater sample, in the unit of `unit` (cm or m). Written as a negative minimum/maximumDistanceAboveSurfaceInMeters (an exact
    * decimal shift of the text, core/convert/seafloor.ts); the site's water depth is the plain depth column and goes to minimum/maximumDepthInMeters.
    */
+  /**
+   * The columns of a long eMoF sheet (one measurement per row; core/convert/emofSheet.ts). Proposed only for the exact Darwin Core header of the term (core/convert/emofRoles.ts); the cells are
+   * written as the file gives them, with no lookup. A sheet with a `measurementValue` column is read as measurements.
+   */
+  | { kind: 'measurementValue' } | { kind: 'measurementType' } | { kind: 'measurementUnit' }
+  | { kind: 'measurementTypeId' } | { kind: 'measurementUnitId' } | { kind: 'measurementValueId' }
+  | { kind: 'measurementAccuracy' } | { kind: 'measurementMethod' } | { kind: 'measurementRemarks' }
   | { kind: 'depthBelowSeafloor'; unit?: string; /** 'down' (the default): positive numbers are depths below the seafloor. 'up': positive numbers go up, so a NEGATIVE number is below the seafloor and the sign is kept. */ positive?: 'down' | 'up' };
 export type ConverterRoleKind = ConverterRole['kind'];
 export interface ColumnProposal {

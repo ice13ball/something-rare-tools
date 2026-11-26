@@ -70,6 +70,8 @@ const DWC_KINDS: Record<string, readonly string[]> = {
   // quantity only where individualCount is not: neither is listed, so they are asked, or ignored where the tool does not write them)
   decimallatitude: ['latitude'], decimallongitude: ['longitude'], eventdate: ['date', 'datetime'], eventtime: ['time'],
   minimumdepthinmeters: ['depth'], maximumdepthinmeters: ['depth'], occurrenceid: ['occurrenceId', 'sampleId'], eventid: ['sampleId'], scientificname: ['taxon'],
+  measurementvalue: ['measurementValue'], measurementtype: ['measurementType'], measurementunit: ['measurementUnit'], measurementtypeid: ['measurementTypeId'], measurementunitid: ['measurementUnitId'],
+  measurementvalueid: ['measurementValueId'], measurementaccuracy: ['measurementAccuracy'], measurementmethod: ['measurementMethod'], measurementremarks: ['measurementRemarks'],
   individualcount: ['quantity'], organismquantitytype: ['quantityType'], lifestage: ['lifeStage'], identificationqualifier: ['qualifier'], scientificnameid: ['taxonId'],
 };
 
