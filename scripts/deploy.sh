@@ -39,11 +39,16 @@ nice -n 15 npx vitest run --maxWorkers=2 || refuse "tests failed"
 # It waits first (at most 10 minutes) until the laptop has cooled after the suite: a 1-minute load under 2.5. It runs at normal priority, so it
 # measures the code and not the other processes of the machine (at nice 15 any other session's job came first: 26.11, three refusals at 1301-1351 ms
 # while the same test alone passed). The threshold is unchanged.
+# SKIP_PERF=1 skips it on the maintainer's word only (Michal 26.11: "ignoruj te testy wydajnosci na razie"); the log says so.
+if [[ "${SKIP_PERF:-}" == 1 ]]; then
+  echo "WARNING: performance test SKIPPED (SKIP_PERF=1)" >&2
+else
 for _ in $(seq 1 20); do
   [[ "$(sysctl -n vm.loadavg 2>/dev/null | awk '{print ($2 < 2.5)}')" == 1 ]] && break
   sleep 30
 done
 npm run test:perf || refuse "performance test failed"
+fi
 nice -n 15 npm run typecheck || refuse "type check failed"
 
 gcloud builds submit --project="$PROJECT" --config=cloudbuild.yaml --gcs-source-staging-dir=gs://something-rare-cloudbuild-src/source --substitutions="_IMAGE=${IMAGE_REPO},_SHA=${SHA}" .
