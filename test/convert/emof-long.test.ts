@@ -8,6 +8,7 @@ import { proposeConvertMapping, suggestConvertShape } from '../../src/core/conve
 import type { RawSheet } from '../../src/core/types';
 import { xlsxFile } from '../helpers/files';
 import type { Cell } from './helpers';
+import { rowWhat } from '../../src/core/rules/convert';
 
 const OCC: Cell[][] = [
   ['eventID', 'occurrenceID', 'scientificName', 'individualCount', 'eventDate', 'decimalLatitude', 'decimalLongitude'],
@@ -101,11 +102,51 @@ describe('what an eMoF row may name', () => {
     const r = run({ occurrence: OCC, emof: [EM_HEADER, ['E1', 1, 'E1-zzz', 'Gadus morhua', 5, 'body length', 'mm', null]] });
     expect(r.ledger.find((l) => l.sheet === 'emof')!.lines.some((l) => l.fate === 'measurement-no-target')).toBe(true);
     expect(r.measurements.length).toBe(0);
+    const f = r.blocking.find((x) => x.ruleId === 'CONV-ROW-NOT-UNDERSTOOD' && x.params.reason === 'measurement-no-target');
+    expect(f).toBeDefined();
+    for (const lang of ['en', 'pl', 'de', 'fr'] as const) {
+      const w = rowWhat('measurement-no-target', lang, 1);
+      expect(w, lang).toMatch(/occurrenceID/);
+      expect(w, lang).not.toBe(rowWhat('something-unknown', lang, 1));
+    }
   });
   it('attaches a row with a taxon and no occurrenceID to the one occurrence of that taxon in the event, else lists it', () => {
     const hdr: Cell[] = ['eventID', 'scientificName', 'measurementType', 'measurementValue'];
     const r = run({ occurrence: OCC, emof: [hdr, ['E1', 'Gadus morhua', 'body length', 301], ['E3', 'Gadus morhua', 'body length', 7]] });
     expect(r.measurements.filter((x) => x.measurementType === 'body length')).toMatchObject([{ target: { kind: 'occurrence', id: 'E1-o1' } }]);
     expect(r.ledger.find((l) => l.sheet === 'emof')!.lines.some((l) => l.fate === 'measurement-no-target')).toBe(true);
+  });
+});
+
+describe('one flat sheet with occurrence columns and measurement columns (the usual OBIS flat shape)', () => {
+  const FLAT: Cell[][] = [
+    ['eventID', 'eventDate', 'decimalLatitude', 'decimalLongitude', 'occurrenceID', 'scientificName', 'individualCount', 'measurementType', 'measurementValue', 'measurementUnit'],
+    ['E1', '2022-03-01', 60.1, 4.2, 'o-1', 'Gadus morhua', 3, 'body length', 310, 'mm'],
+    ['E2', '2022-03-02', 60.3, 4.4, 'o-2', 'Pollachius virens', 1, 'body length', 400, 'mm'],
+  ];
+  it('writes the occurrences as before and attaches each row\'s measurement to that row\'s occurrence', () => {
+    const r = run({ flat: FLAT });
+    expect(r.occurrences.map((o) => o.id).sort()).toEqual(['o-1', 'o-2']);
+    expect(r.measurements.filter((m) => m.measurementType === 'body length').map((m) => [m.target, m.measurementValue])).toEqual([
+      [{ kind: 'occurrence', id: 'o-1' }, '310'],
+      [{ kind: 'occurrence', id: 'o-2' }, '400'],
+    ]);
+    expect(r.blocking.map((f) => f.ruleId)).not.toContain('CONV-ROW-NOT-UNDERSTOOD');
+  });
+  it('a flat row without a value writes its occurrence and no measurement', () => {
+    const r = run({ flat: [FLAT[0]!, FLAT[1]!, ['E2', '2022-03-02', 60.3, 4.4, 'o-2', 'Pollachius virens', 1, 'body length', null, 'mm']] });
+    expect(r.occurrences.length).toBe(2);
+    expect(r.measurements.filter((m) => m.measurementType === 'body length').length).toBe(1);
+  });
+});
+
+describe('what an eMoF sheet carries beyond measurements is never dropped in silence', () => {
+  it('lists date, count and latitude columns of an eMoF sheet as not written, with the reason', () => {
+    const rows: Cell[][] = [['eventID', 'occurrenceID', 'eventDate', 'individualCount', 'decimalLatitude', 'measurementType', 'measurementValue'], ['E1', 'E1-o1', '2021-06-09', 9, 50.0, 'body length', 4]];
+    const r = run({ occurrence: OCC, emof: rows });
+    const l = r.ledger.find((x) => x.sheet === 'emof')!;
+    const f = r.findings.find((x) => x.ruleId === 'CONV-COLUMN-NOT-EXPORTED' && x.sheet === 'emof');
+    expect(f).toBeDefined();
+    for (const h of ['eventDate', 'individualCount', 'decimalLatitude']) expect(JSON.stringify(f)).toContain(h);
   });
 });

@@ -3355,6 +3355,12 @@ export const ROW_WHAT: Record<string, Record<Lang, Forms>> = {
     de: 'mit einem Wert, aber ohne Parameternamen',
     fr: 'avec une valeur mais sans nom de paramètre',
   },
+  'measurement-no-target': {
+    en: 'with a measurement for an occurrenceID or eventID that no occurrence or event has, so the measurement has nothing to attach to',
+    pl: 'z pomiarem dla occurrenceID lub eventID, którego nie ma żadne wystąpienie ani zdarzenie, więc pomiar nie ma do czego przylgnąć',
+    de: 'mit einer Messung für eine occurrenceID oder eventID, die kein Vorkommen und kein Ereignis hat, die Messung kann also nirgends angehängt werden',
+    fr: "avec une mesure pour un occurrenceID ou eventID qu'aucune occurrence ni aucun événement n'a, la mesure n'a donc rien à quoi se rattacher",
+  },
   'repeated-parameter': {
     en: ['that repeats a parameter already given for the same sample (if you leave it out, the first value is written and the later one is listed)', 'that repeat a parameter already given for the same sample (if you leave them out, the first value is written and the later ones are listed)'],
     pl: [

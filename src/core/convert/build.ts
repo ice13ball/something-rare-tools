@@ -53,7 +53,8 @@ import type { ApprovedSplits, SplitEntry, TaxonSplit } from './taxon';
 import { isWritableName, wormsEntry, wormsLsid } from './worms';
 import type { WormsLookup } from './worms';
 import { pushAll } from '../util/arrays';
-import { isEmofSheet, readEmofSheets } from './emofSheet';
+import { EMOF_ROLE_KINDS } from './emofRoles';
+import { flatMeasurements, isEmofSheet, isFlatSheet, readEmofSheets } from './emofSheet';
 import { FateLog, buildSheetLedger, combineDescriptionLedgers, joinLedgers, notReadLedger, settleEventColumns } from './ledger';
 import type { LedgerReason, SheetLedger } from './ledger';
 import { MAX_FINDING_LINES, decideRows, leaveOutHolds } from './notWritten';
@@ -910,6 +911,8 @@ function readColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typeo
   // a sheet that carries a picked key reads those columns (profile sheets take no key)
   if (sin.profile === undefined) for (const i of keyColumns(sin.sampleKey)) use({ index: i });
   use(cols.replicate);
+  // a flat sheet (taxon, date or position and measurement columns together) reads its eMoF columns onto the occurrence of each row (emofSheet.ts flatMeasurements)
+  if (isFlatSheet(sin)) for (const c of sin.mapping.columns) if (EMOF_ROLE_KINDS.has(c.role.kind)) use(c);
   // a biomass column is an eMoF row of each occurrence of a long sheet that has a quantity column; anywhere else it is not read and is said
   if (sin.profile === undefined && sin.shape === 'long' && (cols.quantity !== undefined || sin.presenceOnly === true || ownCount) && cols.taxonCell !== undefined) for (const b of [...cols.biomass, ...cols.occVars]) use(b);
   use(cols.seafloor);
@@ -3118,6 +3121,8 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
       });
     }
 
+    const flatValue = isFlatSheet(sin) ? sin.mapping.columns.find((c) => c.role.kind === 'measurementValue') : undefined;
+    if (flatValue !== undefined) measurements.push(...flatMeasurements(sin, occurrences.slice(occurrencesBefore), fate, findings));
     {
       const wide = sin.shape === 'wide';
       const longBiology = sin.shape === 'long' && cols.taxonCell !== undefined;
@@ -3134,7 +3139,7 @@ function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<nu
           ...(sheet.pivot === undefined ? {} : { pivot: sheet.pivot }),
           taxonColumns: wide ? cols.taxonHeaders.map((c) => c.index) : [],
           occurrenceColumns: wide ? cols.taxonHeaders.map((c) => c.index) : longBiology && cols.quantity !== undefined ? [cols.quantity.index] : [],
-          measurementColumns: [...cols.variables.map((v) => v.index), ...(longBiology && (cols.quantity !== undefined || presence || ownCount) ? [...cols.biomass, ...cols.occVars].map((b) => b.index) : [])],
+          measurementColumns: [...cols.variables.map((v) => v.index), ...(flatValue === undefined ? [] : [flatValue.index]), ...(longBiology && (cols.quantity !== undefined || presence || ownCount) ? [...cols.biomass, ...cols.occVars].map((b) => b.index) : [])],
           hasTaxa: cols.taxonHeaders.length > 0 || cols.taxonCell !== undefined,
           presence,
           ...(sin.sampleJoin === undefined || sin.sampleJoin.descriptionOnly.size === 0 ? {} : { describedLines: new Set(sin.sampleJoin.descriptionOnly.keys()) }),
