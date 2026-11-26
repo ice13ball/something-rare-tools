@@ -14,6 +14,7 @@ import { getConvertEngine } from '../../worker/convert.client';
 import type { CodeProposalView, ConvertEngine, ConvertFileSummary, ConvertParseResult, ConvertView, ExportResult } from '../../worker/convert.protocol';
 import { formatNumber } from '../tips';
 import { ConvertMetadataForm } from '../components/ConvertMetadataForm';
+import { ConvertDwcAsIs, type DwcChoice } from '../components/ConvertDwcAsIs';
 import { ConvertSheetForm } from '../components/ConvertSheetForm';
 import { sentenceWithList } from '../components/CollapsibleList';
 import { ConvertLedger, NotWrittenList } from '../components/ConvertLedger';
@@ -160,6 +161,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
   const [meta, setMeta] = useState<DatasetMetadata>(EMPTY_METADATA);
   // rule id -> the fingerprint of its findings when the user ticked it (nothing is stored beyond this page state)
   const [accepted, setAccepted] = useState<Record<string, string>>({});
+  const [dwcChoice, setDwcChoice] = useState<DwcChoice>('ask'); // the one confirmation of the Darwin Core as-is proposal
   const [exporting, setExporting] = useState(false);
   const [exported, setExported] = useState<(Pick<ExportResult, 'fileName' | 'counts' | 'deflated'>) | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -265,6 +267,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     try {
       const p = await engine.parse(await toInputFiles(input.files));
       setParsed(p);
+      setDwcChoice('ask');
       // the description holds what the user typed, plus what the dropped metadata files said for every other field (the user edits everything)
       setMeta((m) => refreshPrefill(m, touched.current, p.prefill));
       setMappings(Object.fromEntries(p.files.map((f) => [f.fileId, f.mappings])));
@@ -287,6 +290,7 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
     token.current += 1;
     void engine.reset().catch(() => undefined);
     setParsed(null);
+    setDwcChoice('ask');
     setView(null);
     setJoins([]);
     setProblem(null);
@@ -1325,7 +1329,8 @@ export function ConvertPage({ engine: engineProp, download = downloadText, downl
       {parsed && parsed.notRead.length > 0 && <p className="muted">{t('confirm.notRead', { names: parsed.notRead.map((n) => n.fileName).join(', ') })}</p>}
       {parsed && parsed.files.length === 0 && phase === 'input' && <p className="notice">{t('convert.noSheets')}</p>}
 
-      {phase === 'work' && parsed && (
+      {phase === 'work' && parsed?.dwcAsIs && <ConvertDwcAsIs engine={engine} proposal={parsed.dwcAsIs} choice={dwcChoice} onChoice={setDwcChoice} meta={meta} onMeta={changeMeta} prefill={parsed.prefillInfo ?? null} downloadFile={downloadFile} />}
+      {phase === 'work' && parsed && !(parsed.dwcAsIs && dwcChoice !== 'map') && (
         <>
           <section className="confirm-step" aria-labelledby="convert-columns-title">
             <h2 id="convert-columns-title">{t('convert.columns.title')}</h2>
