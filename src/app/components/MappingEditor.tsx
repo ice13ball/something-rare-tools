@@ -8,6 +8,7 @@ import { MAX_SAMPLES } from '../../worker/protocol';
 import { t, useLang } from '../i18n';
 import { FieldLabel, InfoTip } from './InfoTip';
 import { roleOptionText } from '../roleTerms';
+import { DwcTermSelect } from './DwcTermSelect';
 import { ROLE_KINDS, mappingWith, roleChoiceLabelKey, roleChoiceOf, roleFromChoice, roleUnit, setBound, setHemisphereAxis, setPerOccurrence, setPositive, setUnit, setVariableName, type RoleChoice } from '../mappingModel';
 import type { TipId } from '../tips';
 
@@ -156,10 +157,11 @@ function RoleCell({ label, role, proposed, cleanHeader, reason, reasonTip, roleK
       >
         {roleKinds.map((k) => (
           <option key={k} value={k}>
-            {converter ? roleOptionText(k) : t(roleChoiceLabelKey(k))}
+            {converter ? roleOptionText(k, role.kind === 'dwcTerm' ? role.term : undefined) : t(roleChoiceLabelKey(k))}
           </option>
         ))}
       </select>
+      {role.kind === 'dwcTerm' && <DwcTermSelect label={label} term={role.term} onTerm={(term) => onRole({ kind: 'dwcTerm', term })} />}
       {reason !== undefined && (
         <p className="low-note">
           <strong>{t('mapping.low')}.</strong> <span className="muted">{reason}</span>

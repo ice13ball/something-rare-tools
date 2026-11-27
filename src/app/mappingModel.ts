@@ -6,6 +6,7 @@ import { hemisphereTarget } from '../core/recognize/headerWords';
 import { headerKey } from '../core/recognize/vocab';
 import type { ColumnRole, ConverterRoleKind, SheetMapping } from '../core/types';
 import { hemisphereLetter } from '../core/values/coords';
+import { openTermOf } from '../core/convert/dwcTermColumns';
 
 /** The kinds /check offers. The converter-only kinds (types.ts ConverterRole) are not among them: /check never proposes or lists them. */
 export type RoleKind = Exclude<ColumnRole['kind'], ConverterRoleKind | 'datePart'>;
@@ -86,6 +87,7 @@ export const CONVERT_ROLE_CHOICES: readonly RoleChoice[] = [
   'qualifier',
   'taxonId',
   'variable',
+  'dwcTerm',
 ];
 
 export const roleChoiceLabelKey = (c: RoleChoice): UiKey => `role.${c}` as UiKey;
@@ -101,6 +103,7 @@ export function roleFromChoice(current: ColumnRole, proposed: ColumnRole, choice
   if (choice === 'biomassWet' || choice === 'biomassDry' || choice === 'biomassAfdw') return { kind: 'biomass', basis: BIOMASS_CHOICES[choice] };
   if (choice === 'biomass') return proposed.kind === 'biomass' && proposed.basis === undefined ? proposed : { kind: 'biomass' };
   if (choice === 'taxon') return proposed.kind === 'taxon' && proposed.header !== true ? proposed : { kind: 'taxon' };
+  if (choice === 'dwcTerm') return current.kind === 'dwcTerm' ? current : proposed.kind === 'dwcTerm' ? proposed : { kind: 'dwcTerm', term: openTermOf(cleanHeader)?.name ?? '' };
   return changeRole(current, proposed, choice, cleanHeader, samples);
 }
 

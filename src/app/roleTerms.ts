@@ -60,6 +60,7 @@ export const ROLE_TERMS: Readonly<Record<string, RoleTerms>> = {
   qualifier: own('identificationQualifier'),
   taxonId: own('scientificNameID'),
   variable: emof('measurementType', 'measurementValue', 'measurementUnit'),
+  dwcTerm: none, // writes the term the user chooses: roleOptionText(choice, term)
 };
 
 /** "eMoF measurementType / measurementValue", "eventDate", or '' for a role that writes no column. */
@@ -70,8 +71,9 @@ export function roleTermsText(choice: RoleChoice): string {
 }
 
 /** The text of a dropdown entry and of its line in the tip: the label, then the terms it writes. A label that already names its terms (the eMoF roles) stays as it is. */
-export function roleOptionText(choice: RoleChoice): string {
+export function roleOptionText(choice: RoleChoice, term?: string): string {
   const label = t(`role.${choice}` as UiKey);
+  if (choice === 'dwcTerm') return term === undefined || term === '' ? label : `${label} — ${term}`;
   const r = ROLE_TERMS[choice];
   const text = roleTermsText(choice);
   if (text === '' || r.terms.every((term) => label.includes(term))) return label;
