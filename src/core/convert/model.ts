@@ -7,6 +7,7 @@ import type { SplitEntry, TaxonSplit } from './taxon';
 import type { SheetLedger } from './ledger';
 import type { SheetKeyReport } from './sampleKey';
 import type { NercTerm } from './vocab';
+import type { DwcTermData } from './dwcTermColumns';
 
 /*
  * What the converter's core produces: records in INPUT terms, not yet files. Stage 2 turns them into event.txt / occurrence.txt /
@@ -184,6 +185,8 @@ export interface ProfileSummary {
 export const UNMATCHED_SHOWN = 12;
 
 export interface ConvertResult {
+  /** The columns written under a Darwin Core term of their own and their values (dwcTermColumns.ts). Absent when the sheets have none. */
+  dwcTerms?: DwcTermData;
   /** No blocking finding: the core could hand these records to the writer. A blocked result still carries what could be built, for the preview. */
   ok: boolean;
   /** Every finding, CONV-* and the /check ROW-* findings of reading the cells (dates, coordinates, numbers). */
@@ -311,6 +314,8 @@ export interface ConvertedDataset {
   undatedEventIds?: string[];
   /** Paragraphs the converter writes into the EML methods from the person's declarations (an abundance class scale and the words typed for its classes). */
   methodSteps?: string[];
+  /** Same as ConvertResult.dwcTerms: the export adds these columns to the Event and Occurrence tables. */
+  dwcTerms?: DwcTermData;
 }
 
 /**
@@ -325,7 +330,7 @@ export function verbatimDepthText(v: { min?: string; max?: string } | undefined)
   return v.min ?? v.max;
 }
 
-export function toDataset(result: Pick<ConvertResult, 'events' | 'occurrences' | 'measurements' | 'repeatedOccurrenceIds' | 'methodSteps' | 'undatedEventIds'>, metadata: DatasetMetadata, decisions: ConvertSettings): ConvertedDataset {
+export function toDataset(result: Pick<ConvertResult, 'events' | 'occurrences' | 'measurements' | 'repeatedOccurrenceIds' | 'methodSteps' | 'undatedEventIds'> & { dwcTerms?: DwcTermData }, metadata: DatasetMetadata, decisions: ConvertSettings): ConvertedDataset {
   const events: ModelEvent[] = result.events.map((e) => {
     const m: ModelEvent = { id: e.id, type: e.eventType };
     if (e.parentId !== undefined) m.parentId = e.parentId;
@@ -392,5 +397,5 @@ export function toDataset(result: Pick<ConvertResult, 'events' | 'occurrences' |
     if (x.measurementMethod !== undefined) m.method = x.measurementMethod;
     return m;
   });
-  return { events, occurrences, measurements, metadata, decisions, ...(result.repeatedOccurrenceIds === undefined ? {} : { repeatedOccurrenceIds: result.repeatedOccurrenceIds }), ...(result.methodSteps.length === 0 ? {} : { methodSteps: result.methodSteps }), ...(result.undatedEventIds === undefined || result.undatedEventIds.length === 0 ? {} : { undatedEventIds: result.undatedEventIds }) };
+  return { events, occurrences, measurements, metadata, decisions, ...(result.repeatedOccurrenceIds === undefined ? {} : { repeatedOccurrenceIds: result.repeatedOccurrenceIds }), ...(result.methodSteps.length === 0 ? {} : { methodSteps: result.methodSteps }), ...(result.undatedEventIds === undefined || result.undatedEventIds.length === 0 ? {} : { undatedEventIds: result.undatedEventIds }), ...(result.dwcTerms === undefined ? {} : { dwcTerms: result.dwcTerms }) };
 }

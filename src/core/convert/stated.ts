@@ -424,7 +424,7 @@ export function statedInfo(sheet: RawSheet, proposals: readonly ColumnProposal[]
     } else if (named.basis === 'darwin-core') {
       if (named.meant.length === 0) {
         // a term the converter does not read counts as answered; one the proposer gave a role of its own is not ours to take
-        role = kind === 'ignore' ? { kind: 'ignore' } : undefined;
+        role = kind === 'ignore' ? { kind: 'ignore' } : kind === 'dwcTerm' ? p.role : undefined; // a dwcTerm role is the written answer to an open term
       } else {
         role = named.meant.includes(kind) && !(kind === 'taxon' && (p.role as { header?: boolean }).header === true) ? p.role : roleFor(named.meant[0], p.header, named.term);
         nameGivesDirection = named.term === 'minimumdepthinmeters' || named.term === 'maximumdepthinmeters';

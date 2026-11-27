@@ -143,8 +143,8 @@ describe('stated: what is stated', () => {
     // an ordinary word that is also a term (habitat) is a term only beside at least two other exact terms
     expect(propose('habitat', ['reef', 'reef', 'mud', 'mud', 'reef', 'sand']).i.stated).toBe(false);
     const beside = propose('habitat', ['reef', 'reef', 'mud', 'mud', 'reef', 'sand'], [{ header: 'scientificName', cells: LATIN }, { header: 'individualCount', cells: NUMBERS }]);
-    expect(beside.i).toMatchObject({ stated: true, basis: 'darwin-core', role: { kind: 'ignore' } });
-    expect(propose('waterBody', ['North Sea', 'North Sea', 'North Sea', 'North Sea', 'North Sea', 'North Sea']).i).toMatchObject({ stated: true, role: { kind: 'ignore' } });
+    expect(beside.i).toMatchObject({ stated: true, basis: 'darwin-core', role: { kind: 'dwcTerm', term: 'habitat' } });
+    expect(propose('waterBody', ['North Sea', 'North Sea', 'North Sea', 'North Sea', 'North Sea', 'North Sea']).i).toMatchObject({ stated: true, role: { kind: 'dwcTerm', term: 'waterBody' } });
     const ymd = propose('year', [2020, 2020, 2021, 2021, 2020, 2022], [{ header: 'month', cells: [5, 2, 6, 2, 7, 8] }, { header: 'day', cells: [5, 28, 30, 27, 7, 8] }]);
     for (const h of ['year', 'month', 'day']) expect(ymd.info[ymd.proposals.findIndex((p) => p.header === h)], h).toMatchObject({ stated: true, role: { kind: 'datePart' } });
   });

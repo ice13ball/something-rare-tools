@@ -282,3 +282,7 @@ Each row ends with an invisible anchor named after the rule id: the ⓘ explanat
 | CONV-ASIS-COLUMNS-NOT-TERM | info | show | B | — | —<a id="CONV-ASIS-COLUMNS-NOT-TERM"></a> |
 | CONV-ASIS-COLUMNS-OTHER-LEVEL | warning | accept | B | — | —<a id="CONV-ASIS-COLUMNS-OTHER-LEVEL"></a> |
 | CONV-ASIS-EMOF-REDUNDANT | info | show | B | — | —<a id="CONV-ASIS-EMOF-REDUNDANT"></a> |
+| CONV-DWC-TERM-PER-ROW | info | show | B | — | —<a id="CONV-DWC-TERM-PER-ROW"></a> |
+| CONV-DWC-TERM-REPLACES | info | show | B | — | —<a id="CONV-DWC-TERM-REPLACES"></a> |
+| CONV-DWC-TERM-VOCAB | warning | accept | B | — | —<a id="CONV-DWC-TERM-VOCAB"></a> |
+| CONV-DWC-TERM-TWICE | warning | accept | B | — | —<a id="CONV-DWC-TERM-TWICE"></a> |

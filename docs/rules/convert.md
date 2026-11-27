@@ -7,7 +7,7 @@ Regenerate with `UPDATE_RULES_DOC=1 npx vitest run test/rules/rules-docs-per-too
 
 The list is the rules the tool can raise, found by a static scan of its code, so a few may never fire in practice. Severity is error, warning or info. Every number a rule compares against is listed with its source. Each rule has four short parts: what it checks, when it fires, an invented example, and what the person can do.
 
-209 rules.
+213 rules.
 
 ## IN-LAYOUT-UNSUPPORTED — The table is laid out in a way the tool cannot read as one header row and one row per sample, so it was not read
 
@@ -2704,3 +2704,51 @@ Severity: info · Export policy: show
 **Example.** The measurement sheet has occurrenceID, eventID and scientificName. The scientificName column is dropped and said once.
 
 **What you can do.** Nothing to answer.
+
+## CONV-DWC-TERM-PER-ROW — A column named with an event-level or record-level Darwin Core term (for example habitat) is written once per event, as long as all rows of an event agree
+
+Severity: info · Export policy: show
+
+**What it checks.** A column named with an event-level or record-level Darwin Core term (for example habitat) is written once per event, as long as all rows of an event agree.
+
+**When it fires.** Fires once per column when the rows of at least one event hold different non-empty values of it. The whole column is then written on each occurrence in the Occurrence table instead. Information only.
+
+**Example.** A column "habitat" says "sand" in one row of event S1 and "mud" in another. The finding names the column and the number of such events.
+
+**What you can do.** Nothing is required. If the value really belongs to the event, make the rows of each event agree.
+
+## CONV-DWC-TERM-REPLACES — Where a column named with a Darwin Core term overlaps a value the tool writes itself (occurrenceStatus, basisOfRecord, sex, locality, geodeticDatum, coordinateUncertaintyInMeters, verbatimDepth), the cell of the author wins
+
+Severity: info · Export policy: show
+
+**What it checks.** Where a column named with a Darwin Core term overlaps a value the tool writes itself (occurrenceStatus, basisOfRecord, sex, locality, geodeticDatum, coordinateUncertaintyInMeters, verbatimDepth), the cell of the author wins.
+
+**When it fires.** Fires once per column when at least one non-empty cell takes the place of a generated value. An empty cell leaves the tool value. The remarks terms (eventRemarks, georeferenceRemarks, occurrenceRemarks) are joined to the tool text with "; " and are not counted. For basisOfRecord every non-empty cell is counted, the dataset value is not known at this point. Information only.
+
+**Example.** A column "occurrenceStatus" says "absent" in 3 rows; the tool would have written "present" there. The finding says 3 values are replaced.
+
+**What you can do.** Nothing is required. Check that your column is what you want in the archive.
+
+## CONV-DWC-TERM-VOCAB — An occurrenceStatus is present or absent, and a basisOfRecord is a word of the GBIF vocabulary (PreservedSpecimen, FossilSpecimen, LivingSpecimen, MaterialSample, MaterialEntity, MaterialCitation, HumanObservation, MachineObservation, Occurrence, Event, Taxon; capitals do not matter)
+
+Severity: warning · Export policy: accept
+
+**What it checks.** An occurrenceStatus is present or absent, and a basisOfRecord is a word of the GBIF vocabulary (PreservedSpecimen, FossilSpecimen, LivingSpecimen, MaterialSample, MaterialEntity, MaterialCitation, HumanObservation, MachineObservation, Occurrence, Event, Taxon; capitals do not matter).
+
+**When it fires.** Fires once per column and sheet when a cell holds another word. The cell is written as it is. The finding lists the lines and the first values.
+
+**Example.** A column "basisOfRecord" says "observed" in line 5. The finding names line 5 and the value "observed".
+
+**What you can do.** Correct the words in the file, or accept the warning when the receiver of the archive takes your word.
+
+## CONV-DWC-TERM-TWICE — Each Darwin Core term is written from one column of a sheet
+
+Severity: warning · Export policy: accept
+
+**What it checks.** Each Darwin Core term is written from one column of a sheet.
+
+**When it fires.** Fires once per extra column when two columns of a sheet name the same open term (case and the dwc: prefix are ignored). The first column is written, the later one is not, and CONV-COLUMN-NOT-EXPORTED lists it.
+
+**Example.** A sheet has "habitat" and "dwc:habitat". The finding names both columns.
+
+**What you can do.** Delete or rename one of the columns in the file.

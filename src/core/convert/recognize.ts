@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Based on Abyssal Claims — © 2026 Michal Mazurowski — https://something-rare.com
 import { applyEmofRoles } from './emofRoles';
+import { proposeDwcTermRoles } from './dwcTermColumns';
 import { depthUnitOfHeader } from '../recognize/depthUnit';
 import { biomassNameUnit, distinctnessWithinSamples, isTaxonAttribute, isMassUnitText, isOrganismSizeHeader, isSamplingOrEnvironmentHeader, isSizeLikeHeader, SAMPLE_KEY_KINDS, valuesRepeatWithinSample } from './totalColumns';
 import { dwcTermOf, isBlankCell, looksLikeDwcTerm, nameWithComment, proposeColumns, stripTypeSuffix, toMapping, unitFromHeader } from '../recognize/columns';
@@ -189,6 +190,7 @@ export const OVERLAY_REASONS = {
   'dwc-lifestage': 'Darwin Core lifeStage',
   'dwc-identificationqualifier': 'Darwin Core identificationQualifier',
   'dwc-scientificnameid': 'Darwin Core scientificNameID (written as given)',
+  'dwc-open-term': 'the header is the Darwin Core term {term}: the column is written to the archive under that term, as you typed it',
   'dwc-measurement': 'Darwin Core measurement term of an eMoF sheet (written as given, one measurement per row)',
   'name-aphiaid': 'a WoRMS AphiaID column of whole numbers: written as the urn:lsid of the taxon',
   'name-stage': 'name says life stage',
@@ -910,6 +912,7 @@ export function proposeConvertColumns(sheet: RawSheet, ctx: ProposeContext): Col
     why(q, code);
   }
   applyEmofRoles(sheet.header, base, (q) => why(q, 'dwc-measurement'));
+  proposeDwcTermRoles(base, (q) => why(q, 'dwc-open-term'));
   return base;
 }
 

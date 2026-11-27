@@ -290,13 +290,17 @@ const BASELINE: Readonly<Record<string, 'block' | 'accept' | 'show'>> = {
   'CONV-ASIS-COLUMNS-NOT-TERM': 'show',
   'CONV-ASIS-COLUMNS-OTHER-LEVEL': 'accept',
   'CONV-ASIS-EMOF-REDUNDANT': 'show',
+  'CONV-DWC-TERM-PER-ROW': 'show',
+  'CONV-DWC-TERM-REPLACES': 'show',
+  'CONV-DWC-TERM-VOCAB': 'accept',
+  'CONV-DWC-TERM-TWICE': 'accept',
 };
 
 describe('the export policy of every rule', () => {
   it('every rule has the policy it had before the lists moved', () => {
     const now = Object.fromEntries(RULES.map((r) => [r.id, policyOf({ ruleId: r.id, severity: r.severity })]));
     expect(now).toEqual(BASELINE);
-    expect(Object.keys(BASELINE).length).toBe(275);
+    expect(Object.keys(BASELINE).length).toBe(279);
   });
 
   it('the field of each rule definition is its baseline policy', () => {

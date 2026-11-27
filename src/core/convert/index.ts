@@ -18,6 +18,9 @@
  */
 export { convert, listSplits } from './build';
 export type { ConvertInput, ConvertOptions, ConvertSheetInput, ProfileDeclaration, SamplingDevice } from './build';
+export { DWC_TERM_LIST } from './dwcTermList';
+export { dwcTermUri, openTermOf } from './dwcTermColumns';
+export type { DwcTermData } from './dwcTermColumns';
 export { buildEventTree, eventDateText, greatCircleM, stationEventId, summarizeTree } from './events';
 export type { EventTree, SampleSite, TreeOptions } from './events';
 export { proposeSampleCodes } from './ids';

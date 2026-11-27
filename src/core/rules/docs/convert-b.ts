@@ -714,4 +714,28 @@ export const DOCS: Readonly<Record<string, RuleDoc>> = {
     action:
       'Map the station column, tick "each distinct position is a station", or fill in the empty cells. The export is blocked until then.',
   },
+  'CONV-DWC-TERM-PER-ROW': {
+    checks: 'A column named with an event-level or record-level Darwin Core term (for example habitat) is written once per event, as long as all rows of an event agree.',
+    fires: 'Fires once per column when the rows of at least one event hold different non-empty values of it. The whole column is then written on each occurrence in the Occurrence table instead. Information only.',
+    example: 'A column "habitat" says "sand" in one row of event S1 and "mud" in another. The finding names the column and the number of such events.',
+    action: 'Nothing is required. If the value really belongs to the event, make the rows of each event agree.',
+  },
+  'CONV-DWC-TERM-REPLACES': {
+    checks: 'Where a column named with a Darwin Core term overlaps a value the tool writes itself (occurrenceStatus, basisOfRecord, sex, locality, geodeticDatum, coordinateUncertaintyInMeters, verbatimDepth), the cell of the author wins.',
+    fires: 'Fires once per column when at least one non-empty cell takes the place of a generated value. An empty cell leaves the tool value. The remarks terms (eventRemarks, georeferenceRemarks, occurrenceRemarks) are joined to the tool text with "; " and are not counted. For basisOfRecord every non-empty cell is counted, the dataset value is not known at this point. Information only.',
+    example: 'A column "occurrenceStatus" says "absent" in 3 rows; the tool would have written "present" there. The finding says 3 values are replaced.',
+    action: 'Nothing is required. Check that your column is what you want in the archive.',
+  },
+  'CONV-DWC-TERM-VOCAB': {
+    checks: 'An occurrenceStatus is present or absent, and a basisOfRecord is a word of the GBIF vocabulary (PreservedSpecimen, FossilSpecimen, LivingSpecimen, MaterialSample, MaterialEntity, MaterialCitation, HumanObservation, MachineObservation, Occurrence, Event, Taxon; capitals do not matter).',
+    fires: 'Fires once per column and sheet when a cell holds another word. The cell is written as it is. The finding lists the lines and the first values.',
+    example: 'A column "basisOfRecord" says "observed" in line 5. The finding names line 5 and the value "observed".',
+    action: 'Correct the words in the file, or accept the warning when the receiver of the archive takes your word.',
+  },
+  'CONV-DWC-TERM-TWICE': {
+    checks: 'Each Darwin Core term is written from one column of a sheet.',
+    fires: 'Fires once per extra column when two columns of a sheet name the same open term (case and the dwc: prefix are ignored). The first column is written, the later one is not, and CONV-COLUMN-NOT-EXPORTED lists it.',
+    example: 'A sheet has "habitat" and "dwc:habitat". The finding names both columns.',
+    action: 'Delete or rename one of the columns in the file.',
+  },
 };

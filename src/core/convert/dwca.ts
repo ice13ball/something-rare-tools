@@ -5,6 +5,7 @@ import { datasetNameOf } from './metadata';
 import type { ConvertedDataset, ModelEvent } from './model';
 import { coordText, depthWritten } from './events';
 import { hasTabOrNewline } from './ids';
+import { withTermColumns } from './dwcTermColumns';
 
 /*
  * The tables of the Darwin Core Archive and their writers: event.txt (Event core), occurrence.txt (Occurrence extension) and
@@ -158,8 +159,9 @@ function eventRow(e: ModelEvent, datasetName: string, institutionCode: string): 
 export function buildTables(ds: ConvertedDataset): ArchiveTables {
   const name = datasetNameOf(ds.metadata);
   const code = ds.metadata.institutionCode.trim();
-  const ev = prune(EVENT_COLUMNS, ds.events.map((e) => eventRow(e, name, code)));
-  const occ = prune(
+  const evT = withTermColumns(EVENT_COLUMNS, ds.events.map((e) => eventRow(e, name, code)), ds.events.map((e) => e.id), 'event', ds.dwcTerms);
+  const ev = prune(evT.spec, evT.rows);
+  const occT = withTermColumns(
     OCCURRENCE_COLUMNS,
     ds.occurrences.map((o) => [
       o.id,
@@ -177,7 +179,11 @@ export function buildTables(ds: ConvertedDataset): ArchiveTables {
       o.quantity?.organismQuantityType ?? '',
       o.remarks ?? '',
     ]),
+    ds.occurrences.map((o) => o.id),
+    'occurrence',
+    ds.dwcTerms,
   );
+  const occ = prune(occT.spec, occT.rows);
   const tables: ArchiveTables = { event: { name: EVENT_FILE, ...ev }, occurrence: { name: OCCURRENCE_FILE, ...occ } };
   if (ds.measurements.length > 0) {
     tables.emof = {

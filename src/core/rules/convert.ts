@@ -9,6 +9,7 @@ import { MAX_LINE_RANGES, formatLines } from '../lines';
 import { CITE, NVS_CODE_SHAPE } from './citations';
 import type { RuleSpec } from './spec';
 import { DWC_AS_IS_RULES } from './convertDwc';
+import { DWC_TERM_RULES } from './convertDwcTerms';
 
 /*
  * Rules of the converter (/convert, src/core/convert), category 'B', raised only by src/core/convert.
@@ -2577,7 +2578,7 @@ const BASE_CONVERT_RULES: readonly RuleSpec[] = [
   },
 ];
 
-export const CONVERT_RULES: readonly RuleSpec[] = [...BASE_CONVERT_RULES, ...DWC_AS_IS_RULES];
+export const CONVERT_RULES: readonly RuleSpec[] = [...BASE_CONVERT_RULES, ...DWC_AS_IS_RULES, ...DWC_TERM_RULES];
 
 /** Declared params per CONV rule id. */
 export const CONVERT_RULE_PARAMS: Readonly<Record<string, readonly string[]>> = Object.fromEntries(CONVERT_RULES.map((s) => [s.id, s.params]));

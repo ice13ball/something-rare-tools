@@ -243,6 +243,11 @@ export type ConverterRole =
   | { kind: 'measurementValue' } | { kind: 'measurementType' } | { kind: 'measurementUnit' }
   | { kind: 'measurementTypeId' } | { kind: 'measurementUnitId' } | { kind: 'measurementValueId' }
   | { kind: 'measurementAccuracy' } | { kind: 'measurementMethod' } | { kind: 'measurementRemarks' }
+  /**
+   * A column written under a Darwin Core term of its own (core/convert/dwcTermColumns.ts): the cells go to the Event or Occurrence table as the file gives them, with no lookup. Proposed only for the
+   * exact header of an open term; `term` is the canonical name from dwcTerms.ts termOf(). /check never proposes or lists it.
+   */
+  | { kind: 'dwcTerm'; term: string }
   | { kind: 'depthBelowSeafloor'; unit?: string; /** 'down' (the default): positive numbers are depths below the seafloor. 'up': positive numbers go up, so a NEGATIVE number is below the seafloor and the sign is kept. */ positive?: 'down' | 'up' };
 export type ConverterRoleKind = ConverterRole['kind'];
 export interface ColumnProposal {

@@ -54,6 +54,7 @@ import { isWritableName, wormsEntry, wormsLsid } from './worms';
 import type { WormsLookup } from './worms';
 import { pushAll } from '../util/arrays';
 import { EMOF_ROLE_KINDS } from './emofRoles';
+import { applyDwcTerms, termColumnIndexes } from './dwcTermColumns';
 import { flatMeasurements, isEmofSheet, isFlatSheet, readEmofSheets } from './emofSheet';
 import { FateLog, buildSheetLedger, combineDescriptionLedgers, joinLedgers, notReadLedger, settleEventColumns } from './ledger';
 import type { LedgerReason, SheetLedger } from './ledger';
@@ -913,6 +914,7 @@ function readColumns(sin: ConvertSheetInput, cols: Cols, specs: ReturnType<typeo
   use(cols.replicate);
   // a flat sheet (taxon, date or position and measurement columns together) reads its eMoF columns onto the occurrence of each row (emofSheet.ts flatMeasurements)
   if (isFlatSheet(sin)) for (const c of sin.mapping.columns) if (EMOF_ROLE_KINDS.has(c.role.kind)) use(c);
+  for (const i of termColumnIndexes(sin)) use({ index: i });
   // a biomass column is an eMoF row of each occurrence of a long sheet that has a quantity column; anywhere else it is not read and is said
   if (sin.profile === undefined && sin.shape === 'long' && (cols.quantity !== undefined || sin.presenceOnly === true || ownCount) && cols.taxonCell !== undefined) for (const b of [...cols.biomass, ...cols.occVars]) use(b);
   use(cols.seafloor);
@@ -1976,7 +1978,7 @@ export function convert(input: ConvertInput): ConvertResult {
     chosen = convertPass(current, skip);
   }
   const { undated: _undated, textTotals: _totals, ...result } = chosen;
-  return result;
+  return applyDwcTerms(current, result);
 }
 
 function convertPass(rawInputGiven: ConvertInput, undatedLeftOut: ReadonlyMap<number, ReadonlySet<number>>): ConvertResult & { undated: UndatedSheet[]; textTotals: ReadonlyMap<number, CountTextTally> } {
